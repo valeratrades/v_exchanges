@@ -17,5 +17,5 @@ undocumented_unsafe_blocks = "warn"
 tabs_in_doc_comments = "allow"
 
 [dependencies]
-derive-new = "^0"
 color-eyre = "^0.6.3"
+derive-new = "^0"

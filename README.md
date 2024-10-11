@@ -5,6 +5,19 @@
 [<img alt="build status" src="https://img.shields.io/github/actions/workflow/status/valeratrades/v_exchanges/ci.yml?branch=master&style=for-the-badge&style=flat-square" height="20">](https://github.com/valeratrades/v_exchanges/actions?query=branch%3Amaster) <!--NB: Won't find it if repo is private-->
 ![Lines Of Code](https://img.shields.io/badge/LoC-74-lightblue)
 
+Trying to make a unified library for all crypto exchange interactions, instead of redefining the response structs again and again.
+
+
+# Blocker
+Deciding on scope:
+
+components:
+- structs + desers
+? do I want to have methods
+? do I want to have websocket-connect primitives
+	preliminary r: probably yes
+
+
 <!-- markdownlint-disable -->
 <details>
   <summary>
