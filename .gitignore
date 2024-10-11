@@ -1,0 +1,57 @@
+## Conventional
+**/tmp/
+**/target/
+**/debug/
+**/bin/
+**/*.test
+**/*.out
+
+## Personal
+**/_*
+.local.sh
+[push]
+**/TODO.md
+commit-message.txt
+commit_message.txt
+commit-message
+commit_message
+commit
+functions.sh
+
+## Vim
+*.sw[po]
+
+## MacOS
+.DS_Store
+*.dylib
+
+## Shared Objects and backups
+**/*.bak
+**/*.bk
+**/*.so
+
+## Virtual Environments
+.env/
+.venv/
+env/
+venv/
+
+## VS Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/*.code-snippets
+
+## Windows
+*.exe
+*.exe~
+*.dll
+
+
+## Rust
+**/Cargo.lock
+.cargo/config.toml
+.cargo/config
+**/**.pending-snap
