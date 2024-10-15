@@ -19,3 +19,11 @@ tabs_in_doc_comments = "allow"
 [dependencies]
 color-eyre = "^0.6.3"
 derive-new = "^0"
+tokio = { version = "1.40.0", features = ["full"] }
+v_utils = {version = "1.7.8", features = ["trades"]}
+tokio-tungstenite = { version = "0.24.0", features = ["native-tls"] }
+futures-util = "0.3.31"
+serde_json = "1.0.128"
+tracing = "0.1.40"
+serde_with = "3.11.0"
+serde = { version = "1.0.210", features = ["derive"] }

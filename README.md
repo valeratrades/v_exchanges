@@ -3,19 +3,20 @@
 [<img alt="crates.io" src="https://img.shields.io/crates/v/v_exchanges.svg?color=fc8d62&logo=rust" height="20" style=flat-square>](https://crates.io/crates/v_exchanges)
 [<img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs&style=flat-square" height="20">](https://docs.rs/v_exchanges)
 [<img alt="build status" src="https://img.shields.io/github/actions/workflow/status/valeratrades/v_exchanges/ci.yml?branch=master&style=for-the-badge&style=flat-square" height="20">](https://github.com/valeratrades/v_exchanges/actions?query=branch%3Amaster) <!--NB: Won't find it if repo is private-->
-![Lines Of Code](https://img.shields.io/badge/LoC-74-lightblue)
+![Lines Of Code](https://img.shields.io/badge/LoC-315-lightblue)
 
 Trying to make a unified library for all crypto exchange interactions, instead of redefining the response structs again and again.
 
 
-# Blocker
-Deciding on scope:
+# Plan 
+1. Copy over `crypto-botters`
+1. For binance, copy over the struct definitions from binance-rs
+1. implement kline methods, similar to what binance-rs has, but using `crypto-botters` implementation for binance interactions.
+1. Now Implement Exchange::klines on Binance.
+... Later steps should become apparent after
 
-components:
-- structs + desers
-? do I want to have methods
-? do I want to have websocket-connect primitives
-	preliminary r: probably yes
+
+1. Make a slow-test that would call all the implemented endpoints, then store the responses in the directory with test response payloads. // for signed endpoints just use test-network
 
 
 <!-- markdownlint-disable -->
