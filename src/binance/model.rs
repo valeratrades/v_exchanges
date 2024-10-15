@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, Value};
+use serde_with::{serde_as, DisplayFromStr};
 
 use super::errors::BinanceError;
 
@@ -136,6 +137,7 @@ pub struct Balance {
 	pub locked: String,
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Order {
@@ -143,7 +145,7 @@ pub struct Order {
 	pub order_id: u64,
 	pub order_list_id: i64,
 	pub client_order_id: String,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub price: f64,
 	pub orig_qty: String,
 	pub executed_qty: String,
@@ -153,7 +155,7 @@ pub struct Order {
 	#[serde(rename = "type")]
 	pub type_name: String,
 	pub side: String,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub stop_price: f64,
 	pub iceberg_qty: String,
 	pub time: u64,
@@ -185,6 +187,7 @@ pub struct TransactionId {
 	pub tran_id: u64,
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
@@ -193,15 +196,16 @@ pub struct Transaction {
 	pub order_list_id: Option<i64>,
 	pub client_order_id: String,
 	pub transact_time: u64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub price: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub orig_qty: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub executed_qty: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub cummulative_quote_qty: f64,
-	#[serde(with = "string_or_float", default = "default_stop_price")]
+	#[serde(default = "default_stop_price")] //HACK
+	#[serde_as(as = "DisplayFromStr")]
 	pub stop_price: f64,
 	pub status: String,
 	pub time_in_force: String,
@@ -215,14 +219,15 @@ fn default_stop_price() -> f64 {
 	0.0
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct FillInfo {
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub price: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub qty: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub commission: f64,
 	pub commission_asset: String,
 	pub trade_id: Option<u64>,
@@ -243,11 +248,12 @@ pub struct OrderBook {
 	pub asks: Vec<Asks>,
 }
 
+#[serde_as]
 #[derive(PartialEq, Debug, Serialize, Deserialize, Clone)]
 pub struct Bids {
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub price: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub qty: f64,
 }
 
@@ -257,11 +263,12 @@ impl Bids {
 	}
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Asks {
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub price: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub qty: f64,
 }
 
@@ -281,17 +288,19 @@ pub enum Prices {
 	AllPrices(Vec<SymbolPrice>),
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SymbolPrice {
 	pub symbol: String,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub price: f64,
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AveragePrice {
 	pub mins: u64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub price: f64,
 }
 
@@ -307,27 +316,29 @@ pub enum KlineSummaries {
 	AllKlineSummaries(Vec<KlineSummary>),
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Tickers {
 	pub symbol: String,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub bid_price: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub bid_qty: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub ask_price: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub ask_qty: f64,
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TradeHistory {
 	pub id: u64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub price: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub qty: f64,
 	pub commission: String,
 	pub commission_asset: String,
@@ -337,6 +348,7 @@ pub struct TradeHistory {
 	pub is_best_match: bool,
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PriceStats {
@@ -344,21 +356,21 @@ pub struct PriceStats {
 	pub price_change: String,
 	pub price_change_percent: String,
 	pub weighted_avg_price: String,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub prev_close_price: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub last_price: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub bid_price: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub ask_price: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub open_price: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub high_price: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub low_price: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub volume: f64,
 	pub open_time: u64,
 	pub close_time: u64,
@@ -367,6 +379,7 @@ pub struct PriceStats {
 	pub count: u64,
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AggTrade {
 	#[serde(rename = "T")]
@@ -381,9 +394,11 @@ pub struct AggTrade {
 	pub maker: bool,
 	#[serde(rename = "M")]
 	pub best_match: bool,
-	#[serde(rename = "p", with = "string_or_float")]
+	#[serde(rename = "p")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub price: f64,
-	#[serde(rename = "q", with = "string_or_float")]
+	#[serde(rename = "q")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub qty: f64,
 }
 
@@ -1225,33 +1240,35 @@ pub struct DepthOrderBookEvent {
 }
 
 /// Response to the Savings API get all coins request
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CoinInfo {
 	pub coin: String,
 	pub deposit_all_enable: bool,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub free: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub freeze: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub ipoable: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub ipoing: f64,
 	pub is_legal_money: bool,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub locked: f64,
 	pub name: String,
 	pub network_list: Vec<Network>,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub storage: f64,
 	pub trading: bool,
 	pub withdraw_all_enable: bool,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub withdrawing: f64,
 }
 
 /// Part of the Savings API get all coins response
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Network {
@@ -1273,23 +1290,24 @@ pub struct Network {
 	/// shown only when "withdrawEnable" is false.
 	pub withdraw_desc: Option<String>,
 	pub withdraw_enable: bool,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub withdraw_fee: f64,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub withdraw_min: f64,
 	// pub insert_time: Option<u64>, //commented out for now, because they are not inside the actual response (only the api doc example)
 	// pub update_time: Option<u64>,
 	pub withdraw_integer_multiple: Option<String>,
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AssetDetail {
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub min_withdraw_amount: f64,
 	/// false if ALL of networks' are false
 	pub deposit_status: bool,
-	#[serde(with = "string_or_float")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub withdraw_fee: f64,
 	/// false if ALL of networks' are false
 	pub withdraw_status: bool,
@@ -1303,98 +1321,6 @@ pub struct DepositAddress {
 	pub coin: String,
 	pub tag: String,
 	pub url: String,
-}
-
-pub(crate) mod string_or_float {
-	use std::fmt;
-
-	use serde::{de, Deserialize, Deserializer, Serializer};
-
-	pub fn serialize<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		T: fmt::Display,
-		S: Serializer, {
-		serializer.collect_str(value)
-	}
-
-	pub fn deserialize<'de, D>(deserializer: D) -> Result<f64, D::Error>
-	where
-		D: Deserializer<'de>, {
-		#[derive(Deserialize)]
-		#[serde(untagged)]
-		enum StringOrFloat {
-			String(String),
-			Float(f64),
-		}
-
-		match StringOrFloat::deserialize(deserializer)? {
-			StringOrFloat::String(s) =>
-				if s == "INF" {
-					Ok(f64::INFINITY)
-				} else {
-					s.parse().map_err(de::Error::custom)
-				},
-			StringOrFloat::Float(i) => Ok(i),
-		}
-	}
-}
-
-pub(crate) mod string_or_float_opt {
-	use std::fmt;
-
-	use serde::{Deserialize, Deserializer, Serializer};
-
-	pub fn serialize<T, S>(value: &Option<T>, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		T: fmt::Display,
-		S: Serializer, {
-		match value {
-			Some(v) => crate::binance::model::string_or_float::serialize(v, serializer),
-			None => serializer.serialize_none(),
-		}
-	}
-
-	pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
-	where
-		D: Deserializer<'de>, {
-		#[derive(Deserialize)]
-		#[serde(untagged)]
-		enum StringOrFloat {
-			String(String),
-			Float(f64),
-		}
-
-		Ok(Some(crate::binance::model::string_or_float::deserialize(deserializer)?))
-	}
-}
-
-pub(crate) mod string_or_bool {
-	use std::fmt;
-
-	use serde::{de, Deserialize, Deserializer, Serializer};
-
-	pub fn serialize<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		T: fmt::Display,
-		S: Serializer, {
-		serializer.collect_str(value)
-	}
-
-	pub fn deserialize<'de, D>(deserializer: D) -> Result<bool, D::Error>
-	where
-		D: Deserializer<'de>, {
-		#[derive(Deserialize)]
-		#[serde(untagged)]
-		enum StringOrFloat {
-			String(String),
-			Bool(bool),
-		}
-
-		match StringOrFloat::deserialize(deserializer)? {
-			StringOrFloat::String(s) => s.parse().map_err(de::Error::custom),
-			StringOrFloat::Bool(i) => Ok(i),
-		}
-	}
 }
 
 #[test]
