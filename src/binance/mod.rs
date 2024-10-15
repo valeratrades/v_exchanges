@@ -5,9 +5,12 @@ use serde_with::{serde_as, DisplayFromStr};
 use tokio::sync::mpsc;
 use tokio_tungstenite::connect_async;
 use tracing::debug;
-use v_utils::trades::{Timeframe};
+use v_utils::trades::Timeframe;
 
 use crate::{Exchange, Kline, Ohlc, Pair};
+
+pub mod errors;
+mod model;
 
 #[derive(Clone, Debug, Default)]
 struct Binance {
@@ -51,9 +54,7 @@ impl TryFrom<Timeframe> for BinanceTimeframe {
 impl Exchange for Binance {
 	type Timeframe = BinanceTimeframe;
 
-	fn klines(&self, symbol: crate::Pair, tf: Self::Timeframe, limit: u32) -> impl std::future::Future<Output = color_eyre::eyre::Result<crate::Kline>> + Send {
-		async { todo!() }
-	}
+	async fn klines(&self, symbol: crate::Pair, tf: Self::Timeframe, limit: u32) -> color_eyre::eyre::Result<crate::Kline> { todo!() }
 
 	//? wait, could I just get the klines once here, then only listen for AggrTrade updates, construct the candles on-site?
 	// Also there should be a way to subscribe to multiple things at once, so this thing could check for existing subscriptions and then request being attached there.
@@ -70,14 +71,12 @@ impl Exchange for Binance {
 				let data = msg.unwrap().into_data();
 				debug!("SAR received websocket klines update: {:?}", data);
 				match serde_json::from_slice::<WsKlineEvent>(&data) {
-					Ok(kline_event) => {
-						match tx.send(kline_event.kline.into_kline()).await {
-							Ok(()) => {}
-							Err(_) => {
-								break;
-							}
+					Ok(kline_event) => match tx.send(kline_event.kline.into_kline()).await {
+						Ok(()) => {}
+						Err(_) => {
+							break;
 						}
-					}
+					},
 					Err(e) => {
 						println!("Failed to parse message as JSON: {}", e);
 					}
@@ -159,11 +158,10 @@ impl WsKlineData {
 			close: self.close,
 		};
 
-
 		Kline {
 			open_time: self.start_time as i64,
 			ohlc,
-			close_time: if self.is_closed {Some(self.close_time as i64)} else {None},
+			close_time: if self.is_closed { Some(self.close_time as i64) } else { None },
 			base_asset_volume: self.base_asset_volume,
 			quote_asset_volume: self.quote_asset_volume,
 			number_of_trades: self.number_of_trades as usize,
@@ -175,62 +173,60 @@ impl WsKlineData {
 
 #[derive(Clone, Debug)]
 pub struct BinanceConfig {
-    pub rest_api_endpoint: String,
-    pub ws_endpoint: String,
+	pub rest_api_endpoint: String,
+	pub ws_endpoint: String,
 
-    pub futures_rest_api_endpoint: String,
-    pub futures_ws_endpoint: String,
+	pub futures_rest_api_endpoint: String,
+	pub futures_ws_endpoint: String,
 
-    pub recv_window: u64,
+	pub recv_window: u64,
 }
 
 impl Default for BinanceConfig {
-    fn default() -> Self {
-        Self {
-            rest_api_endpoint: "https://api.binance.com".into(),
-            ws_endpoint: "wss://stream.binance.com/ws".into(),
+	fn default() -> Self {
+		Self {
+			rest_api_endpoint: "https://api.binance.com".into(),
+			ws_endpoint: "wss://stream.binance.com/ws".into(),
 
-            futures_rest_api_endpoint: "https://fapi.binance.com".into(),
-            futures_ws_endpoint: "wss://fstream.binance.com/ws".into(),
+			futures_rest_api_endpoint: "https://fapi.binance.com".into(),
+			futures_ws_endpoint: "wss://fstream.binance.com/ws".into(),
 
-            recv_window: 5000,
-        }
-    }
+			recv_window: 5000,
+		}
+	}
 }
 
 impl BinanceConfig {
-    pub fn testnet() -> Self {
-        Self::default()
-            .set_rest_api_endpoint("https://testnet.binance.vision")
-            .set_ws_endpoint("wss://testnet.binance.vision/ws")
-            .set_futures_rest_api_endpoint("https://testnet.binancefuture.com")
-            .set_futures_ws_endpoint("https://testnet.binancefuture.com/ws")
-    }
+	pub fn testnet() -> Self {
+		Self::default()
+			.set_rest_api_endpoint("https://testnet.binance.vision")
+			.set_ws_endpoint("wss://testnet.binance.vision/ws")
+			.set_futures_rest_api_endpoint("https://testnet.binancefuture.com")
+			.set_futures_ws_endpoint("https://testnet.binancefuture.com/ws")
+	}
 
-    pub fn set_rest_api_endpoint<T: Into<String>>(mut self, rest_api_endpoint: T) -> Self {
-        self.rest_api_endpoint = rest_api_endpoint.into();
-        self
-    }
+	pub fn set_rest_api_endpoint<T: Into<String>>(mut self, rest_api_endpoint: T) -> Self {
+		self.rest_api_endpoint = rest_api_endpoint.into();
+		self
+	}
 
-    pub fn set_ws_endpoint<T: Into<String>>(mut self, ws_endpoint: T) -> Self {
-        self.ws_endpoint = ws_endpoint.into();
-        self
-    }
-    pub fn set_futures_rest_api_endpoint<T: Into<String>>(
-        mut self, futures_rest_api_endpoint: T,
-    ) -> Self {
-        self.futures_rest_api_endpoint = futures_rest_api_endpoint.into();
-        self
-    }
+	pub fn set_ws_endpoint<T: Into<String>>(mut self, ws_endpoint: T) -> Self {
+		self.ws_endpoint = ws_endpoint.into();
+		self
+	}
 
-    pub fn set_futures_ws_endpoint<T: Into<String>>(mut self, futures_ws_endpoint: T) -> Self {
-        self.futures_ws_endpoint = futures_ws_endpoint.into();
-        self
-    }
+	pub fn set_futures_rest_api_endpoint<T: Into<String>>(mut self, futures_rest_api_endpoint: T) -> Self {
+		self.futures_rest_api_endpoint = futures_rest_api_endpoint.into();
+		self
+	}
 
-    pub fn set_recv_window(mut self, recv_window: u64) -> Self {
-        self.recv_window = recv_window;
-        self
-    }
+	pub fn set_futures_ws_endpoint<T: Into<String>>(mut self, futures_ws_endpoint: T) -> Self {
+		self.futures_ws_endpoint = futures_ws_endpoint.into();
+		self
+	}
+
+	pub fn set_recv_window(mut self, recv_window: u64) -> Self {
+		self.recv_window = recv_window;
+		self
+	}
 }
-

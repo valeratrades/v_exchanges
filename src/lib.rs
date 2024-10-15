@@ -1,6 +1,5 @@
 use color_eyre::eyre::Result;
 use tokio::sync::mpsc;
-use v_utils::trades::Timeframe;
 
 mod binance;
 
