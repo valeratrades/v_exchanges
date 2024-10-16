@@ -10,7 +10,7 @@ pub struct BinanceContentError {
 #[derive(Error, Debug)]
 pub enum BinanceError {
 	#[error("Binance API error: {0:?}")]
-	BinanceError(BinanceContentError),
+	ContentError(BinanceContentError),
 
 	#[error("Kline value '{name}' at index {index} is missing")]
 	KlineValueMissingError { index: usize, name: &'static str },

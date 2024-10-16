@@ -54,7 +54,9 @@ impl TryFrom<Timeframe> for BinanceTimeframe {
 impl Exchange for Binance {
 	type Timeframe = BinanceTimeframe;
 
-	async fn klines(&self, symbol: crate::Pair, tf: Self::Timeframe, limit: u32) -> color_eyre::eyre::Result<crate::Kline> { todo!() }
+	async fn klines(&self, symbol: crate::Pair, tf: Self::Timeframe, limit: u32) -> color_eyre::eyre::Result<crate::Kline> {
+		todo!()
+	}
 
 	//? wait, could I just get the klines once here, then only listen for AggrTrade updates, construct the candles on-site?
 	// Also there should be a way to subscribe to multiple things at once, so this thing could check for existing subscriptions and then request being attached there.

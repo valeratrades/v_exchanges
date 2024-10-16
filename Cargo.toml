@@ -1,3 +1,8 @@
+[workspace]
+members = [
+	"generic-api-client",
+]
+
 [package]
 name = "v_exchanges"
 version = "0.1.0"

@@ -1,0 +1,30 @@
+[package]
+name = "generic-api-client"
+version = "0.3.0"
+authors = ["negi_grass"]
+edition = "2021"
+description = "A client for HTTP/HTTPS/WebSocket APIs."
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/negi-grass/crypto-botters/tree/main/generic-api-client"
+documentation = "https://docs.rs/generic-api-client"
+repository = "https://github.com/negi-grass/crypto-botters/tree/main/generic-api-client"
+keywords = ["client", "websocket", "asynchronous"]
+categories = ["api-bindings", "asynchronous"]
+
+[dependencies]
+tokio = { version = "1.40.0", features = ["time", "sync", "net", "macros"] }
+tokio-tungstenite = "0.24.0"
+reqwest = "0.12.8"
+futures-util = "0.3.31"
+serde = "1.0.210"
+parking_lot = "0.12.3"
+bytes = "1.7.2"
+log = "0.4.22"
+thiserror = "1.0.64"
+
+[features]
+native-tls = ["reqwest/native-tls", "tokio-tungstenite/native-tls"]
+native-tls-vendored = ["reqwest/native-tls-vendored", "tokio-tungstenite/native-tls-vendored"]
+rustls-tls-native-roots = ["reqwest/rustls-tls-native-roots", "tokio-tungstenite/rustls-tls-native-roots"]
+rustls-tls-webpki-roots = ["reqwest/rustls-tls-webpki-roots", "tokio-tungstenite/rustls-tls-webpki-roots"]
