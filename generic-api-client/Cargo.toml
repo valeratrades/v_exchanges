@@ -13,15 +13,15 @@ keywords = ["client", "websocket", "asynchronous"]
 categories = ["api-bindings", "asynchronous"]
 
 [dependencies]
+bytes = "1.7.2"
+futures-util = "0.3.31"
+log = "0.4.22"
+parking_lot = "0.12.3"
+reqwest = "0.12.8"
+serde = "1.0.210"
+thiserror = "1.0.64"
 tokio = { version = "1.40.0", features = ["time", "sync", "net", "macros"] }
 tokio-tungstenite = "0.24.0"
-reqwest = "0.12.8"
-futures-util = "0.3.31"
-serde = "1.0.210"
-parking_lot = "0.12.3"
-bytes = "1.7.2"
-log = "0.4.22"
-thiserror = "1.0.64"
 
 [features]
 native-tls = ["reqwest/native-tls", "tokio-tungstenite/native-tls"]
