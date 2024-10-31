@@ -1,9 +1,12 @@
 # Architecture
 ```mermaid
 flowchart TD
-    F["data in"]
-    B["data out"]
-    F --> |TODO: graph the process| B
+	S["Standardized layer for interactions"]
+	D["Define all endpoints for exchange with it "]
+	T["Translation layer to unified Exchange struct and those associated"]
+
+	S --> D
+	D --> T
 ```
 
 

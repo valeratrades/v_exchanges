@@ -10,32 +10,32 @@ pub struct BinanceContentError {
 #[derive(Error, Debug)]
 pub enum BinanceError {
 	#[error("Binance API error: {0:?}")]
-	ContentError(BinanceContentError),
+	Content(BinanceContentError),
 
 	#[error("Kline value '{name}' at index {index} is missing")]
-	KlineValueMissingError { index: usize, name: &'static str },
+	KlineValueMissing { index: usize, name: &'static str },
 
 	#[error(transparent)]
-	ReqError(#[from] reqwest::Error),
+	Req(#[from] reqwest::Error),
 
 	#[error(transparent)]
-	InvalidHeaderError(#[from] reqwest::header::InvalidHeaderValue),
+	InvalidHeader(#[from] reqwest::header::InvalidHeaderValue),
 
 	#[error(transparent)]
-	IoError(#[from] std::io::Error),
+	Io(#[from] std::io::Error),
 
 	#[error(transparent)]
-	ParseFloatError(#[from] std::num::ParseFloatError),
+	ParseFloat(#[from] std::num::ParseFloatError),
 
 	#[error(transparent)]
-	UrlParserError(#[from] url::ParseError),
+	UrlParser(#[from] url::ParseError),
 
 	#[error(transparent)]
-	JsonError(#[from] serde_json::Error),
+	Json(#[from] serde_json::Error),
 
 	#[error(transparent)]
-	TungsteniteError(#[from] tungstenite::Error),
+	Tungstenite(#[from] tungstenite::Error),
 
 	#[error(transparent)]
-	TimestampError(#[from] std::time::SystemTimeError),
+	Timestamp(#[from] std::time::SystemTimeError),
 }

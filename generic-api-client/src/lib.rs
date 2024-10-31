@@ -1,12 +1,7 @@
-// Warn (almost) everything. see https://doc.rust-lang.org/rustc/lints/groups.html
 #![warn(
 	future_incompatible,
 	let_underscore,
 	nonstandard_style,
-	rust_2018_compatibility,
-	rust_2018_idioms,
-	rust_2021_compatibility,
-	unused,
 	missing_docs
 )]
 

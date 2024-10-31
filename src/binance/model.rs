@@ -1024,7 +1024,7 @@ pub struct KlineSummary {
 }
 
 fn get_value(row: &[Value], index: usize, name: &'static str) -> Result<Value, BinanceError> {
-	row.get(index).cloned().ok_or_else(|| BinanceError::KlineValueMissingError { index, name })
+	row.get(index).cloned().ok_or_else(|| BinanceError::KlineValueMissing { index, name })
 }
 
 impl TryFrom<&Vec<Value>> for KlineSummary {
