@@ -9,7 +9,7 @@ Trying to make a unified library for all crypto exchange interactions, instead o
 
 
 # Plan 
-- [ ] Copy over `crypto-botters`
+- [x] Copy over `crypto-botters`
 - [x] For binance, copy over the struct definitions from binance-rs
 - [ ] implement kline methods, similar to what binance-rs has, but using `crypto-botters` implementation for binance interactions.
 - [ ] Now Implement Exchange::klines on Binance.
@@ -30,6 +30,13 @@ Trying to make a unified library for all crypto exchange interactions, instead o
 
 ## Usage
 TODO
+
+
+
+## Relevant projects
+- [crypto-botters](<https://github.com/negi-grass/crypto-botters>), from where I stole the entire `generic-api-client`.
+- [binance-rs](<https://github.com/wisespace-io/binance-rs>), which provided a cheat-sheet for so many binance interactions and best-practices on testing.
+
 
 <br>
 
