@@ -27,6 +27,8 @@ TODO
     - [x] For binance, copy over the struct definitions from binance-rs
     - [x] distribute the current infrastructure to defined boundaries (add _adapters, keep generic-api-client for now (mb rename to _api_generics later)). Get responses with it.
     - [ ] go into src/binance/ on ::, implement klines methods with defined xxxResponse structs, have it just cover the websocket and rest for klines. Print both in main.
+        - [x] define core types
+        - [ ] improve error tracing. If the response fails to deserialize, want to know why. Look up how discretionary_engine does it. Want to print the actual response (+ utils functions to concat when too long (add later)), then the target type.
     - [ ] now implement `Exchange` for them (same place for now). Call methods.
     - [ ] now implement `Exchange` for bybit.
 - [ ] full bybit integration

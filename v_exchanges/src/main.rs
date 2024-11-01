@@ -3,44 +3,50 @@ use rust_decimal::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use v_exchanges_adapters::{
-    Client,
-    binance::{BinanceHttpUrl, BinanceOption},
+	Client,
+	binance::{BinanceHttpUrl, BinanceOption},
 };
+mod binance;
+
+use binance::futures::KlineCore;
+
+//- [ ] generics request for klines rest
+//- [ ] generics request for klines ws
+// just start subbing stuff
 
 #[tokio::main]
 async fn main() {
-    env_logger::builder()
-        .filter_level(LevelFilter::Debug)
-        .init();
-    let mut client = Client::new();
-    client.update_default_option(BinanceOption::HttpUrl(BinanceHttpUrl::Spot));
+	env_logger::builder().filter_level(LevelFilter::Debug).init();
+	let mut client = Client::new();
+	client.update_default_option(BinanceOption::HttpUrl(BinanceHttpUrl::Spot));
 
-    // typed
-    #[derive(Serialize)]
-    struct TickerParams<'a> {
-        symbol: &'a str,
-    }
+	#[derive(Serialize)]
+	pub struct KlineParams<'a> {
+		pub symbol: &'a str,
+		pub interval: &'a str,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub limit: Option<u16>,
+		#[serde(rename = "startTime", skip_serializing_if = "Option::is_none")]
+		pub start_time: Option<u64>,
+		#[serde(rename = "endTime", skip_serializing_if = "Option::is_none")]
+		pub end_time: Option<u64>,
+	}
+	impl Default for KlineParams<'_> {
+		fn default() -> Self {
+			Self {
+				symbol: "BTCUSDT",
+				interval: "1m", //HACK: should use [v_exchangse_core::Timeframe] struct
+				limit: None,
+				start_time: None,
+				end_time: None,
+			}
+		}
+	}
 
-    #[derive(Deserialize)]
-    struct Ticker {
-        #[serde(with = "rust_decimal::serde::str")]
-        price: Decimal,
-        #[allow(dead_code)]
-        symbol: String,
-    }
+	let klines: Vec<KlineCore> = client
+		.get("/fapi/v1/klines", Some(&KlineParams::default()), [BinanceOption::Default])
+		.await
+		.unwrap();
 
-    let ticker: Ticker = client.get(
-        "/api/v3/ticker/price",
-        Some(&TickerParams { symbol: "BTCUSDT" }),
-        [BinanceOption::Default],
-    ).await.expect("failed to get tickers");
-    println!("BTC & ETH prices:\n{:?}", ticker.price);
-
-    // not typed
-    let orderbook: serde_json::Value = client.get(
-        "https://api.binance.com/api/v3/ticker/bookTicker",
-        Some(&json!({ "symbol": "BTCUSDT" })),
-        [BinanceOption::HttpUrl(BinanceHttpUrl::None)],
-    ).await.expect("failed get orderbook");
-    println!("BTC bidPrice:\n{:?}", orderbook["bidPrice"]);
+	dbg!(&klines);
 }

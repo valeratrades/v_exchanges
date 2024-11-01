@@ -1,0 +1,2 @@
+Implementation details of API methods are not intrinsic. They can change, they are a level of abstraction higher than [`url`, `inputs`, `outputs`], - these should be the core primitives and _always_ go together.
+Although what about the authentication reqs? Wait, maybe I can consider _everything_ that the generics-client brings as core! Then we just define endpoints that are already naturally limited to use of core primitives, without need for additional `Endpoint` traits and alike.
