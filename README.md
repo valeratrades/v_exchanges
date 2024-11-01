@@ -25,7 +25,7 @@ TODO
 - [ ] full binance integration
     - [x] Copy over `crypto-botters`
     - [x] For binance, copy over the struct definitions from binance-rs
-    - [ ] distribute the current infrastructure to defined boundaries (add _adapters, keep generic-api-client for now (mb rename to _api_generics later)). Get responses with it.
+    - [x] distribute the current infrastructure to defined boundaries (add _adapters, keep generic-api-client for now (mb rename to _api_generics later)). Get responses with it.
     - [ ] go into src/binance/ on ::, implement klines methods with defined xxxResponse structs, have it just cover the websocket and rest for klines. Print both in main.
     - [ ] now implement `Exchange` for them (same place for now). Call methods.
     - [ ] now implement `Exchange` for bybit.
