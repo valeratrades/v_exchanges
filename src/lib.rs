@@ -27,9 +27,9 @@ pub struct Ohlc {
 	pub close: f64,
 }
 
-pub struct Config {
-	binance: binance::BinanceConfig,
-}
+//pub struct Config {
+//	binance: binance::BinanceConfig,
+//}
 
 pub trait Exchange {
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this woudl increase the error surface on new listings.
