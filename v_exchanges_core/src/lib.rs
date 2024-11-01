@@ -1,7 +1,7 @@
 use color_eyre::eyre::Result;
 use tokio::sync::mpsc;
 
-mod binance;
+//mod binance;
 
 pub struct Pair {
 	pub base: String,

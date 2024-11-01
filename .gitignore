@@ -18,6 +18,9 @@ commit_message
 commit
 functions.sh
 
+## Nix
+**/.direnv/
+
 ## Vim
 *.sw[po]
 

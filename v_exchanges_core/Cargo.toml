@@ -1,0 +1,16 @@
+cargo-features = ["edition2024", "codegen-backend"]
+
+[package]
+name = "v_exchanges_core"
+version = "0.1.0"
+edition = "2024"
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+
+[package.metadata.cargo-machete]
+ignored = ["derive-new", "eyre", "serde", "tokio", "v_utils"]
+
+[dependencies]
+color-eyre.workspace = true
+tokio.workspace = true

@@ -8,17 +8,6 @@
 Trying to make a unified library for all crypto exchange interactions, instead of redefining the response structs again and again.
 
 
-# Plan 
-- [x] Copy over `crypto-botters`
-- [x] For binance, copy over the struct definitions from binance-rs
-- [ ] implement kline methods, similar to what binance-rs has, but using `crypto-botters` implementation for binance interactions.
-- [ ] Now Implement Exchange::klines on Binance.
-... Later steps should become apparent after
-
-
-1. Make a slow-test that would call all the implemented endpoints, then store the responses in the directory with test response payloads. // for signed endpoints just use test-network
-
-
 <!-- markdownlint-disable -->
 <details>
   <summary>
@@ -32,6 +21,16 @@ Trying to make a unified library for all crypto exchange interactions, instead o
 TODO
 
 
+## Roadmap
+- [ ] full binance integration
+	- [x] Copy over `crypto-botters`
+	- [x] For binance, copy over the struct definitions from binance-rs
+	- [ ] implement kline methods, similar to what binance-rs has, but using `crypto-botters` implementation for binance interactions.
+	- [ ] Now Implement Exchange::klines on Binance.
+- [ ] full bybit integration
+- [ ] method to execute _all_ known requests in test mode[^1], on `success`full responses, persist the returned json objects to use in test later.
+
+[^1] where allowed, otherwise use min position size or just skip problematic endpoints
 
 ## Relevant projects
 - [crypto-botters](<https://github.com/negi-grass/crypto-botters>), from where I stole the entire `generic-api-client`.
