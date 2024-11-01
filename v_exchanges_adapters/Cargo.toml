@@ -1,0 +1,42 @@
+cargo-features = [ "edition2024" ]
+
+[package]
+name = "v_exchanges_adapters"
+version = "0.1.0"
+edition = "2024"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default = ["native-tls"]
+
+full = ["binance", "bitflyer", "bybit", "coincheck"]
+binance = ["dep:serde_urlencoded"]
+bitflyer = ["dep:rand"]
+bybit = ["dep:serde_urlencoded", "dep:rand"]
+coincheck = ["dep:serde_urlencoded"]
+
+native-tls = ["generic-api-client/native-tls"]
+native-tls-vendored = ["generic-api-client/native-tls-vendored"]
+rustls-tls-native-roots = ["generic-api-client/rustls-tls-native-roots"]
+rustls-tls-webpki-roots = ["generic-api-client/rustls-tls-webpki-roots"]
+
+[dependencies]
+generic-api-client = { version = "^0.3", path = "../generic-api-client" }
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+hex.workspace = true
+log.workspace = true
+
+serde_urlencoded = { version = "0.7.1", optional = true }
+rand = { version = "0.8.5", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.34.0", features = ["rt-multi-thread", "macros"] }
+rust_decimal = { version = "1.33.0", features = ["serde-with-str", "serde-with-float"] }
+env_logger = "0.10.1"

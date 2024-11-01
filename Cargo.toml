@@ -19,14 +19,18 @@ tabs_in_doc_comments = "allow"
 color-eyre = "^0.6.3"
 derive-new = "^0"
 futures-util = "0.3.31"
-reqwest = { version = "0.12.8", features = ["blocking", "json"] }
-serde = { version = "1.0.210", features = ["derive"] }
-serde_json = "1.0.128"
+reqwest = { version = "0.12.9", features = ["blocking", "json"] }
+serde = { version = "1.0.214", features = ["derive"] }
+serde_json = "1.0.132"
 serde_with = "3.11.0"
-thiserror = "1.0.64"
-tokio = { version = "^1.40.0", features = ["full"] }
+thiserror = "1.0.66"
+tokio = { version = "^1.41.0", features = ["full"] }
 tokio-tungstenite = { version = "^0.24.0", features = ["native-tls"] }
 tracing = "0.1.40"
-
 url = "2.5.2"
 v_utils = { version = "1.7.8", features = ["trades"] }
+generic-api-client = { version = "0.3", path = "../generic-api-client" }
+hmac = "0.12.1"
+sha2 = "0.10.8"
+hex = "0.4.3"
+log = "0.4.22"
