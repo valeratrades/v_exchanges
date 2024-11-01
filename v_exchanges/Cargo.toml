@@ -10,3 +10,20 @@ cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 
 [package.metadata.cargo-machete]
 ignored = ["derive-new", "eyre", "serde", "tokio", "v_utils"]
+
+[dependencies]
+tokio.workspace = true
+
+[features]
+default = ["native-tls"]
+
+full = ["binance", "bitflyer", "bybit", "coincheck"]
+binance = ["dep:serde_urlencoded"]
+bitflyer = ["dep:rand"]
+bybit = ["dep:serde_urlencoded", "dep:rand"]
+coincheck = ["dep:serde_urlencoded"]
+
+native-tls = ["generic-api-client/native-tls"]
+native-tls-vendored = ["generic-api-client/native-tls-vendored"]
+rustls-tls-native-roots = ["generic-api-client/rustls-tls-native-roots"]
+rustls-tls-webpki-roots = ["generic-api-client/rustls-tls-webpki-roots"]

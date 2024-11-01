@@ -23,10 +23,12 @@ TODO
 
 ## Roadmap
 - [ ] full binance integration
-	- [x] Copy over `crypto-botters`
-	- [x] For binance, copy over the struct definitions from binance-rs
-	- [ ] implement kline methods, similar to what binance-rs has, but using `crypto-botters` implementation for binance interactions.
-	- [ ] Now Implement Exchange::klines on Binance.
+    - [x] Copy over `crypto-botters`
+    - [x] For binance, copy over the struct definitions from binance-rs
+    - [ ] distribute the current infrastructure to defined boundaries (add _adapters, keep generic-api-client for now (mb rename to _api_generics later)). Get responses with it.
+    - [ ] go into src/binance/ on ::, implement klines methods with defined xxxResponse structs, have it just cover the websocket and rest for klines. Print both in main.
+    - [ ] now implement `Exchange` for them (same place for now). Call methods.
+    - [ ] now implement `Exchange` for bybit.
 - [ ] full bybit integration
 - [ ] method to execute _all_ known requests in test mode[^1], on `success`full responses, persist the returned json objects to use in test later.
 
