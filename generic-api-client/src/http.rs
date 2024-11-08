@@ -39,16 +39,15 @@ impl Client {
 		H: RequestHandler<B>, {
 		let config = handler.request_config();
 		config.verify();
+
 		let url = config.url_prefix + url;
-		let mut count = 1;
-		loop {
-			// create RequestBuilder
-			let mut request_builder = self.client.request(method.clone(), url.clone()).timeout(config.timeout);
-			if let Some(query) = query {
-				request_builder = request_builder.query(query);
-			}
-			let request = handler.build_request(request_builder, &body, count).map_err(RequestError::BuildRequestError)?;
-			// send the request
+		let mut request_builder = self.client.request(method.clone(), url.clone()).timeout(config.timeout);
+		if let Some(query) = query {
+			request_builder = request_builder.query(query);
+		}
+		let request = handler.build_request(request_builder, &body, count).map_err(RequestError::BuildRequestError)?;
+
+		for i in 1..=config.max_try {
 			match self.client.execute(request).await {
 				Ok(mut response) => {
 					let status = response.status();
@@ -57,17 +56,16 @@ impl Client {
 					return handler.handle_response(status, headers, body).map_err(RequestError::ResponseHandleError);
 				}
 				Err(error) => {
-					if count >= config.max_try {
-						// max retry count
+					if i < config.max_try {
+						log::warn!("Retrying sending request; made so far: {}", count);
+						tokio::time::sleep(config.retry_cooldown).await;
+					} else {
 						return Err(RequestError::SendRequest(error));
 					}
-					log::warn!("Retrying sending reqeust, count: {}", count);
-					// else, continue
-					count += 1;
-					tokio::time::sleep(config.retry_cooldown).await;
 				}
 			}
 		}
+		unreachable!()
 	}
 
 	/// Makes an GET request with the given [RequestHandler].

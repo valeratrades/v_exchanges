@@ -87,15 +87,15 @@ impl Client {
 		self.client.get(url, query, &O::request_handler(self.merged_options(options))).await
 	}
 
-	/// see [http::Client::get_no_query()]
-	#[inline(always)]
-	pub async fn get_no_query<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
-	where
-		O: HttpOption<'a, R, ()>,
-		O::RequestHandler: RequestHandler<()>,
-		Self: GetOptions<O::Options>, {
-		self.client.get_no_query(url, &O::request_handler(self.merged_options(options))).await
-	}
+	///// see [http::Client::get_no_query()]
+	//#[inline(always)]
+	//pub async fn get_no_query<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
+	//where
+	//	O: HttpOption<'a, R, ()>,
+	//	O::RequestHandler: RequestHandler<()>,
+	//	Self: GetOptions<O::Options>, {
+	//	self.client.get_no_query(url, &O::request_handler(self.merged_options(options))).await
+	//}
 
 	/// see [http::Client::post()]
 	#[inline(always)]
@@ -107,15 +107,15 @@ impl Client {
 		self.client.post(url, body, &O::request_handler(self.merged_options(options))).await
 	}
 
-	/// see [http::Client::post_no_body()]
-	#[inline(always)]
-	pub async fn post_no_body<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
-	where
-		O: HttpOption<'a, R, ()>,
-		O::RequestHandler: RequestHandler<()>,
-		Self: GetOptions<O::Options>, {
-		self.client.post_no_body(url, &O::request_handler(self.merged_options(options))).await
-	}
+	///// see [http::Client::post_no_body()]
+	//#[inline(always)]
+	//pub async fn post_no_body<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
+	//where
+	//	O: HttpOption<'a, R, ()>,
+	//	O::RequestHandler: RequestHandler<()>,
+	//	Self: GetOptions<O::Options>, {
+	//	self.client.post_no_body(url, &O::request_handler(self.merged_options(options))).await
+	//}
 
 	/// see [http::Client::put()]
 	#[inline(always)]
@@ -127,15 +127,15 @@ impl Client {
 		self.client.put(url, body, &O::request_handler(self.merged_options(options))).await
 	}
 
-	/// see [http::Client::put_no_body()]
-	#[inline(always)]
-	pub async fn put_no_body<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
-	where
-		O: HttpOption<'a, R, ()>,
-		O::RequestHandler: RequestHandler<()>,
-		Self: GetOptions<O::Options>, {
-		self.client.put_no_body(url, &O::request_handler(self.merged_options(options))).await
-	}
+	///// see [http::Client::put_no_body()]
+	//#[inline(always)]
+	//pub async fn put_no_body<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
+	//where
+	//	O: HttpOption<'a, R, ()>,
+	//	O::RequestHandler: RequestHandler<()>,
+	//	Self: GetOptions<O::Options>, {
+	//	self.client.put_no_body(url, &O::request_handler(self.merged_options(options))).await
+	//}
 
 	/// see [http::Client::delete()]
 	#[inline(always)]
@@ -148,15 +148,15 @@ impl Client {
 		self.client.delete(url, query, &O::request_handler(self.merged_options(options))).await
 	}
 
-	/// see [http::Client::delete_no_query()]
-	#[inline(always)]
-	pub async fn delete_no_query<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
-	where
-		O: HttpOption<'a, R, ()>,
-		O::RequestHandler: RequestHandler<()>,
-		Self: GetOptions<O::Options>, {
-		self.client.delete_no_query(url, &O::request_handler(self.merged_options(options))).await
-	}
+	///// see [http::Client::delete_no_query()]
+	//#[inline(always)]
+	//pub async fn delete_no_query<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
+	//where
+	//	O: HttpOption<'a, R, ()>,
+	//	O::RequestHandler: RequestHandler<()>,
+	//	Self: GetOptions<O::Options>, {
+	//	self.client.delete_no_query(url, &O::request_handler(self.merged_options(options))).await
+	//}
 
 	#[inline(always)]
 	pub async fn websocket<O, H>(&self, url: &str, handler: H, options: impl IntoIterator<Item = O>) -> Result<WebSocketConnection<O::WebSocketHandler>, TungsteniteError>
