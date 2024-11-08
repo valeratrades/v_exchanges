@@ -117,14 +117,14 @@ impl<H: WebSocketHandler> WebSocketConnection<H> {
 								match entry {
 									Entry::Occupied(mut occupied) => {
 										if config.ignore_duplicate_during_reconnection {
-											log::debug!("Skipping duplicate message.");
+											tracing::debug!("Skipping duplicate message.");
 											continue;
 										}
 
 										*occupied.get_mut() += id_sign;
 										if id_sign != occupied.get().signum() {
 											// same message which comes from different connections, so we assume it's a duplicate.
-											log::debug!("Skipping duplicate message.");
+											tracing::debug!("Skipping duplicate message.");
 											continue;
 										}
 										// comes from the same connection, which means the message was sent twice.
@@ -141,26 +141,26 @@ impl<H: WebSocketHandler> WebSocketConnection<H> {
 							let mut sink_lock = sink.lock().await;
 							for message in messages {
 								if let Err(error) = sink_lock.send(message.into_message()).await {
-									log::error!("Failed to send message because of an error: {}", error);
+									tracing::error!("Failed to send message because of an error: {}", error);
 								};
 							}
 							if let Err(error) = sink_lock.flush().await {
-								log::error!("An error occurred while flushing WebSocket sink: {error:?}");
+								tracing::error!("An error occurred while flushing WebSocket sink: {error:?}");
 							}
 						}
 					}
 					// failed to receive message
 					Ok(Some((_, FeederMessage::Message(Err(error))))) => {
-						log::error!("Failed to receive message because of an error: {error:?}");
+						tracing::error!("Failed to receive message because of an error: {error:?}");
 						if reconnect_manager.request_reconnect() {
-							log::info!("Reconnecting WebSocket because there was an error while receiving a message");
+							tracing::info!("Reconnecting WebSocket because there was an error while receiving a message");
 						}
 					}
 					// timeout
 					Err(_) => {
-						log::debug!("WebSocket message timeout");
+						tracing::debug!("WebSocket message timeout");
 						if reconnect_manager.request_reconnect() {
-							log::info!("Reconnecting WebSocket because of timeout");
+							tracing::info!("Reconnecting WebSocket because of timeout");
 						}
 					}
 					// connection was closed
@@ -170,15 +170,15 @@ impl<H: WebSocketHandler> WebSocketConnection<H> {
 							// old connection, ignore
 							continue;
 						}
-						log::debug!("WebSocket connection closed by server");
+						tracing::debug!("WebSocket connection closed by server");
 						if reconnect_manager.request_reconnect() {
-							log::info!("Reconnecting WebSocket because it was disconnected by the server");
+							tracing::info!("Reconnecting WebSocket because it was disconnected by the server");
 						}
 					}
 					// the connection is no longer needed because WebSocketConnection was dropped
 					Ok(Some((_, FeederMessage::DropConnectionRequest))) => {
 						if let Err(error) = sink.lock().await.close().await {
-							log::debug!("Failed to close WebSocket connection: {error:?}");
+							tracing::debug!("Failed to close WebSocket connection: {error:?}");
 						}
 						break;
 					}
@@ -211,7 +211,7 @@ impl<H: WebSocketHandler> WebSocketConnection<H> {
 					_ = reconnect_manager.inner.reconnect_notify.notified() => {},
 					_ = timer => {},
 				}
-				log::debug!("Reconnection requested");
+				tracing::debug!("Reconnection requested");
 				cooldown.tick().await;
 				reconnect_manager.inner.reconnecting.store(true, Ordering::SeqCst);
 
@@ -221,7 +221,7 @@ impl<H: WebSocketHandler> WebSocketConnection<H> {
 				// this completes immediately because we just added a permit
 				reconnect_manager.inner.reconnect_notify.notified().await;
 
-				log::debug!("Starting reconnection process ...");
+				tracing::debug!("Starting reconnection process ...");
 				if no_duplicate {
 					tokio::time::sleep(wait).await;
 				}
@@ -231,21 +231,21 @@ impl<H: WebSocketHandler> WebSocketConnection<H> {
 					Ok(new_sink) => {
 						// replace the sink with the new one
 						let mut old_sink = mem::replace(&mut *sink.lock().await, new_sink);
-						log::debug!("New connection established");
+						tracing::debug!("New connection established");
 
 						if no_duplicate {
 							tokio::time::sleep(wait).await;
 						}
 
 						if let Err(error) = old_sink.close().await {
-							log::debug!("An error occurred while closing old connection: {}", error);
+							tracing::debug!("An error occurred while closing old connection: {}", error);
 						}
 						connection.handler.lock().handle_close(true);
-						log::debug!("Old connection closed");
+						tracing::debug!("Old connection closed");
 					}
 					Err(error) => {
 						// try reconnecting again
-						log::error!("Failed to reconnect because of an error: {}, trying again ...", error);
+						tracing::error!("Failed to reconnect because of an error: {}, trying again ...", error);
 						reconnect_manager.inner.reconnect_notify.notify_one();
 					}
 				}
@@ -255,7 +255,7 @@ impl<H: WebSocketHandler> WebSocketConnection<H> {
 				}
 
 				reconnect_manager.inner.reconnecting.store(false, Ordering::SeqCst);
-				log::debug!("Reconnection process complete");
+				tracing::debug!("Reconnection process complete");
 			}
 		}
 
@@ -301,14 +301,14 @@ impl<H: WebSocketHandler> WebSocketConnection<H> {
 				// send the received message to the task running feed_handler
 				if connection.message_tx.send((id, FeederMessage::Message(message))).is_err() {
 					// the channel is closed. we can't disconnect because we don't have the sink
-					log::debug!("WebSocket message receiver is closed; abandon connection");
+					tracing::debug!("WebSocket message receiver is closed; abandon connection");
 					return;
 				}
 			}
 			// the underlying WebSocket connection was closed
 
 			drop(connection.message_tx.send((id, FeederMessage::ConnectionClosed))); // this may be Err
-			log::debug!("WebSocket stream closed");
+			tracing::debug!("WebSocket stream closed");
 		});
 		Ok(sink)
 	}
@@ -430,7 +430,7 @@ pub trait WebSocketHandler: Send + 'static {
 	///
 	/// This could be called multiple times because the connection can be reconnected.
 	fn handle_start(&mut self) -> Vec<WebSocketMessage> {
-		log::debug!("WebSocket connection started");
+		tracing::debug!("WebSocket connection started");
 		vec![]
 	}
 
@@ -444,7 +444,7 @@ pub trait WebSocketHandler: Send + 'static {
 	/// - `false`, it means that the connection will not be reconnected, because the [WebSocketConnection] was dropped.
 	#[allow(unused_variables)]
 	fn handle_close(&mut self, reconnect: bool) {
-		log::debug!("WebSocket connection closed; reconnect: {}", reconnect);
+		tracing::debug!("WebSocket connection closed; reconnect: {}", reconnect);
 	}
 }
 

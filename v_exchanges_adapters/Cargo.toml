@@ -31,7 +31,7 @@ serde_with.workspace = true
 hmac.workspace = true
 sha2.workspace = true
 hex.workspace = true
-log.workspace = true
+tracing.workspace = true
 
 serde_urlencoded = { version = "0.7.1", optional = true }
 rand = { version = "0.8.5", optional = true }

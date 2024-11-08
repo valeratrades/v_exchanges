@@ -13,15 +13,15 @@ keywords = ["client", "websocket", "asynchronous"]
 categories = ["api-bindings", "asynchronous"]
 
 [dependencies]
-bytes = "1.7.2"
-futures-util = "0.3.31"
-log = "0.4.22"
+bytes = "1.8.0"
+futures-util.workspace = true
 parking_lot = "0.12.3"
-reqwest = "0.12.8"
-serde = "1.0.210"
-thiserror = "1.0.64"
-tokio = { version = "1.40.0", features = ["time", "sync", "net", "macros"] }
+reqwest.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
 tokio-tungstenite = "0.24.0"
+tracing.workspace = true
 
 [features]
 native-tls = ["reqwest/native-tls", "tokio-tungstenite/native-tls"]

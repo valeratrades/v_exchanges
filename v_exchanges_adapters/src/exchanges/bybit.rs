@@ -180,7 +180,7 @@ where
 	fn handle_response(&self, status: StatusCode, _: HeaderMap, response_body: Bytes) -> Result<Self::Successful, Self::Unsuccessful> {
 		if status.is_success() {
 			serde_json::from_slice(&response_body).map_err(|error| {
-				log::debug!("Failed to parse response due to an error: {}", error);
+				tracing::debug!("Failed to parse response due to an error: {}", error);
 				BybitHandlerError::ParseError
 			})
 		} else {
@@ -193,7 +193,7 @@ where
 						BybitHandlerError::ApiError(parsed)
 					},
 				Err(error) => {
-					log::debug!("Failed to parse error response due to an error: {}", error);
+					tracing::debug!("Failed to parse error response due to an error: {}", error);
 					BybitHandlerError::ParseError
 				}
 			};
@@ -391,10 +391,10 @@ impl WebSocketHandler for BybitWebSocketHandler {
 						.to_string(),
 					)];
 				} else {
-					log::debug!("API secret not set.");
+					tracing::debug!("API secret not set.");
 				};
 			} else {
-				log::debug!("API key not set.");
+				tracing::debug!("API key not set.");
 			};
 		}
 		self.message_subscribe()
@@ -406,29 +406,29 @@ impl WebSocketHandler for BybitWebSocketHandler {
 				let message: serde_json::Value = match serde_json::from_str(&message) {
 					Ok(message) => message,
 					Err(_) => {
-						log::debug!("Invalid JSON received");
+						tracing::debug!("Invalid JSON received");
 						return vec![];
 					}
 				};
 				match message["op"].as_str() {
 					Some("auth") => {
 						if message["success"].as_bool() == Some(true) {
-							log::debug!("WebSocket authentication successful");
+							tracing::debug!("WebSocket authentication successful");
 						} else {
-							log::debug!("WebSocket authentication unsuccessful; message: {}", message["ret_msg"]);
+							tracing::debug!("WebSocket authentication unsuccessful; message: {}", message["ret_msg"]);
 						}
 						return self.message_subscribe();
 					}
 					Some("subscribe") =>
 						if message["success"].as_bool() == Some(true) {
-							log::debug!("WebSocket topics subscription successful");
+							tracing::debug!("WebSocket topics subscription successful");
 						} else {
-							log::debug!("WebSocket topics subscription unsuccessful; message: {}", message["ret_msg"]);
+							tracing::debug!("WebSocket topics subscription unsuccessful; message: {}", message["ret_msg"]);
 						},
 					_ => (self.message_handler)(message),
 				}
 			}
-			WebSocketMessage::Binary(_) => log::debug!("Unexpected binary message received"),
+			WebSocketMessage::Binary(_) => tracing::debug!("Unexpected binary message received"),
 			WebSocketMessage::Ping(_) | WebSocketMessage::Pong(_) => (),
 		}
 		vec![]

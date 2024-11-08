@@ -28,9 +28,8 @@ tokio = { version = "^1.41.1", features = ["full"] }
 tokio-tungstenite = { version = "^0.24.0", features = ["native-tls"] }
 tracing = "0.1.40"
 url = "2.5.3"
-v_utils = { version = "1.7.8", features = ["trades"] }
+v_utils = { version = "^1.9.1", features = ["trades", "tracing"], path = "../v_utils/v_utils" }
 generic-api-client = { version = "0.3", path = "../generic-api-client" }
 hmac = "0.12.1"
 sha2 = "0.10.8"
 hex = "0.4.3"
-log = "0.4.22"

@@ -21,7 +21,7 @@ pub struct Client {
 }
 
 impl Client {
-	/// Constructs a new `Client`.
+	/// Constructs a default `Client`.
 	#[inline(always)]
 	pub fn new() -> Self {
 		Self::default()
@@ -41,13 +41,14 @@ impl Client {
 		config.verify();
 
 		let url = config.url_prefix + url;
-		let mut request_builder = self.client.request(method.clone(), url.clone()).timeout(config.timeout);
-		if let Some(query) = query {
-			request_builder = request_builder.query(query);
-		}
-		let request = handler.build_request(request_builder, &body, count).map_err(RequestError::BuildRequestError)?;
 
 		for i in 1..=config.max_try {
+			//HACK: hate to create a new request every time, but I haven't yet figured out how to provide by reference
+			let mut request_builder = self.client.request(method.clone(), url.clone()).timeout(config.timeout);
+			if let Some(query) = query {
+				request_builder = request_builder.query(query);
+			}
+			let request = handler.build_request(request_builder, &body, i).map_err(RequestError::BuildRequestError)?;
 			match self.client.execute(request).await {
 				Ok(mut response) => {
 					let status = response.status();
@@ -56,8 +57,10 @@ impl Client {
 					return handler.handle_response(status, headers, body).map_err(RequestError::ResponseHandleError);
 				}
 				Err(error) => {
+					//TODO!!!!: we are retrying regardless of the error. Must refactor to require a list of retryable errors for each defined exchange.
+					dbg!(&error);
 					if i < config.max_try {
-						log::warn!("Retrying sending request; made so far: {}", count);
+						tracing::warn!("Retrying sending request; made so far: {i}");
 						tokio::time::sleep(config.retry_cooldown).await;
 					} else {
 						return Err(RequestError::SendRequest(error));

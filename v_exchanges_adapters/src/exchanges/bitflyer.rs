@@ -172,14 +172,14 @@ where
 	fn handle_response(&self, status: StatusCode, _: HeaderMap, response_body: Bytes) -> Result<Self::Successful, Self::Unsuccessful> {
 		if status.is_success() {
 			serde_json::from_slice(&response_body).map_err(|error| {
-				log::debug!("Failed to parse response due to an error: {}", error);
+				tracing::debug!("Failed to parse response due to an error: {}", error);
 				BitFlyerHandlerError::ParseError
 			})
 		} else {
 			let error = match serde_json::from_slice(&response_body) {
 				Ok(parsed_error) => BitFlyerHandlerError::ApiError(parsed_error),
 				Err(error) => {
-					log::debug!("Failed to parse error response due to an error: {}", error);
+					tracing::debug!("Failed to parse error response due to an error: {}", error);
 					BitFlyerHandlerError::ParseError
 				}
 			};
@@ -228,10 +228,10 @@ impl WebSocketHandler for BitFlyerWebSocketHandler {
 						.to_string(),
 					)];
 				} else {
-					log::debug!("API secret not set.");
+					tracing::debug!("API secret not set.");
 				};
 			} else {
-				log::debug!("API key not set.");
+				tracing::debug!("API key not set.");
 			};
 		}
 		self.message_subscribe()
@@ -253,17 +253,17 @@ impl WebSocketHandler for BitFlyerWebSocketHandler {
 				let message: Message = match serde_json::from_str(&message) {
 					Ok(message) => message,
 					Err(_) => {
-						log::debug!("Invalid JSON-RPC message received");
+						tracing::debug!("Invalid JSON-RPC message received");
 						return vec![];
 					}
 				};
 				if self.options.websocket_auth && self.auth_id == message.id {
 					// result of auth
 					if message.result == Some(serde_json::Value::Bool(true)) {
-						log::debug!("WebSocket authentication successful");
+						tracing::debug!("WebSocket authentication successful");
 						return self.message_subscribe();
 					} else {
-						log::debug!("WebSocket authentication unsuccessful");
+						tracing::debug!("WebSocket authentication unsuccessful");
 					}
 					self.auth_id = None;
 				} else if message.method.as_deref() == Some("channelMessage") {
@@ -272,7 +272,7 @@ impl WebSocketHandler for BitFlyerWebSocketHandler {
 					}
 				}
 			}
-			WebSocketMessage::Binary(_) => log::debug!("Unexpected binary message received"),
+			WebSocketMessage::Binary(_) => tracing::debug!("Unexpected binary message received"),
 			WebSocketMessage::Ping(_) | WebSocketMessage::Pong(_) => (),
 		}
 		vec![]

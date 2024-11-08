@@ -1,4 +1,3 @@
-use log::LevelFilter;
 use rust_decimal::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -9,6 +8,7 @@ use v_exchanges_adapters::{
 mod binance;
 
 use binance::futures::KlineCore;
+use v_utils::utils::init_subscriber;
 
 //- [ ] generics request for klines rest
 //- [ ] generics request for klines ws
@@ -16,7 +16,8 @@ use binance::futures::KlineCore;
 
 #[tokio::main]
 async fn main() {
-	env_logger::builder().filter_level(LevelFilter::Debug).init();
+	init_subscriber(None);
+
 	let mut client = Client::new();
 	client.update_default_option(BinanceOption::HttpUrl(BinanceHttpUrl::Spot));
 
@@ -43,10 +44,7 @@ async fn main() {
 		}
 	}
 
-	let klines: Vec<KlineCore> = client
-		.get("/fapi/v1/klines", Some(&KlineParams::default()), [BinanceOption::Default])
-		.await
-		.unwrap();
+	let klines: Vec<KlineCore> = client.get("/fapi/v1/klines", Some(&KlineParams::default()), [BinanceOption::Default]).await.unwrap();
 
 	dbg!(&klines);
 }

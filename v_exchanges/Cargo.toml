@@ -15,10 +15,11 @@ ignored = ["derive-new", "eyre", "serde", "tokio", "v_utils"]
 v_exchanges_adapters = { path = "../v_exchanges_adapters/", features = ["full"] }
 
 tokio.workspace = true
-log.workspace = true
+tracing.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
+v_utils.workspace = true
 
 # #dbg
 rust_decimal = { version = "1.33.0", features = ["serde-with-str", "serde-with-float"] }
