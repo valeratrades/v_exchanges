@@ -6,7 +6,7 @@ use std::{
 	time::{Duration, SystemTime},
 };
 
-use generic_api_client::{http::*, websocket::*};
+use v_exchanges_api_generics::{http::*, websocket::*};
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;

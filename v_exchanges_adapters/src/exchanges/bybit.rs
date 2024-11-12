@@ -3,7 +3,7 @@
 
 use std::{borrow::Cow, marker::PhantomData, time::SystemTime, vec};
 
-use generic_api_client::{
+use v_exchanges_api_generics::{
 	http::{header::HeaderValue, *},
 	websocket::*,
 };

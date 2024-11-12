@@ -10,7 +10,7 @@ use thiserror::Error;
 use tracing::instrument;
 
 /// The User Agent string
-pub static USER_AGENT: &str = concat!("generic-api-client/", env!("CARGO_PKG_VERSION"));
+pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_PKG_VERSION"));
 
 /// Client for communicating with APIs through HTTP/HTTPS.
 ///

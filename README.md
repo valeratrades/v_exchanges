@@ -37,7 +37,7 @@ TODO
 [^1] where allowed, otherwise use min position size or just skip problematic endpoints
 
 ## Relevant projects
-- [crypto-botters](<https://github.com/negi-grass/crypto-botters>), from where I stole the entire `generic-api-client`.
+- [crypto-botters](<https://github.com/negi-grass/crypto-botters>), from where I stole the entire `generic-api-client` (as `v_exchanges_api_generics`).
 - [binance-rs](<https://github.com/wisespace-io/binance-rs>), which provided a cheat-sheet for so many binance interactions and best-practices on testing.
 
 

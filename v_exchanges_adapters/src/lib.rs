@@ -1,8 +1,8 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub use exchanges::*;
-pub use generic_api_client;
-use generic_api_client::{
+pub use v_exchanges_api_generics;
+use v_exchanges_api_generics::{
 	http::{self, *},
 	websocket::*,
 };

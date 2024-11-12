@@ -10,7 +10,7 @@ flowchart TD
 	D --> T
 ```
 
-### `generic-api-client`
+### `v_exchanges_api_generics`
 Provides a standardized interface for defining how an exchange wants to be communicated with.
 
 ### `v_exchanges_core`

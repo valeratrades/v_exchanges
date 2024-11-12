@@ -3,7 +3,7 @@
 
 use std::{marker::PhantomData, time::SystemTime};
 
-use generic_api_client::{
+use v_exchanges_api_generics::{
 	http::{header::HeaderValue, *},
 	websocket::*,
 };

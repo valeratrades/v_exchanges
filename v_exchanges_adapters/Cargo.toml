@@ -18,13 +18,13 @@ bitflyer = ["dep:rand"]
 bybit = ["dep:serde_urlencoded", "dep:rand"]
 coincheck = ["dep:serde_urlencoded"]
 
-native-tls = ["generic-api-client/native-tls"]
-native-tls-vendored = ["generic-api-client/native-tls-vendored"]
-rustls-tls-native-roots = ["generic-api-client/rustls-tls-native-roots"]
-rustls-tls-webpki-roots = ["generic-api-client/rustls-tls-webpki-roots"]
+native-tls = ["v_exchanges_api_generics/native-tls"]
+native-tls-vendored = ["v_exchanges_api_generics/native-tls-vendored"]
+rustls-tls-native-roots = ["v_exchanges_api_generics/rustls-tls-native-roots"]
+rustls-tls-webpki-roots = ["v_exchanges_api_generics/rustls-tls-webpki-roots"]
 
 [dependencies]
-generic-api-client = { version = "^0.3", path = "../generic-api-client" }
+v_exchanges_api_generics = { version = "^0.3", path = "../v_exchanges_api_generics" }
 serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
