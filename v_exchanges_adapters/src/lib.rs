@@ -70,9 +70,10 @@ impl Client {
 	pub async fn request<'a, R, O, Q, B>(&self, method: Method, url: &str, query: Option<&Q>, body: Option<B>, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, B)
 	where
 		O: HttpOption<'a, R, B>,
-		O::RequestHandler: RequestHandler<B>,
+		O::RequestHandler: RequestHandler<B> ,
+		B: std::fmt::Debug,
 		Self: GetOptions<O::Options>,
-		Q: Serialize + ?Sized, {
+		Q: Serialize + ?Sized , {
 		self.client.request(method, url, query, body, &O::request_handler(self.merged_options(options))).await
 	}
 
@@ -81,9 +82,9 @@ impl Client {
 	pub async fn get<'a, R, O, Q>(&self, url: &str, query: Option<&Q>, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
 	where
 		O: HttpOption<'a, R, ()>,
-		O::RequestHandler: RequestHandler<()>,
+		O::RequestHandler: RequestHandler<()> ,
 		Self: GetOptions<O::Options>,
-		Q: Serialize + ?Sized, {
+		Q: Serialize + ?Sized , {
 		self.client.get(url, query, &O::request_handler(self.merged_options(options))).await
 	}
 
@@ -102,7 +103,8 @@ impl Client {
 	pub async fn post<'a, R, O, B>(&self, url: &str, body: Option<B>, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, B)
 	where
 		O: HttpOption<'a, R, B>,
-		O::RequestHandler: RequestHandler<B>,
+		O::RequestHandler: RequestHandler<B> ,
+		B: std::fmt::Debug,
 		Self: GetOptions<O::Options>, {
 		self.client.post(url, body, &O::request_handler(self.merged_options(options))).await
 	}
@@ -122,7 +124,8 @@ impl Client {
 	pub async fn put<'a, R, O, B>(&self, url: &str, body: Option<B>, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, B)
 	where
 		O: HttpOption<'a, R, B>,
-		O::RequestHandler: RequestHandler<B>,
+		O::RequestHandler: RequestHandler<B> ,
+		B: std::fmt::Debug,
 		Self: GetOptions<O::Options>, {
 		self.client.put(url, body, &O::request_handler(self.merged_options(options))).await
 	}
@@ -141,10 +144,11 @@ impl Client {
 	#[inline(always)]
 	pub async fn delete<'a, R, O, Q>(&self, url: &str, query: Option<&Q>, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
 	where
-		O: HttpOption<'a, R, ()>,
+		O: HttpOption<'a, R, ()> ,
+		R: std::fmt::Debug,
 		O::RequestHandler: RequestHandler<()>,
 		Self: GetOptions<O::Options>,
-		Q: Serialize + ?Sized, {
+		Q: Serialize + ?Sized , {
 		self.client.delete(url, query, &O::request_handler(self.merged_options(options))).await
 	}
 

@@ -19,6 +19,7 @@ pub type CoincheckRequestResult<T> = Result<T, CoincheckRequestError>;
 pub type CoincheckRequestError = RequestError<&'static str, CoincheckHandlerError>;
 
 /// Options that can be set when creating handlers
+#[derive(Debug)]
 pub enum CoincheckOption {
 	/// [Default] variant, does nothing
 	Default,

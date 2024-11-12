@@ -16,6 +16,7 @@ use v_utils::utils::init_subscriber;
 
 #[tokio::main]
 async fn main() {
+	color_eyre::install().unwrap();
 	init_subscriber(None);
 
 	let mut client = Client::new();

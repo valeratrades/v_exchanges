@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{fmt::Debug, time::Duration};
 
 pub use bytes::Bytes;
 pub use reqwest::{
@@ -7,6 +7,7 @@ pub use reqwest::{
 };
 use serde::Serialize;
 use thiserror::Error;
+use tracing::instrument;
 
 /// The User Agent string
 pub static USER_AGENT: &str = concat!("generic-api-client/", env!("CARGO_PKG_VERSION"));
@@ -22,7 +23,7 @@ pub struct Client {
 
 impl Client {
 	/// Constructs a default `Client`.
-	#[inline(always)]
+	#[deprecated(note = "Use [Client::default()] instead")]
 	pub fn new() -> Self {
 		Self::default()
 	}
@@ -33,6 +34,7 @@ impl Client {
 	///
 	/// The request is passed to `handler` before being sent, and the response is passed to `handler` before being returned.
 	/// Note, that as stated in the docs for [RequestBuilder::query()], parameter `query` only accepts a **sequence of** key-value pairs.
+	//#[instrument] //TODO: get all generics to impl std::fmt::Debug
 	pub async fn request<Q, B, H>(&self, method: Method, url: &str, query: Option<&Q>, body: Option<B>, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
 	where
 		Q: Serialize + ?Sized,
@@ -85,19 +87,6 @@ impl Client {
 		self.request::<Q, (), H>(Method::GET, url, query, None, handler).await
 	}
 
-	/// Makes an GET request with the given [RequestHandler], without queries.
-	///
-	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
-	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
-	///
-	/// For more information, see [request()][Self::request()].
-	#[inline(always)]
-	pub async fn get_no_query<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
-	where
-		H: RequestHandler<()>, {
-		self.request::<&[(&str, &str)], (), H>(Method::GET, url, None, None, handler).await
-	}
-
 	/// Makes an POST request with the given [RequestHandler].
 	///
 	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
@@ -108,19 +97,6 @@ impl Client {
 	where
 		H: RequestHandler<B>, {
 		self.request::<(), B, H>(Method::POST, url, None, body, handler).await
-	}
-
-	/// Makes an POST request with the given [RequestHandler], without a body.
-	///
-	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
-	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
-	///
-	/// For more information, see [request()][Self::request()].
-	#[inline(always)]
-	pub async fn post_no_body<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
-	where
-		H: RequestHandler<()>, {
-		self.request::<(), (), H>(Method::POST, url, None, None, handler).await
 	}
 
 	/// Makes an PUT request with the given [RequestHandler].
@@ -135,19 +111,6 @@ impl Client {
 		self.request::<(), B, H>(Method::PUT, url, None, body, handler).await
 	}
 
-	/// Makes an PUT request with the given [RequestHandler], without a body.
-	///
-	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
-	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
-	///
-	/// For more information, see [request()][Self::request()].
-	#[inline(always)]
-	pub async fn put_no_body<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
-	where
-		H: RequestHandler<()>, {
-		self.request::<(), (), H>(Method::PUT, url, None, None, handler).await
-	}
-
 	/// Makes an DELETE request with the given [RequestHandler].
 	///
 	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
@@ -160,19 +123,6 @@ impl Client {
 		Q: Serialize + ?Sized,
 		H: RequestHandler<()>, {
 		self.request::<Q, (), H>(Method::DELETE, url, query, None, handler).await
-	}
-
-	/// Makes an DELETE request with the given [RequestHandler], without queries.
-	///
-	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
-	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
-	///
-	/// For more information, see [request()][Self::request()].
-	#[inline(always)]
-	pub async fn delete_no_query<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
-	where
-		H: RequestHandler<()>, {
-		self.request::<&[(&str, &str)], (), H>(Method::DELETE, url, None, None, handler).await
 	}
 }
 
@@ -277,7 +227,7 @@ impl Default for RequestConfig {
 /// An `enum` that represents errors that could be returned by [Client::request()]
 ///
 /// Type parameter `R` is [RequestHandler::Unsuccessful].
-#[derive(Error, Debug)]
+#[derive(Error, std::fmt::Debug)]
 pub enum RequestError<E, R> {
 	/// An error which occurred while sending a HTTP request.
 	#[error("failed to send reqeust")]
