@@ -20,7 +20,7 @@ async fn main() {
 	init_subscriber(None);
 
 	let mut client = Client::new();
-	client.update_default_option(BinanceOption::HttpUrl(BinanceHttpUrl::Spot));
+	client.update_default_option(BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM));
 
 	#[derive(Serialize)]
 	pub struct KlineParams<'a> {
@@ -45,7 +45,7 @@ async fn main() {
 		}
 	}
 
-	let klines: Vec<KlineCore> = client.get("/fapi/v1/klines", Some(&KlineParams::default()), [BinanceOption::Default]).await.unwrap();
+	let klines: Vec<KlineCore> = client.get(/*https://fapi.binance.com*/"/fapi/v1/klines", Some(&KlineParams::default()), [BinanceOption::Default]).await.unwrap();
 
 	dbg!(&klines);
 }

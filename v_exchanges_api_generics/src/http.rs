@@ -7,7 +7,7 @@ pub use reqwest::{
 };
 use serde::Serialize;
 use thiserror::Error;
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 /// The User Agent string
 pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_PKG_VERSION"));
@@ -34,7 +34,7 @@ impl Client {
 	///
 	/// The request is passed to `handler` before being sent, and the response is passed to `handler` before being returned.
 	/// Note, that as stated in the docs for [RequestBuilder::query()], parameter `query` only accepts a **sequence of** key-value pairs.
-	//#[instrument] //TODO: get all generics to impl std::fmt::Debug
+	#[instrument(skip_all, fields(?url))] //TODO: get all generics to impl std::fmt::Debug
 	pub async fn request<Q, B, H>(&self, method: Method, url: &str, query: Option<&Q>, body: Option<B>, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
 	where
 		Q: Serialize + ?Sized,
@@ -56,11 +56,11 @@ impl Client {
 					let status = response.status();
 					let headers = std::mem::take(response.headers_mut());
 					let body = response.bytes().await.map_err(RequestError::ReceiveResponse)?;
+					//TODO!!!: we are only retrying when response is not received. Although there is a list of errors we would also like to retry on.
+					debug!(?body);
 					return handler.handle_response(status, headers, body).map_err(RequestError::ResponseHandleError);
 				}
 				Err(error) => {
-					//TODO!!!!: we are retrying regardless of the error. Must refactor to require a list of retryable errors for each defined exchange.
-					dbg!(&error);
 					if i < config.max_try {
 						tracing::warn!("Retrying sending request; made so far: {i}");
 						tokio::time::sleep(config.retry_cooldown).await;
