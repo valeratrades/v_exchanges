@@ -1,4 +1,4 @@
-cargo-features = ["edition2024", "codegen-backend"]
+cargo-features = ["codegen-backend"]
 
 [package]
 name = "v_exchanges"

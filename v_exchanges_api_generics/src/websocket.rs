@@ -399,9 +399,9 @@ impl WebSocketMessage {
 	fn from_message(message: tungstenite::Message) -> Option<Self> {
 		match message {
 			tungstenite::Message::Text(text) => Some(Self::Text(text.to_string())),
-			tungstenite::Message::Binary(data) => Some(Self::Binary(data.into())),
-			tungstenite::Message::Ping(data) => Some(Self::Ping(data.into())),
-			tungstenite::Message::Pong(data) => Some(Self::Pong(data.into())),
+			tungstenite::Message::Binary(data) => Some(Self::Binary(data.as_slice().to_owned())),
+			tungstenite::Message::Ping(data) => Some(Self::Ping(data.as_slice().to_owned())),
+			tungstenite::Message::Pong(data) => Some(Self::Pong(data.as_slice().to_owned())),
 			tungstenite::Message::Close(_) | tungstenite::Message::Frame(_) => None,
 		}
 	}
