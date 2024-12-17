@@ -2,8 +2,8 @@
 name = "v_exchanges_api_generics"
 version = "0.3.0"
 authors = ["negi_grass"]
-edition = "2021"
 description = "A client for HTTP/HTTPS/WebSocket APIs."
+edition = "2024"
 license = "MIT"
 readme = "README.md"
 homepage = "https://github.com/negi-grass/crypto-botters/tree/main/v_exchanges_api_generics"
@@ -13,14 +13,14 @@ keywords = ["client", "websocket", "asynchronous"]
 categories = ["api-bindings", "asynchronous"]
 
 [dependencies]
-bytes = "1.8.0"
+bytes = "1.9.0"
 futures-util.workspace = true
 parking_lot = "0.12.3"
 reqwest.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-tokio-tungstenite = "0.24.0"
+tokio-tungstenite = "0.25.0"
 tracing.workspace = true
 
 [features]

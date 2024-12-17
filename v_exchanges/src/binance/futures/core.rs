@@ -1,15 +1,18 @@
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
 
+//TODO: make these actually consistent
+
+/** # Ex: ```json
+[1731448080000,\"88591.90\",\"88630.90\",\"88560.00\",\"88574.10\",\"173.581\",1731448139999,\"15378315.48720\",2800,\"113.654\",\"10069629.84420\",\"0\"]
+```
+**/
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct KlineCore {
 	#[serde(rename = "t")]
 	pub open_time: i64,
-
-	#[serde(rename = "T")]
-	pub close_time: i64,
 
 	#[serde_as(as = "DisplayFromStr")]
 	#[serde(rename = "o")]
@@ -31,6 +34,9 @@ pub struct KlineCore {
 	#[serde(rename = "v")]
 	pub volume: f64,
 
+	#[serde(rename = "T")]
+	pub close_time: i64,
+
 	#[serde_as(as = "DisplayFromStr")]
 	#[serde(rename = "q")]
 	pub quote_asset_volume: f64,
@@ -45,6 +51,10 @@ pub struct KlineCore {
 	#[serde_as(as = "DisplayFromStr")]
 	#[serde(rename = "Q")]
 	pub taker_buy_quote_asset_volume: f64,
+
+	#[serde_as(as = "DisplayFromStr")]
+	#[serde(skip, rename = "B")]
+	pub __ignore: Option<f64>,
 }
 
 #[serde_as]
@@ -88,5 +98,5 @@ pub struct Kline {
 
 	#[serde_as(as = "DisplayFromStr")]
 	#[serde(skip, rename = "B")]
-	pub ignore_me: u64,
+	pub __ignore: u64,
 }

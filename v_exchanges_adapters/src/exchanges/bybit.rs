@@ -3,14 +3,14 @@
 
 use std::{borrow::Cow, marker::PhantomData, time::SystemTime, vec};
 
-use v_exchanges_api_generics::{
-	http::{header::HeaderValue, *},
-	websocket::*,
-};
 use hmac::{Hmac, Mac};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::json;
 use sha2::Sha256;
+use v_exchanges_api_generics::{
+	http::{header::HeaderValue, *},
+	websocket::*,
+};
 
 use crate::traits::*;
 

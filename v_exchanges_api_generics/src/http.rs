@@ -2,8 +2,8 @@ use std::{fmt::Debug, time::Duration};
 
 pub use bytes::Bytes;
 pub use reqwest::{
-	header::{self, HeaderMap},
 	Method, Request, RequestBuilder, StatusCode,
+	header::{self, HeaderMap},
 };
 use serde::Serialize;
 use thiserror::Error;
@@ -60,14 +60,13 @@ impl Client {
 					debug!(?body);
 					return handler.handle_response(status, headers, body).map_err(RequestError::ResponseHandleError);
 				}
-				Err(error) => {
+				Err(error) =>
 					if i < config.max_try {
 						tracing::warn!("Retrying sending request; made so far: {i}");
 						tokio::time::sleep(config.retry_cooldown).await;
 					} else {
 						return Err(RequestError::SendRequest(error));
-					}
-				}
+					},
 			}
 		}
 		unreachable!()

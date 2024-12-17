@@ -2,12 +2,12 @@ use std::{
 	collections::hash_map::{Entry, HashMap},
 	mem,
 	sync::{
-		atomic::{AtomicBool, Ordering},
 		Arc,
+		atomic::{AtomicBool, Ordering},
 	},
 	time::Duration,
 };
-
+use tokio_tungstenite::tungstenite::protocol::frame::Payload;
 use futures_util::{
 	sink::SinkExt,
 	stream::{SplitSink, StreamExt},
@@ -15,11 +15,11 @@ use futures_util::{
 use parking_lot::Mutex as SyncMutex;
 use tokio::{
 	net::TcpStream,
-	sync::{mpsc as tokio_mpsc, Mutex as AsyncMutex, Notify},
+	sync::{Mutex as AsyncMutex, Notify, mpsc as tokio_mpsc},
 	task::JoinHandle,
-	time::{timeout, MissedTickBehavior},
+	time::{MissedTickBehavior, timeout},
 };
-use tokio_tungstenite::{tungstenite, MaybeTlsStream};
+use tokio_tungstenite::{MaybeTlsStream, tungstenite};
 pub use tungstenite::Error as TungsteniteError;
 
 type WebSocketStream = tokio_tungstenite::WebSocketStream<MaybeTlsStream<TcpStream>>;
@@ -398,20 +398,20 @@ pub enum WebSocketMessage {
 impl WebSocketMessage {
 	fn from_message(message: tungstenite::Message) -> Option<Self> {
 		match message {
-			tungstenite::Message::Text(text) => Some(Self::Text(text)),
-			tungstenite::Message::Binary(data) => Some(Self::Binary(data)),
-			tungstenite::Message::Ping(data) => Some(Self::Ping(data)),
-			tungstenite::Message::Pong(data) => Some(Self::Pong(data)),
+			tungstenite::Message::Text(text) => Some(Self::Text(text.to_string())),
+			tungstenite::Message::Binary(data) => Some(Self::Binary(data.into())),
+			tungstenite::Message::Ping(data) => Some(Self::Ping(data.into())),
+			tungstenite::Message::Pong(data) => Some(Self::Pong(data.into())),
 			tungstenite::Message::Close(_) | tungstenite::Message::Frame(_) => None,
 		}
 	}
 
 	fn into_message(self) -> tungstenite::Message {
 		match self {
-			WebSocketMessage::Text(text) => tungstenite::Message::Text(text),
-			WebSocketMessage::Binary(data) => tungstenite::Message::Binary(data),
-			WebSocketMessage::Ping(data) => tungstenite::Message::Ping(data),
-			WebSocketMessage::Pong(data) => tungstenite::Message::Pong(data),
+			WebSocketMessage::Text(text) => tungstenite::Message::Text(text.into()),
+			WebSocketMessage::Binary(data) => tungstenite::Message::Binary(data.into()),
+			WebSocketMessage::Ping(data) => tungstenite::Message::Ping(data.into()),
+			WebSocketMessage::Pong(data) => tungstenite::Message::Pong(data.into()),
 		}
 	}
 }

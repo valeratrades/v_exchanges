@@ -33,6 +33,7 @@ async fn main() {
 		#[serde(rename = "endTime", skip_serializing_if = "Option::is_none")]
 		pub end_time: Option<u64>,
 	}
+
 	impl Default for KlineParams<'_> {
 		fn default() -> Self {
 			Self {
@@ -45,7 +46,9 @@ async fn main() {
 		}
 	}
 
-	let klines: Vec<KlineCore> = client.get(/*https://fapi.binance.com*/"/fapi/v1/klines", Some(&KlineParams::default()), [BinanceOption::Default]).await.unwrap();
+	// Vec of: [1731448080000,\"88591.90\",\"88630.90\",\"88560.00\",\"88574.10\",\"173.581\",1731448139999,\"15378315.48720\",2800,\"113.654\",\"10069629.84420\",\"0\"]
+	// https://binance-docs.github.io/apidocs/futures/en/#kline-candlestick-data
+	let klines: Vec<KlineCore> = client.get("/fapi/v1/klines", Some(&KlineParams::default()), [BinanceOption::Default]).await.unwrap();
 
 	dbg!(&klines);
 }

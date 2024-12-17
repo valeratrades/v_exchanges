@@ -6,10 +6,10 @@ use std::{
 	time::{Duration, SystemTime},
 };
 
-use v_exchanges_api_generics::{http::*, websocket::*};
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
+use v_exchanges_api_generics::{http::*, websocket::*};
 
 use crate::traits::*;
 

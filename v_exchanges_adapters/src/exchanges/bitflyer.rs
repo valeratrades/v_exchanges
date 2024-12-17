@@ -3,15 +3,15 @@
 
 use std::{marker::PhantomData, time::SystemTime};
 
-use v_exchanges_api_generics::{
-	http::{header::HeaderValue, *},
-	websocket::*,
-};
 use hmac::{Hmac, Mac};
 use rand::{Rng, distributions::Alphanumeric};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::json;
 use sha2::Sha256;
+use v_exchanges_api_generics::{
+	http::{header::HeaderValue, *},
+	websocket::*,
+};
 
 use crate::traits::*;
 
