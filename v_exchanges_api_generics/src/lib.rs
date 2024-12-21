@@ -1,4 +1,5 @@
 #![warn(future_incompatible, let_underscore, nonstandard_style, missing_docs)]
+#![feature(slice_pattern)]
 
 //! # Generic-API-Client
 //! This is a crate for interacting with HTTP/HTTPS/WebSocket APIs.

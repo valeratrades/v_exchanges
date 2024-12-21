@@ -7,11 +7,11 @@ use std::{
 	},
 	time::Duration,
 };
-use tokio_tungstenite::tungstenite::protocol::frame::Payload;
 use futures_util::{
 	sink::SinkExt,
 	stream::{SplitSink, StreamExt},
 };
+use core::slice::SlicePattern;
 use parking_lot::Mutex as SyncMutex;
 use tokio::{
 	net::TcpStream,

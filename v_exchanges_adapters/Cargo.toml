@@ -1,3 +1,5 @@
+cargo-features = ["codegen-backend"]
+
 [package]
 name = "v_exchanges_adapters"
 version = "0.1.0"

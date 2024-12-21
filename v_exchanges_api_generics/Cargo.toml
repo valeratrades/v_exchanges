@@ -1,3 +1,5 @@
+cargo-features = ["codegen-backend"]
+
 [package]
 name = "v_exchanges_api_generics"
 version = "0.3.0"
@@ -20,7 +22,7 @@ reqwest.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-tokio-tungstenite = "0.25.0"
+tokio-tungstenite = "0.26.0"
 tracing.workspace = true
 
 [features]

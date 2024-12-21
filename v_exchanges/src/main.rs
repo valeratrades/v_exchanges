@@ -1,6 +1,4 @@
-use rust_decimal::prelude::*;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde::Serialize;
 use v_exchanges_adapters::{
 	Client,
 	binance::{BinanceHttpUrl, BinanceOption},

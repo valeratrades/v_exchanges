@@ -1,3 +1,5 @@
+cargo-features = ["codegen-backend"]
+
 [workspace]
 members = [
 	"v_exchanges",
@@ -22,7 +24,7 @@ serde_json = "1.0.133"
 serde_with = "3.11.0"
 thiserror = "2.0.7"
 tokio = { version = "^1.42.0", features = ["full"] }
-tokio-tungstenite = { version = "^0.25.0", features = ["native-tls"] }
+tokio-tungstenite = { version = "^0.26.0", features = ["native-tls"] }
 tracing = "0.1.41"
 url = "2.5.4"
 v_utils = { version = "^1.9.1", features = ["trades", "tracing"], path = "../v_utils/v_utils" }
