@@ -100,3 +100,12 @@ pub struct Kline {
 	#[serde(skip, rename = "B")]
 	pub __ignore: u64,
 }
+
+#[cfg(test)]
+mod tests {
+	#[test]
+	fn kline_core() {
+		let raw_str = r#"[1731448080000,\"88591.90\",\"88630.90\",\"88560.00\",\"88574.10\",\"173.581\",1731448139999,\"15378315.48720\",2800,\"113.654\",\"10069629.84420\",\"0\"]"#;
+		let _: super::KlineCore = serde_json::from_str(raw_str).unwrap();
+	}
+}

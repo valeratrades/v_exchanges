@@ -15,8 +15,9 @@ use v_utils::utils::init_subscriber;
 #[tokio::main]
 async fn main() {
 	color_eyre::install().unwrap();
-	init_subscriber(None);
+	init_subscriber(Some(std::path::PathBuf::from("/home/v/.local/share/v_exchanges/.log").into())); //dbg
 
+	tracing::debug!("Starting...");
 	let mut client = Client::new();
 	client.update_default_option(BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM));
 

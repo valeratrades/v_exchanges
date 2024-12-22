@@ -55,9 +55,11 @@ impl Client {
 				Ok(mut response) => {
 					let status = response.status();
 					let headers = std::mem::take(response.headers_mut());
-					let body = response.bytes().await.map_err(RequestError::ReceiveResponse)?;
+					let body: Bytes = response.bytes().await.map_err(RequestError::ReceiveResponse)?;
 					//TODO!!!: we are only retrying when response is not received. Although there is a list of errors we would also like to retry on.
-					debug!(?body);
+					let body_str: &str = std::str::from_utf8(&body).unwrap_or_default().trim();
+					let truncated_body = v_utils::utils::truncate_msg(body_str);
+					debug!(truncated_body);
 					return handler.handle_response(status, headers, body).map_err(RequestError::ResponseHandleError);
 				}
 				Err(error) =>
