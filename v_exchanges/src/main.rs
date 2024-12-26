@@ -6,7 +6,7 @@ use v_exchanges_adapters::{
 mod binance;
 
 use binance::futures::KlineCore;
-use v_utils::utils::init_subscriber;
+use v_utils::utils::{LogDestination, init_subscriber};
 
 //- [ ] generics request for klines rest
 //- [ ] generics request for klines ws
@@ -15,8 +15,7 @@ use v_utils::utils::init_subscriber;
 #[tokio::main]
 async fn main() {
 	color_eyre::install().unwrap();
-	//init_subscriber(Some(std::path::PathBuf::from("/home/v/.local/share/v_exchanges/.log").into())); //dbg
-	init_subscriber(None);
+	init_subscriber(LogDestination::xdg_data_home("v_exchanges"));
 
 	tracing::info!("Starting...");
 	let mut client = Client::new();
