@@ -15,7 +15,8 @@ use v_utils::utils::init_subscriber;
 #[tokio::main]
 async fn main() {
 	color_eyre::install().unwrap();
-	init_subscriber(Some(std::path::PathBuf::from("/home/v/.local/share/v_exchanges/.log").into())); //dbg
+	//init_subscriber(Some(std::path::PathBuf::from("/home/v/.local/share/v_exchanges/.log").into())); //dbg
+	init_subscriber(None);
 
 	tracing::debug!("Starting...");
 	let mut client = Client::new();
