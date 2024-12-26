@@ -18,7 +18,7 @@ async fn main() {
 	//init_subscriber(Some(std::path::PathBuf::from("/home/v/.local/share/v_exchanges/.log").into())); //dbg
 	init_subscriber(None);
 
-	tracing::debug!("Starting...");
+	tracing::info!("Starting...");
 	let mut client = Client::new();
 	client.update_default_option(BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM));
 
