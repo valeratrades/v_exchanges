@@ -15,7 +15,9 @@
       in
       {
         devShells.default = with pkgs; mkShell {
+					stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv;
           packages = [
+						mold-wrapped
             openssl
             pkg-config
             (rust-bin.fromRustupToolchainFile ./.cargo/rust-toolchain.toml)
