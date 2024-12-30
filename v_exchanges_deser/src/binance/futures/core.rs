@@ -4,14 +4,11 @@ use serde_with::{DisplayFromStr, serde_as};
 
 //TODO: make these actually consistent
 
-/** # Ex: ```json
-[1731448080000,\"88591.90\",\"88630.90\",\"88560.00\",\"88574.10\",\"173.581\",1731448139999,\"15378315.48720\",2800,\"113.654\",\"10069629.84420\",\"0\"]
-```
-**/
+// // Klines Core
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct KlineCoreNamed {
+pub struct KlineNamed {
 	#[serde(rename = "t")]
 	pub open_time: i64,
 
@@ -33,7 +30,7 @@ pub struct KlineCoreNamed {
 
 	#[serde_as(as = "DisplayFromStr")]
 	#[serde(rename = "v")]
-	pub volume: f64,
+	pub volume_quote: f64,
 
 	#[serde(rename = "T")]
 	pub close_time: i64,
@@ -53,9 +50,39 @@ pub struct KlineCoreNamed {
 	#[serde(rename = "Q")]
 	pub taker_buy_quote_asset_volume: f64,
 
-	#[serde(skip, rename = "B")]
+	#[serde(rename = "B")]
 	__ignore: Option<Value>,
 }
+/** # Ex: ```json
+[1731448080000,\"88591.90\",\"88630.90\",\"88560.00\",\"88574.10\",\"173.581\",1731448139999,\"15378315.48720\",2800,\"113.654\",\"10069629.84420\",\"0\"]
+```
+**/
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Kline {
+	pub open_time: i64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub open: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub close: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub high: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub low: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub volume: f64,
+	pub close_time: i64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub quote_asset_volume: f64,
+	pub number_of_trades: i64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub taker_buy_base_asset_volume: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub taker_buy_quote_asset_volume: f64,
+
+	__ignore: Option<Value>,
+}
+//
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -71,15 +98,15 @@ pub struct KlineEvent {
 	pub symbol: String,
 
 	#[serde(rename = "k")]
-	pub kline: Kline,
+	pub kline: FullKlines,
 }
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct Kline {
+pub struct FullKlines {
 	#[serde(flatten)]
-	pub core: KlineCore,
+	pub core: KlineNamed,
 
 	#[serde(rename = "s")]
 	pub symbol: String,
@@ -101,36 +128,11 @@ pub struct Kline {
 	pub __ignore: u64,
 }
 
-#[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct KlineCore {
-	pub open_time: i64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub open: f64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub close: f64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub high: f64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub low: f64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub volume: f64,
-	pub close_time: i64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub quote_asset_volume: f64,
-	pub number_of_trades: i64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub taker_buy_base_asset_volume: f64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub taker_buy_quote_asset_volume: f64,
-	__ignore: Option<Value>,
-}
-
 #[cfg(test)]
 mod tests {
 	#[test]
 	fn kline_core() {
 		let raw_str = "[1731448080000,\"88591.90\",\"88630.90\",\"88560.00\",\"88574.10\",\"173.581\",1731448139999,\"15378315.48720\",2800,\"113.654\",\"10069629.84420\",\"0\"]";
-		let _: super::KlineCore = serde_json::from_str(raw_str).unwrap();
+		let _: super::Kline = serde_json::from_str(raw_str).unwrap();
 	}
 }
