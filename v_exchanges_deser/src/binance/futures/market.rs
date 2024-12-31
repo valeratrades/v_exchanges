@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use crate::binance::futures::core::*;
 
-//HACK: oversimplified
+//? should the `symbol` and `tf` be strs, while only the top-most level interface takes in the general interfaces?
 pub async fn klines(generic_client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, limit: Option<u16>, start_time: Option<u64>, end_time: Option<u64>) -> Result<Vec<Kline>> {
 	#[derive(Serialize)]
 	pub struct KlineParams {

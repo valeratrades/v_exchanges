@@ -22,9 +22,6 @@ async fn main() {
 	let mut client = Client::new();
 	client.update_default_option(BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM));
 
-	let pair = v_utils::trades::Pair::new("BTC", "USDT");
-	let tf = Timeframe::from("1m");
-
-	let klines = binance::futures::market::klines(&client, pair, tf, None, None, None).await.unwrap();
+	let klines = binance::futures::market::klines(&client, ("BTC", "USDT").into(), "1m".into(), None, None, None).await.unwrap();
 	dbg!(&klines);
 }

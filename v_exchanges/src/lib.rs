@@ -1,1 +1,3 @@
-pub mod core;
+pub(crate) mod core;
+
+pub mod binance;
