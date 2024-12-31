@@ -13,6 +13,7 @@ ignored = ["derive-new", "eyre", "serde", "tokio", "v_utils"]
 
 [dependencies]
 v_exchanges_deser = { path = "../v_exchanges_deser/", features = ["full"] }
+v_exchanges_adapters = { path = "../v_exchanges_adapters/", features = ["full"] }
 
 tokio.workspace = true
 tracing.workspace = true

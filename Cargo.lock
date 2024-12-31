@@ -2883,6 +2883,7 @@ dependencies = [
  "serde_with",
  "tokio",
  "tracing",
+ "v_exchanges_adapters",
  "v_exchanges_deser",
  "v_utils",
 ]

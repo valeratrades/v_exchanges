@@ -9,6 +9,7 @@ use v_utils::{
 	trades::Timeframe,
 	utils::{LogDestination, init_subscriber},
 };
+pub mod core;
 
 //- [ ] generics request for klines rest
 //- [ ] generics request for klines ws
