@@ -3,16 +3,17 @@ cargo-features = ["codegen-backend"]
 [package]
 name = "v_exchanges_api_generics"
 version = "0.3.0"
-authors = ["negi_grass"]
-description = "A client for HTTP/HTTPS/WebSocket APIs."
 edition = "2024"
+
+authors = ["negi_grass", "valeratrades"]
+categories = ["api-bindings", "asynchronous"]
+description = "A client for HTTP/HTTPS/WebSocket APIs."
+documentation = "https://docs.rs/v_exchanges_api_generics"
+homepage = "https://github.com/valeratrades/v_exchanges"
+keywords = ["client", "websocket", "asynchronous"]
 license = "MIT"
 readme = "README.md"
-homepage = "https://github.com/negi-grass/crypto-botters/tree/main/v_exchanges_api_generics"
-documentation = "https://docs.rs/v_exchanges_api_generics"
-repository = "https://github.com/negi-grass/crypto-botters/tree/main/v_exchanges_api_generics"
-keywords = ["client", "websocket", "asynchronous"]
-categories = ["api-bindings", "asynchronous"]
+repository = "https://github.com/valeratrades/v_exchanges/tree/master/v_exchanges_api_generics"
 
 [dependencies]
 bytes = "1.9.0"

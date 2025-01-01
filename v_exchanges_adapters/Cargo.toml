@@ -5,6 +5,17 @@ name = "v_exchanges_adapters"
 version = "0.1.0"
 edition = "2024"
 
+authors = ["negi-grass", "valeratrades"]
+categories = ["api-bindings", "asynchronous"]
+description = "Implementations of HTTP/HTTPS/WebSocket API methods for some crypto exchanges, using [crypto-botters](<https://github.com/negi-grass/crypto-botters>) framework"
+documentation = "https://docs.rs/v_exchanges_adapters"
+homepage = "https://github.com/valeratrades/v_exchanges"
+keywords = ["client", "websocket", "asynchronous"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/valeratrades/v_exchanges/tree/master/v_exchanges_adapters"
+
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
@@ -24,7 +35,7 @@ rustls-tls-native-roots = ["v_exchanges_api_generics/rustls-tls-native-roots"]
 rustls-tls-webpki-roots = ["v_exchanges_api_generics/rustls-tls-webpki-roots"]
 
 [dependencies]
-v_exchanges_api_generics = { path = "../v_exchanges_api_generics" }
+v_exchanges_api_generics = { version = "^0.3.0", path = "../v_exchanges_api_generics" }
 serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true

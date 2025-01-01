@@ -2973,7 +2973,9 @@ dependencies = [
 
 [[package]]
 name = "v_utils"
-version = "1.12.0"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c88f88e25b232998d0b7cef5bc728130aa4316c819c2c685dc4c20c20cb3150c"
 dependencies = [
  "chrono",
  "console-subscriber",
