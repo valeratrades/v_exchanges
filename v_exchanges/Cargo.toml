@@ -54,3 +54,7 @@ coincheck = ["v_exchanges_adapters/coincheck"]
 [[example]]
 name = "binance_market"
 path = "../examples/binance/market.rs"
+
+[[example]]
+name = "bybit_market"
+path = "../examples/bybit/market.rs"
