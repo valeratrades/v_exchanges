@@ -10,15 +10,15 @@ async fn main() {
 
 	let mut client = Client::new();
 
-	//client.update_default_option(BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM));
-	//let klines = client.futures_klines(("BTC", "USDT").into(), "1m".into(), None, None, None).await.unwrap();
-	//let price = client.futures_price(("BTC", "USDT").into()).await.unwrap();
-	//dbg!(&klines);
+	client.update_default_option(BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM));
+	let klines = client.futures_klines(("BTC", "USDT").into(), "1m".into(), 2, None, None).await.unwrap();
+	let price = client.futures_price(("BTC", "USDT").into()).await.unwrap();
+	dbg!(&klines, price);
 
-	let key = env::var("BINANCE_TIGER_READ_KEY").unwrap();
-	let secret = env::var("BINANCE_TIGER_READ_SECRET").unwrap();
-	client.update_default_option(BinanceOption::Key(key));
-	client.update_default_option(BinanceOption::Secret(secret));
-	let balance = client.futures_asset_balance("USDT".into()).await.unwrap();
-	dbg!(&balance);
+	//let key = env::var("BINANCE_TIGER_READ_KEY").unwrap();
+	//let secret = env::var("BINANCE_TIGER_READ_SECRET").unwrap();
+	//client.update_default_option(BinanceOption::Key(key));
+	//client.update_default_option(BinanceOption::Secret(secret));
+	//let balance = client.futures_asset_balance("USDT".into()).await.unwrap();
+	//dbg!(&balance);
 }

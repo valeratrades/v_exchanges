@@ -78,7 +78,7 @@ impl Client {
 
 	/// see [http::Client::get()]
 	#[inline(always)]
-	pub async fn get<'a, R, O, Q>(&self, url: &str, query: Option<&Q>, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
+	pub async fn get<'a, R, O, Q>(&self, url: &str, query: &Q, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
 	where
 		O: HttpOption<'a, R, ()>,
 		O::RequestHandler: RequestHandler<()>,
@@ -99,7 +99,7 @@ impl Client {
 
 	/// see [http::Client::post()]
 	#[inline(always)]
-	pub async fn post<'a, R, O, B>(&self, url: &str, body: Option<B>, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, B)
+	pub async fn post<'a, R, O, B>(&self, url: &str, body: B, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, B)
 	where
 		O: HttpOption<'a, R, B>,
 		O::RequestHandler: RequestHandler<B>,
@@ -119,7 +119,7 @@ impl Client {
 
 	/// see [http::Client::put()]
 	#[inline(always)]
-	pub async fn put<'a, R, O, B>(&self, url: &str, body: Option<B>, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, B)
+	pub async fn put<'a, R, O, B>(&self, url: &str, body: B, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, B)
 	where
 		O: HttpOption<'a, R, B>,
 		O::RequestHandler: RequestHandler<B>,
@@ -139,7 +139,7 @@ impl Client {
 
 	/// see [http::Client::delete()]
 	#[inline(always)]
-	pub async fn delete<'a, R, O, Q>(&self, url: &str, query: Option<&Q>, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
+	pub async fn delete<'a, R, O, Q>(&self, url: &str, query: &Q, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
 	where
 		O: HttpOption<'a, R, ()>,
 		O::RequestHandler: RequestHandler<()>,

@@ -8,7 +8,7 @@ use crate::core::{AssetBalance, Exchange, Klines};
 
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
 impl Exchange<binance::BinanceOptions> for Client {
-	async fn futures_klines(&self, symbol: Pair, tf: Timeframe, limit: Option<u32>, start_time: Option<u64>, end_time: Option<u64>) -> Result<Klines> {
+	async fn futures_klines(&self, symbol: Pair, tf: Timeframe, limit: u32, start_time: Option<u64>, end_time: Option<u64>) -> Result<Klines> {
 		futures::market::klines(&self, symbol, tf, limit, start_time, end_time).await
 	}
 

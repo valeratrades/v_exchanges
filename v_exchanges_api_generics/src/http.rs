@@ -81,11 +81,11 @@ impl Client {
 	///
 	/// For more information, see [request()][Self::request()].
 	#[inline(always)]
-	pub async fn get<Q, H>(&self, url: &str, query: Option<&Q>, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
+	pub async fn get<Q, H>(&self, url: &str, query: &Q, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
 	where
 		Q: Serialize + ?Sized,
 		H: RequestHandler<()>, {
-		self.request::<Q, (), H>(Method::GET, url, query, None, handler).await
+		self.request::<Q, (), H>(Method::GET, url, Some(query), None, handler).await
 	}
 
 	/// Makes an GET request with the given [RequestHandler], without queries.
@@ -107,10 +107,10 @@ impl Client {
 	///
 	/// For more information, see [request()][Self::request()].
 	#[inline(always)]
-	pub async fn post<B, H>(&self, url: &str, body: Option<B>, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
+	pub async fn post<B, H>(&self, url: &str, body: B, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
 	where
 		H: RequestHandler<B>, {
-		self.request::<(), B, H>(Method::POST, url, None, body, handler).await
+		self.request::<(), B, H>(Method::POST, url, None, Some(body), handler).await
 	}
 
 	/// Makes an POST request with the given [RequestHandler], without a body.
@@ -132,10 +132,10 @@ impl Client {
 	///
 	/// For more information, see [request()][Self::request()].
 	#[inline(always)]
-	pub async fn put<B, H>(&self, url: &str, body: Option<B>, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
+	pub async fn put<B, H>(&self, url: &str, body: B, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
 	where
 		H: RequestHandler<B>, {
-		self.request::<(), B, H>(Method::PUT, url, None, body, handler).await
+		self.request::<(), B, H>(Method::PUT, url, None, Some(body), handler).await
 	}
 
 	/// Makes an PUT request with the given [RequestHandler], without a body.
@@ -158,11 +158,11 @@ impl Client {
 	///
 	/// For more information, see [request()][Self::request()].
 	#[inline(always)]
-	pub async fn delete<Q, H>(&self, url: &str, query: Option<&Q>, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
+	pub async fn delete<Q, H>(&self, url: &str, query: &Q, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
 	where
 		Q: Serialize + ?Sized,
 		H: RequestHandler<()>, {
-		self.request::<Q, (), H>(Method::DELETE, url, query, None, handler).await
+		self.request::<Q, (), H>(Method::DELETE, url, Some(query), None, handler).await
 	}
 
 	/// Makes an DELETE request with the given [RequestHandler], without queries.
