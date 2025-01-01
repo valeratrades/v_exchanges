@@ -1,7 +1,7 @@
 use std::env;
 
+use v_exchanges::{binance::Client, core::Exchange};
 use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
-use v_exchanges_deser::{binance::Client, core::Exchange};
 
 #[tokio::main]
 async fn main() {
@@ -15,10 +15,12 @@ async fn main() {
 	let price = client.futures_price(("BTC", "USDT").into()).await.unwrap();
 	dbg!(&klines, price);
 
-	//let key = env::var("BINANCE_TIGER_READ_KEY").unwrap();
-	//let secret = env::var("BINANCE_TIGER_READ_SECRET").unwrap();
-	//client.update_default_option(BinanceOption::Key(key));
-	//client.update_default_option(BinanceOption::Secret(secret));
-	//let balance = client.futures_asset_balance("USDT".into()).await.unwrap();
-	//dbg!(&balance);
+	if let (Ok(key), Ok(secret)) = (env::var("BINANCE_TIGER_READ_KEY"), env::var("BINANCE_TIGER_READ_SECRET")) {
+		client.update_default_option(BinanceOption::Key(key));
+		client.update_default_option(BinanceOption::Secret(secret));
+		let balance = client.futures_asset_balance("USDT".into()).await.unwrap();
+		dbg!(&balance);
+	} else {
+		eprintln!("BINANCE_TIGER_READ_KEY or BINANCE_TIGER_READ_SECRET is missing, skipping private API methods.");
+	}
 }

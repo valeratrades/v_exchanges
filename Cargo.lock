@@ -2933,7 +2933,6 @@ dependencies = [
  "tokio",
  "tracing",
  "v_exchanges_adapters",
- "v_exchanges_deser",
  "v_utils",
 ]
 
@@ -2969,24 +2968,6 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "tracing",
- "v_utils",
-]
-
-[[package]]
-name = "v_exchanges_deser"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "color-eyre",
- "derive-new",
- "env_logger",
- "rust_decimal",
- "serde",
- "serde_json",
- "serde_with",
- "tokio",
- "tracing",
- "v_exchanges_adapters",
  "v_utils",
 ]
 

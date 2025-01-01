@@ -9,12 +9,10 @@ edition = "2024"
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 
 [package.metadata.cargo-machete]
-ignored = ["derive-new", "eyre", "serde", "tokio", "v_utils"]
+ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
 
 [dependencies]
-v_exchanges_deser = { path = "../v_exchanges_deser/", features = ["full"] }
 v_exchanges_adapters = { path = "../v_exchanges_adapters/", features = ["full"] }
-
 tokio.workspace = true
 tracing.workspace = true
 serde.workspace = true
@@ -28,4 +26,18 @@ rust_decimal = { version = "1.36.0", features = ["serde-with-str", "serde-with-f
 env_logger = "0.11.5"
 derive-new.workspace = true
 chrono = "0.4.39"
+
 #
+
+[features]
+default = ["binance"]
+
+full = ["binance", "bitflyer", "bybit", "coincheck"]
+binance = ["v_exchanges_adapters/binance"]
+bybit = ["v_exchanges_adapters/bybit"]
+bitflyer = ["v_exchanges_adapters/bitflyer"]
+coincheck = ["v_exchanges_adapters/coincheck"]
+
+[[example]]
+name = "binance_market"
+path = "../examples/binance/market.rs"
