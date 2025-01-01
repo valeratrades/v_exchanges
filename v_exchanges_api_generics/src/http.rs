@@ -16,7 +16,7 @@ pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_P
 ///
 /// When making a HTTP request or starting a websocket connection with this client,
 /// a handler that implements [RequestHandler] is required.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Client {
 	client: reqwest::Client,
 }
@@ -88,6 +88,19 @@ impl Client {
 		self.request::<Q, (), H>(Method::GET, url, query, None, handler).await
 	}
 
+	/// Makes an GET request with the given [RequestHandler], without queries.
+	///
+	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
+	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
+	///
+	/// For more information, see [request()][Self::request()].
+	#[inline(always)]
+	pub async fn get_no_query<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
+	where
+		H: RequestHandler<()>, {
+		self.request::<&[(&str, &str)], (), H>(Method::GET, url, None, None, handler).await
+	}
+
 	/// Makes an POST request with the given [RequestHandler].
 	///
 	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
@@ -100,6 +113,19 @@ impl Client {
 		self.request::<(), B, H>(Method::POST, url, None, body, handler).await
 	}
 
+	/// Makes an POST request with the given [RequestHandler], without a body.
+	///
+	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
+	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
+	///
+	/// For more information, see [request()][Self::request()].
+	#[inline(always)]
+	pub async fn post_no_body<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
+	where
+		H: RequestHandler<()>, {
+		self.request::<(), (), H>(Method::POST, url, None, None, handler).await
+	}
+
 	/// Makes an PUT request with the given [RequestHandler].
 	///
 	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
@@ -110,6 +136,19 @@ impl Client {
 	where
 		H: RequestHandler<B>, {
 		self.request::<(), B, H>(Method::PUT, url, None, body, handler).await
+	}
+
+	/// Makes an PUT request with the given [RequestHandler], without a body.
+	///
+	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
+	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
+	///
+	/// For more information, see [request()][Self::request()].
+	#[inline(always)]
+	pub async fn put_no_body<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
+	where
+		H: RequestHandler<()>, {
+		self.request::<(), (), H>(Method::PUT, url, None, None, handler).await
 	}
 
 	/// Makes an DELETE request with the given [RequestHandler].
@@ -125,12 +164,18 @@ impl Client {
 		H: RequestHandler<()>, {
 		self.request::<Q, (), H>(Method::DELETE, url, query, None, handler).await
 	}
-}
 
-impl Default for Client {
-	fn default() -> Self {
-		let client = reqwest::ClientBuilder::new().user_agent(USER_AGENT).build().unwrap(); // user agent should be valid
-		Self { client }
+	/// Makes an DELETE request with the given [RequestHandler], without queries.
+	///
+	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
+	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
+	///
+	/// For more information, see [request()][Self::request()].
+	#[inline(always)]
+	pub async fn delete_no_query<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
+	where
+		H: RequestHandler<()>, {
+		self.request::<&[(&str, &str)], (), H>(Method::DELETE, url, None, None, handler).await
 	}
 }
 

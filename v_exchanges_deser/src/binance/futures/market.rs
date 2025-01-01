@@ -2,7 +2,7 @@ use chrono::{DateTime, TimeZone, Utc};
 //HACK: Methods should be implemented on the central interface struct, following <https://github.com/wisespace-io/binance-rs>.
 use color_eyre::eyre::Result;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
 use v_utils::trades::{Kline, Ohlc, Pair, Timeframe};
@@ -11,25 +11,13 @@ use crate::core::Klines;
 
 // klines {{{
 pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, limit: Option<u32>, start_time: Option<u64>, end_time: Option<u64>) -> Result<Klines> {
-	#[derive(Serialize)]
-	pub struct KlineParams {
-		pub symbol: String,
-		pub interval: String,
-		#[serde(skip_serializing_if = "Option::is_none")]
-		pub limit: Option<u32>,
-		#[serde(rename = "startTime", skip_serializing_if = "Option::is_none")]
-		pub start_time: Option<u64>,
-		#[serde(rename = "endTime", skip_serializing_if = "Option::is_none")]
-		pub end_time: Option<u64>,
-	}
-
-	let mut params = KlineParams {
-		symbol: pair.to_string(),
-		interval: tf.format_binance()?,
-		limit,
-		start_time,
-		end_time,
-	};
+	let params = json!({
+		"symbol": pair.to_string(),
+		"interval": tf.format_binance()?,
+		"limit": limit,
+		"startTime": start_time,
+		"endTime": end_time,
+	});
 
 	let kline_responses: Vec<KlineResponse> = client.get("/fapi/v1/klines", Some(&params), [BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)]).await.unwrap();
 	let klines: Vec<Kline> = kline_responses.into_iter().map(Kline::from).collect();
@@ -96,7 +84,10 @@ pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> Result<
 	}
 	let mut params = PriceParams { symbol: pair.to_string() };
 
-	let r: MarkPriceResponse = client.get("/fapi/v1/premiumIndex", Some(&params), [BinanceOption::Default]).await.unwrap();
+	let r: MarkPriceResponse = client
+		.get("/fapi/v1/premiumIndex", Some(&params), [BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)])
+		.await
+		.unwrap();
 	let price = r.index_price; // when using this framework, we care for per-exchange price, obviously
 	Ok(price)
 }
