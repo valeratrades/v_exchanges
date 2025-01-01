@@ -2920,7 +2920,7 @@ checksum = "f8c5f0a0af699448548ad1a2fbf920fb4bee257eae39953ba95cb84891a0446a"
 
 [[package]]
 name = "v_exchanges"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "color-eyre",
@@ -2938,7 +2938,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_adapters"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "env_logger",
  "hex",
@@ -2957,7 +2957,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_api_generics"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "bytes",
  "futures-util",

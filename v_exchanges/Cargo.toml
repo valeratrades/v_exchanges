@@ -2,7 +2,7 @@ cargo-features = ["codegen-backend"]
 
 [package]
 name = "v_exchanges"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 
 authors = ["negi-grass", "valeratrades"]
@@ -25,7 +25,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
 
 [dependencies]
-v_exchanges_adapters = { version = "^0.1.0", path = "../v_exchanges_adapters/", features = ["full"] }
+v_exchanges_adapters = { version = "^0.1.1", path = "../v_exchanges_adapters/", features = ["full"] }
 tokio.workspace = true
 tracing.workspace = true
 serde.workspace = true
