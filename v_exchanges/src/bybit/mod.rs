@@ -1,30 +1,17 @@
 pub mod account;
 
 use color_eyre::eyre::Result;
+use derive_more::derive::Deref;
+use derive_more::derive::DerefMut;
 use v_exchanges_adapters::Client;
 use v_exchanges_adapters::bybit;
+use v_utils::macros::WrapNew;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::core::{AssetBalance, Exchange, Klines};
 
+#[derive(Clone, Debug, Default, Deref, DerefMut, WrapNew)]
 pub struct Bybit(pub Client);
-impl Bybit {
-	pub fn new() -> Self {
-		Self(Client::new())
-	}
-}
-impl std::ops::Deref for Bybit {
-	type Target = Client;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-impl std::ops::DerefMut for Bybit {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.0
-	}
-}
 
 
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?

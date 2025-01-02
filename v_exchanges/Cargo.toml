@@ -32,7 +32,7 @@ serde.workspace = true
 serde_json.workspace = true
 serde_plain.workspace = true
 serde_with.workspace = true
-v_utils.workspace = true
+v_utils = { workspace = true }
 color-eyre.workspace = true
 
 # #dbg
@@ -42,6 +42,7 @@ derive-new.workspace = true
 chrono = "0.4.39"
 
 insta.workspace = true #dbg (for some reason is not loading in dev-dependencies rn
+derive_more = { version = "1.0.0", features = ["deref", "deref_mut"] }
 
 [dev-dependencies]
 insta.workspace = true
