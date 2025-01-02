@@ -4,7 +4,7 @@ use tokio::sync::mpsc;
 use v_exchanges_adapters::traits::HandlerOptions;
 use v_utils::trades::{Asset, Kline, Pair, Timeframe};
 
-pub trait Exchange<O: HandlerOptions> {
+pub trait Exchange {
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
 	fn futures_klines(&self, symbol: Pair, tf: Timeframe, limit: u32, start_time: Option<u64>, end_time: Option<u64>) -> impl std::future::Future<Output = Result<Klines>> + Send;
 	fn futures_price(&self, symbol: Pair) -> impl std::future::Future<Output = Result<f64>> + Send;
