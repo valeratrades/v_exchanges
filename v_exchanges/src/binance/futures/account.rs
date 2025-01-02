@@ -4,7 +4,7 @@ use color_eyre::eyre::Result;
 use serde::Deserialize;
 use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::binance::{BinanceAuth, BinanceHttpUrl, BinanceOption};
-use v_utils::trades::{Asset, Kline, Ohlc, Pair, Side, Timeframe};
+use v_utils::{macros::ScreamIt, trades::{Asset, Kline, Ohlc, Pair, Side, Timeframe}};
 
 use crate::core::AssetBalance;
 
@@ -57,6 +57,7 @@ impl From<AssetBalanceResponse> for AssetBalance {
 }
 //,}}}
 
+#[derive(ScreamIt)]
 pub enum ContractType {
 	Perpetual,
 	CurrentMonth,
@@ -64,33 +65,15 @@ pub enum ContractType {
 	CurrentQuarter,
 	NextQuarter,
 }
-impl Display for ContractType {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			ContractType::Perpetual => write!(f, "PERPETUAL"),
-			ContractType::CurrentMonth => write!(f, "CURRENT_MONTH"),
-			ContractType::NextMonth => write!(f, "NEXT_MONTH"),
-			ContractType::CurrentQuarter => write!(f, "CURRENT_QUARTER"),
-			ContractType::NextQuarter => write!(f, "NEXT_QUARTER"),
-		}
-	}
-}
 
+#[derive(ScreamIt)]
 pub enum PositionSide {
 	Both,
 	Long,
 	Short,
 }
-impl Display for PositionSide {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::Both => write!(f, "BOTH"),
-			Self::Long => write!(f, "LONG"),
-			Self::Short => write!(f, "SHORT"),
-		}
-	}
-}
 
+#[derive(ScreamIt)]
 pub enum OrderType {
 	Limit,
 	Market,
@@ -100,49 +83,19 @@ pub enum OrderType {
 	TakeProfitMarket,
 	TrailingStopMarket,
 }
-impl Display for OrderType {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::Limit => write!(f, "LIMIT"),
-			Self::Market => write!(f, "MARKET"),
-			Self::Stop => write!(f, "STOP"),
-			Self::StopMarket => write!(f, "STOP_MARKET"),
-			Self::TakeProfit => write!(f, "TAKE_PROFIT"),
-			Self::TakeProfitMarket => write!(f, "TAKE_PROFIT_MARKET"),
-			Self::TrailingStopMarket => write!(f, "TRAILING_STOP_MARKET"),
-		}
-	}
-}
 
+#[derive(ScreamIt)]
 pub enum WorkingType {
 	MarkPrice,
 	ContractPrice,
 }
-impl Display for WorkingType {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::MarkPrice => write!(f, "MARK_PRICE"),
-			Self::ContractPrice => write!(f, "CONTRACT_PRICE"),
-		}
-	}
-}
 
-#[allow(clippy::all)]
+#[derive(ScreamIt)]
 pub enum TimeInForce {
 	Gtc,
 	Ioc,
 	Fok,
 	Gtx,
-}
-impl Display for TimeInForce {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::Gtc => write!(f, "GTC"),
-			Self::Ioc => write!(f, "IOC"),
-			Self::Fok => write!(f, "FOK"),
-			Self::Gtx => write!(f, "GTX"),
-		}
-	}
 }
 
 struct OrderRequest {
@@ -170,7 +123,7 @@ pub struct IncomeRequest {
 	pub limit: Option<u32>,
 }
 
-#[allow(non_camel_case_types)]
+#[derive(ScreamIt)]
 pub enum IncomeType {
 	Transfer,
 	WelcomeBonus,
@@ -191,30 +144,4 @@ pub enum IncomeType {
 	CoinSwapDeposit,
 	CoinSwapWithdraw,
 	PositionLimitIncreaseFee,
-}
-//TODO!: figure out how to automatically derive this. Probably with derive_more::derive::Display and serde(rename = "UPPERCASE"). Or better yet just fork derive_more::Display
-impl Display for IncomeType {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::Transfer => write!(f, "TRANSFER"),
-			Self::WelcomeBonus => write!(f, "WELCOME_BONUS"),
-			Self::RealizedPnl => write!(f, "REALIZED_PNL"),
-			Self::FundingFee => write!(f, "FUNDING_FEE"),
-			Self::Commission => write!(f, "COMMISSION"),
-			Self::InsuranceClear => write!(f, "INSURANCE_CLEAR"),
-			Self::ReferralKickback => write!(f, "REFERRAL_KICKBACK"),
-			Self::CommissionRebate => write!(f, "COMMISSION_REBATE"),
-			Self::ApiRebate => write!(f, "API_REBATE"),
-			Self::ContestReward => write!(f, "CONTEST_REWARD"),
-			Self::CrossCollateralTransfer => write!(f, "CROSS_COLLATERAL_TRANSFER"),
-			Self::OptionsPremiumFee => write!(f, "OPTIONS_PREMIUM_FEE"),
-			Self::OptionsSettleProfit => write!(f, "OPTIONS_SETTLE_PROFIT"),
-			Self::InternalTransfer => write!(f, "INTERNAL_TRANSFER"),
-			Self::AutoExchange => write!(f, "AUTO_EXCHANGE"),
-			Self::DeliveredSettlement => write!(f, "DELIVERED_SETTELMENT"),
-			Self::CoinSwapDeposit => write!(f, "COIN_SWAP_DEPOSIT"),
-			Self::CoinSwapWithdraw => write!(f, "COIN_SWAP_WITHDRAW"),
-			Self::PositionLimitIncreaseFee => write!(f, "POSITION_LIMIT_INCREASE_FEE"),
-		}
-	}
 }
