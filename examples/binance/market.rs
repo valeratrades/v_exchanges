@@ -8,15 +8,13 @@ async fn main() {
 	color_eyre::install().unwrap();
 	v_utils::utils::init_subscriber(v_utils::utils::LogDestination::xdg("v_exchanges"));
 
-	let mut b = Binance::new();
+	let mut b = Binance::default();
 
 	b.update_default_option(BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM));
 
 	//before implementing the trait for bybit too, was able to just do eg: `let klines = client.futures_klines(("BTC", "USDT").into(), "1m".into(), 2, None, None).await.unwrap();`
 
-	let klines = b.futures_klines(("BTC", "USDT").into(), "1m".into(), 2, None, None)
-		.await
-		.unwrap();
+	let klines = b.futures_klines(("BTC", "USDT").into(), "1m".into(), 2, None, None).await.unwrap();
 	let price = b.futures_price(("BTC", "USDT").into()).await.unwrap();
 	dbg!(&klines, price);
 

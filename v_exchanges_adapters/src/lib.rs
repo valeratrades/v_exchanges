@@ -39,11 +39,6 @@ pub struct Client {
 }
 
 impl Client {
-	/// Creates a new [Client].
-	pub fn new() -> Self {
-		Self::default()
-	}
-
 	/// Update the default options for this [Client]
 	#[inline(always)]
 	pub fn update_default_option<O>(&mut self, option: O)

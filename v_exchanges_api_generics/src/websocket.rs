@@ -1,3 +1,4 @@
+use core::slice::SlicePattern;
 use std::{
 	collections::hash_map::{Entry, HashMap},
 	mem,
@@ -7,11 +8,11 @@ use std::{
 	},
 	time::Duration,
 };
+
 use futures_util::{
 	sink::SinkExt,
 	stream::{SplitSink, StreamExt},
 };
-use core::slice::SlicePattern;
 use parking_lot::Mutex as SyncMutex;
 use tokio::{
 	net::TcpStream,

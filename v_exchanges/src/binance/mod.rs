@@ -9,7 +9,7 @@ use v_utils::{
 
 use crate::core::{AssetBalance, Exchange, Klines};
 
-#[derive(Clone, Debug, Default, Deref, DerefMut, WrapNew)]
+#[derive(Clone, Debug, Default, Deref, DerefMut)]
 pub struct Binance(pub Client);
 
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?

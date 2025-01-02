@@ -8,12 +8,12 @@ async fn main() {
 	color_eyre::install().unwrap();
 	v_utils::utils::init_subscriber(v_utils::utils::LogDestination::xdg("v_exchanges"));
 
-	let mut bb = Bybit::new();
+	let mut bb = Bybit::default();
 
-	let ticker: serde_json::Value = bb.0
-		.get("/v5/market/tickers", &[("category", "spot"), ("symbol", "BTCUSDT")], [BybitOption::Default])
-		.await
-		.expect("failed to get ticker");
+	let ticker: serde_json::Value =
+		bb.0.get("/v5/market/tickers", &[("category", "spot"), ("symbol", "BTCUSDT")], [BybitOption::Default])
+			.await
+			.expect("failed to get ticker");
 	println!("Ticker:\n{ticker}");
 
 	if let (Ok(key), Ok(secret)) = (env::var("BYBIT_TIGER_READ_KEY"), env::var("BYBIT_TIGER_READ_SECRET")) {
