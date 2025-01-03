@@ -15,7 +15,6 @@ license = "MIT"
 readme = "README.md"
 repository = "https://github.com/valeratrades/v_exchanges/tree/master/v_exchanges"
 
-
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 all-features = true
@@ -25,28 +24,27 @@ rustdoc-args = ["--cfg", "docsrs"]
 ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
 
 [dependencies]
-v_exchanges_adapters = { version = "^0.1.1", path = "../v_exchanges_adapters/", features = ["full"] }
-tokio.workspace = true
-tracing.workspace = true
+color-eyre.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_plain.workspace = true
 serde_with.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+v_exchanges_adapters = { version = "^0.1.1", path = "../v_exchanges_adapters/", features = ["full"] }
 v_utils = { workspace = true }
-color-eyre.workspace = true
+chrono = "0.4.39"
+derive-new.workspace = true
+env_logger = "0.11.5"
 
 # #dbg
 rust_decimal = { version = "1.36.0", features = ["serde-with-str", "serde-with-float"] }
-env_logger = "0.11.5"
-derive-new.workspace = true
-chrono = "0.4.39"
+derive_more = { version = "1.0.0", features = ["deref", "deref_mut"] }
 
 insta.workspace = true #dbg (for some reason is not loading in dev-dependencies rn
-derive_more = { version = "1.0.0", features = ["deref", "deref_mut"] }
 
 [dev-dependencies]
 insta.workspace = true
-
 #
 
 [features]

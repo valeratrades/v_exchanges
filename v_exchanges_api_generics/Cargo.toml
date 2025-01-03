@@ -22,14 +22,20 @@ tokio-tungstenite = "0.26.0"
 
 futures-util.workspace = true
 reqwest.workspace = true
-v_utils.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+v_utils.workspace = true
 
 [features]
 native-tls = ["reqwest/native-tls", "tokio-tungstenite/native-tls"]
 native-tls-vendored = ["reqwest/native-tls-vendored", "tokio-tungstenite/native-tls-vendored"]
-rustls-tls-native-roots = ["reqwest/rustls-tls-native-roots", "tokio-tungstenite/rustls-tls-native-roots"]
-rustls-tls-webpki-roots = ["reqwest/rustls-tls-webpki-roots", "tokio-tungstenite/rustls-tls-webpki-roots"]
+rustls-tls-native-roots = [
+    "reqwest/rustls-tls-native-roots",
+    "tokio-tungstenite/rustls-tls-native-roots"
+]
+rustls-tls-webpki-roots = [
+    "reqwest/rustls-tls-webpki-roots",
+    "tokio-tungstenite/rustls-tls-webpki-roots"
+]
