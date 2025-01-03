@@ -1,3 +1,5 @@
+use std::fmt;
+
 use chrono::{DateTime, TimeZone, Utc};
 //HACK: Methods should be implemented on the central interface struct, following <https://github.com/wisespace-io/binance-rs>.
 use color_eyre::eyre::{self, Error, Result};
@@ -11,17 +13,52 @@ use v_utils::{
 	utils::filter_nulls,
 };
 
-use crate::core::Klines;
+use crate::core::{Klines, KlinesRequestRange};
+
+//MOVE: centralized error module
+#[derive(Debug)]
+struct LimitOutOfRangeError {
+	allowed: std::ops::RangeInclusive<u32>,
+	provided: u32,
+}
+impl fmt::Display for LimitOutOfRangeError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "Limit out of range. Allowed: {:?}, provided: {}", self.allowed, self.provided)
+	}
+}
+impl std::error::Error for LimitOutOfRangeError {}
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, limit: u32, start_time: Option<u64>, end_time: Option<u64>) -> Result<Klines> {
-	let mut params = filter_nulls(json!({
+pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
+	let range_json = match range {
+		KlinesRequestRange::StartEnd { start, end } => json!({
+			"startTime": start.timestamp_millis(),
+			"endTime": end.timestamp_millis(),
+		}),
+		KlinesRequestRange::Limit(limit) => {
+			let allowed_range = 1..=1000;
+			if !allowed_range.contains(&limit) {
+				return Err(LimitOutOfRangeError {
+					allowed: allowed_range,
+					provided: limit,
+				}
+				.into());
+			}
+			json!({
+				"limit": limit,
+			})
+		}
+	};
+	let mut base_params = filter_nulls(json!({
 		"symbol": pair.to_string(),
 		"interval": tf.format_binance()?,
-		"limit": limit,
-		"startTime": start_time,
-		"endTime": end_time,
 	}));
+
+	let mut base_map = base_params.as_object().unwrap().clone();
+	let range_map = range_json.as_object().unwrap();
+	base_map.extend(range_map.clone());
+	let params = filter_nulls(serde_json::Value::Object(base_map));
+
 	let kline_responses: Vec<KlineResponse> = client.get("/fapi/v1/klines", &params, [BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)]).await.unwrap();
 
 	let r_len = kline_responses.len();

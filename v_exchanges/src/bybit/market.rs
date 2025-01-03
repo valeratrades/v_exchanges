@@ -12,7 +12,7 @@ use v_utils::{
 	utils::filter_nulls,
 };
 
-use crate::core::Klines;
+use crate::core::{Klines, KlinesRequestRange};
 
 //MOVE: centralized error module
 #[derive(Debug)]
@@ -27,20 +27,37 @@ impl fmt::Display for LimitOutOfRangeError {
 }
 impl std::error::Error for LimitOutOfRangeError {}
 
-pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, limit: u32, start_time: Option<u64>, end_time: Option<u64>) -> Result<Klines> {
-	let range = 1..=1000;
-	if !range.contains(&limit) {
-		return Err(LimitOutOfRangeError { allowed: range, provided: limit }.into());
-	}
-
-	let mut params = filter_nulls(json!({
+pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
+	let range_json = match range {
+		KlinesRequestRange::StartEnd { start, end } => json!({
+			"startTime": start.timestamp_millis(),
+			"endTime": end.timestamp_millis(),
+		}),
+		KlinesRequestRange::Limit(limit) => {
+			let allowed_range = 1..=1000;
+			if !allowed_range.contains(&limit) {
+				return Err(LimitOutOfRangeError {
+					allowed: allowed_range,
+					provided: limit,
+				}
+				.into());
+			}
+			json!({
+				"limit": limit,
+			})
+		}
+	};
+	let mut base_params = filter_nulls(json!({
 		"category": "linear", // can be ["linear", "inverse", "spot"] afaiu, could drive some generics with this later, but for now hardcode
 		"symbol": pair.to_string(),
 		"interval": tf.format_bybit()?,
-		"limit": limit,
-		"startTime": start_time,
-		"endTime": end_time,
 	}));
+
+	let mut base_map = base_params.as_object().unwrap().clone();
+	let range_map = range_json.as_object().unwrap();
+	base_map.extend(range_map.clone());
+	let params = filter_nulls(serde_json::Value::Object(base_map));
+
 	let kline_response: KlineResponse = client.get("/v5/market/kline", &params, [BybitOption::Default]).await.unwrap();
 
 	let mut klines = Vec::new();

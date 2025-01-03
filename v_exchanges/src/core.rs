@@ -8,7 +8,7 @@ use v_utils::trades::{Asset, Kline, Pair, Timeframe};
 
 pub trait Exchange {
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
-	fn futures_klines(&self, symbol: Pair, tf: Timeframe, limit: u32, start_time: Option<u64>, end_time: Option<u64>) -> impl std::future::Future<Output = Result<Klines>> + Send;
+	fn futures_klines(&self, symbol: Pair, tf: Timeframe, range: KlinesRequestRange) -> impl std::future::Future<Output = Result<Klines>> + Send;
 	fn futures_price(&self, symbol: Pair) -> impl std::future::Future<Output = Result<f64>> + Send;
 
 	// Defined in terms of actors
@@ -45,11 +45,39 @@ pub struct Klines {
 //? not sure what to do about oi here
 /// [Kline]s series that is _guaranteed to not have any gaps in kline data_.
 #[derive(Clone, Debug, Default)]
-struct FullKlines(Klines);
+pub struct FullKlines(Klines);
 impl TryFrom<Klines> for FullKlines {
 	type Error = color_eyre::eyre::Report;
 	fn try_from(value: Klines) -> Result<Self> {
 	  todo!();
+	}
+}
+
+#[derive(Clone, Debug, Copy)]
+pub enum KlinesRequestRange {
+	/// Preferred way of defining the range
+	StartEnd{start: DateTime<Utc>, end: DateTime<Utc>},
+	/// For quick and dirty
+	Limit(u32),
+}
+impl Default for KlinesRequestRange {
+	fn default() -> Self {
+	  KlinesRequestRange::StartEnd { start: DateTime::default(), end: DateTime::default() }
+	}
+}
+impl From<u32> for KlinesRequestRange {
+	fn from(value: u32) -> Self {
+	  KlinesRequestRange::Limit(value)
+	}
+}
+impl From<(DateTime<Utc>, DateTime<Utc>)> for KlinesRequestRange {
+	fn from(value: (DateTime<Utc>, DateTime<Utc>)) -> Self {
+	  KlinesRequestRange::StartEnd { start: value.0, end: value.1 }
+	}
+}
+impl From<(i64, i64)> for KlinesRequestRange {
+	fn from(value: (i64, i64)) -> Self {
+	  KlinesRequestRange::StartEnd { start: DateTime::from_timestamp_millis(value.0).unwrap(), end: DateTime::from_timestamp_millis(value.1).unwrap()}
 	}
 }
 //,}}}

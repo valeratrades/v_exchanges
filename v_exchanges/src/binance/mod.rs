@@ -7,15 +7,15 @@ use v_utils::{
 	trades::{Asset, Pair, Timeframe},
 };
 
-use crate::core::{AssetBalance, Exchange, Klines};
+use crate::core::{AssetBalance, Exchange, Klines, KlinesRequestRange};
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
 pub struct Binance(pub Client);
 
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
 impl Exchange for Binance {
-	async fn futures_klines(&self, symbol: Pair, tf: Timeframe, limit: u32, start_time: Option<u64>, end_time: Option<u64>) -> Result<Klines> {
-		futures::market::klines(&self.0, symbol, tf, limit, start_time, end_time).await
+	async fn futures_klines(&self, symbol: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
+		futures::market::klines(&self.0, symbol, tf, range).await
 	}
 
 	async fn futures_price(&self, symbol: Pair) -> Result<f64> {

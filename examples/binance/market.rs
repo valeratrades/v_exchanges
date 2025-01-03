@@ -12,7 +12,7 @@ async fn main() {
 
 	b.update_default_option(BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM));
 
-	let klines = b.futures_klines(("BTC", "USDT").into(), "1m".into(), 2, None, None).await.unwrap();
+	let klines = b.futures_klines(("BTC", "USDT").into(), "1m".into(), 2.into()).await.unwrap();
 	let price = b.futures_price(("BTC", "USDT").into()).await.unwrap();
 	dbg!(&klines, price);
 
