@@ -51,7 +51,7 @@ impl From<AssetBalanceResponse> for AssetBalance {
 		Self {
 			asset: r.asset.into(),
 			balance: r.balance,
-			timestamp: r.update_time,
+			timestamp: r.update_time as i64,
 		}
 	}
 }

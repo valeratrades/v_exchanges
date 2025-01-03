@@ -12,9 +12,11 @@ pub trait Exchange {
 	// Defined in terms of actors
 	//TODO!!!: fn spawn_klines_listener(&self, symbol: Pair, tf: Timeframe) -> mpsc::Receiver<Kline>;
 
-	//DO: balances
+	/// balance of a specific asset
 	fn futures_asset_balance(&self, asset: Asset) -> impl std::future::Future<Output = Result<AssetBalance>> + Send;
+	/// vec of balances of specific assets
 	fn futures_balances(&self) -> impl std::future::Future<Output = Result<Vec<AssetBalance>>> + Send;
+	//? potentially `total_balance`? Would return precompiled USDT-denominated balance of a (bybit::wallet/binance::account)
 	// balances are defined for each margin type: [futures_balance, spot_balance, margin_balance], but note that on some exchanges, (like bybit), some of these may point to the same exact call
 	// to negate confusion could add a `total_balance` endpoint
 
@@ -47,5 +49,5 @@ pub struct AssetBalance {
 	//available_balance: f64,
 	//max_withdraw_amount: f64,
 	//margin_available: bool,
-	pub timestamp: u64,
+	pub timestamp: i64,
 }

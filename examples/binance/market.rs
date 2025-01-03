@@ -12,11 +12,12 @@ async fn main() {
 
 	b.update_default_option(BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM));
 
-	//before implementing the trait for bybit too, was able to just do eg: `let klines = client.futures_klines(("BTC", "USDT").into(), "1m".into(), 2, None, None).await.unwrap();`
-
 	let klines = b.futures_klines(("BTC", "USDT").into(), "1m".into(), 2, None, None).await.unwrap();
 	let price = b.futures_price(("BTC", "USDT").into()).await.unwrap();
 	dbg!(&klines, price);
+
+	let trades: serde_json::Value = b.get("/fapi/v1/aggTrades", &[("symbol", "BTCUSDT"), ("limit", "2")], [BinanceOption::Default]).await.unwrap();
+	dbg!(&trades);
 
 	if let (Ok(key), Ok(secret)) = (env::var("BINANCE_TIGER_READ_KEY"), env::var("BINANCE_TIGER_READ_SECRET")) {
 		b.update_default_option(BinanceOption::Key(key));
