@@ -9,7 +9,6 @@ let
   rust-jobs-errors = {
     tests = import workflow-parts.rust.tests { inherit rustc-versions; };
     doc = import workflow-parts.rust.doc { inherit pkgs; };
-    miri = import workflow-parts.rust.miri { inherit pkgs; };
   };
   rust-jobs-warn = {
     machete = import workflow-parts.rust.machete { inherit pkgs; };

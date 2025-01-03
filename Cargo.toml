@@ -15,7 +15,7 @@ undocumented_unsafe_blocks = "warn"
 tabs_in_doc_comments = "allow"
 
 [workspace.dependencies]
-v_utils = { version = "^2.0", features = ["trades", "tracing", "macros"], path = "../v_utils/v_utils" } #ga: rm path
+v_utils = { version = "^2.0", path = "../v_utils/v_utils", features = ["trades", "tracing", "macros"] } #ga: rm path
 
 chrono = "^0.4.39"
 color-eyre = "^0.6.3"
