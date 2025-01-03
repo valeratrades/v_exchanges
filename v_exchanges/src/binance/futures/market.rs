@@ -1,6 +1,7 @@
 use chrono::{DateTime, TimeZone, Utc};
 //HACK: Methods should be implemented on the central interface struct, following <https://github.com/wisespace-io/binance-rs>.
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{self, Error, Result};
+use color_eyre::eyre::{Report, eyre};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
@@ -21,10 +22,35 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timef
 		"startTime": start_time,
 		"endTime": end_time,
 	}));
-
 	let kline_responses: Vec<KlineResponse> = client.get("/fapi/v1/klines", &params, [BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)]).await.unwrap();
-	let klines: Vec<Kline> = kline_responses.into_iter().map(Kline::from).collect();
 
+	let r_len = kline_responses.len();
+	let mut klines = Vec::with_capacity(r_len);
+	for (i, k) in kline_responses.into_iter().enumerate() {
+		//HACK: have to check against [now](Utc::now) instead, because binance returns some dumb shit instead of actual close. Here structured this way in case they fix it in the future.
+		let close_time = Utc::now().timestamp_millis();
+		match close_time > k.open_time + (0.99 * tf.duration().num_milliseconds() as f64) as i64 {
+			true => {
+				let ohlc = Ohlc {
+					open: k.open,
+					high: k.high,
+					low: k.low,
+					close: k.close,
+				};
+				klines.push(Kline {
+					open_time: DateTime::from_timestamp_millis(k.open_time).unwrap(),
+					ohlc,
+					volume_quote: k.quote_asset_volume,
+					trades: Some(k.number_of_trades),
+					taker_buy_volume_quote: Some(k.taker_buy_quote_asset_volume),
+				});
+			}
+			false => match i == r_len - 1 {
+				true => tracing::trace!("Skipped last kline in binance request, as it's incomplete (expected behavior)"),
+				false => tracing::warn!("Skipped kline in binance request, as it's incomplete"),
+			},
+		}
+	}
 	Ok(Klines { v: klines, tf, oi: Vec::new() })
 }
 
@@ -46,7 +72,8 @@ pub struct KlineResponse {
 	pub low: f64,
 	#[serde_as(as = "DisplayFromStr")]
 	pub volume: f64,
-	pub close_time: i64,
+	/// As of today (2025/01/03), means NOTHING, as they will still send what it _SHOULD_ be even if the kline is not yet finished. (fuck you, binance)
+	__close_time: i64,
 	#[serde_as(as = "DisplayFromStr")]
 	pub quote_asset_volume: f64,
 	pub number_of_trades: usize,
@@ -56,25 +83,6 @@ pub struct KlineResponse {
 	pub taker_buy_quote_asset_volume: f64,
 
 	__ignore: Option<Value>,
-}
-impl From<KlineResponse> for Kline {
-	fn from(k: KlineResponse) -> Self {
-		let ohlc = Ohlc {
-			open: k.open,
-			high: k.high,
-			low: k.low,
-			close: k.close,
-		};
-		Kline {
-			open_time: DateTime::from_timestamp_millis(k.open_time).unwrap(),
-			ohlc,
-			volume_quote: k.quote_asset_volume,
-			//TODO!!!!!!: before adding check that it is not less than start_time + tf
-			trades: Some(k.number_of_trades),
-			taker_buy_volume_quote: Some(k.taker_buy_quote_asset_volume),
-			close_time: Some(Utc.timestamp_millis_opt(k.close_time).unwrap()),
-		}
-	}
 }
 //,}}}
 

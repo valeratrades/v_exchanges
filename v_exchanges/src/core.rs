@@ -1,8 +1,10 @@
 use chrono::{DateTime, Utc};
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Error, Result};
 use tokio::sync::mpsc;
 use v_exchanges_adapters::traits::HandlerOptions;
 use v_utils::trades::{Asset, Kline, Pair, Timeframe};
+
+//TODO!!!!!!!!!!!!!: klines switch to defining the range via an Enum over either limit either start and end times
 
 pub trait Exchange {
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
@@ -37,6 +39,18 @@ pub struct Klines {
 	pub tf: Timeframe,
 	/// Doesn't have to be synchronized with klines; each track has its own timestamps.
 	pub oi: Vec<Oi>,
+}
+
+//MOVE: v_utils (along with [Klines])
+//? not sure what to do about oi here
+/// [Kline]s series that is _guaranteed to not have any gaps in kline data_.
+#[derive(Clone, Debug, Default)]
+struct FullKlines(Klines);
+impl TryFrom<Klines> for FullKlines {
+	type Error = color_eyre::eyre::Report;
+	fn try_from(value: Klines) -> Result<Self> {
+	  todo!();
+	}
 }
 //,}}}
 

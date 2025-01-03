@@ -2990,6 +2990,7 @@ dependencies = [
  "serde_json",
  "serde_plain",
  "serde_with",
+ "thiserror",
  "tokio",
  "tracing",
  "v_exchanges_adapters",

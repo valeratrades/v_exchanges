@@ -16,9 +16,6 @@ async fn main() {
 	let price = b.futures_price(("BTC", "USDT").into()).await.unwrap();
 	dbg!(&klines, price);
 
-	let trades: serde_json::Value = b.get("/fapi/v1/aggTrades", &[("symbol", "BTCUSDT"), ("limit", "2")], [BinanceOption::Default]).await.unwrap();
-	dbg!(&trades);
-
 	if let (Ok(key), Ok(secret)) = (env::var("BINANCE_TIGER_READ_KEY"), env::var("BINANCE_TIGER_READ_SECRET")) {
 		b.update_default_option(BinanceOption::Key(key));
 		b.update_default_option(BinanceOption::Secret(secret));

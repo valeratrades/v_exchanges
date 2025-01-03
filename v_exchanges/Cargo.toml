@@ -31,6 +31,7 @@ serde_plain.workspace = true
 serde_with.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+thiserror.workspace = true
 v_exchanges_adapters = { version = "^0.1.1", path = "../v_exchanges_adapters/", features = ["full"] }
 v_utils = { workspace = true }
 chrono = "0.4.39"

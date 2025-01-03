@@ -1,14 +1,13 @@
 use std::str::FromStr;
-use v_utils::macros::ScreamIt;
 
 use color_eyre::eyre::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::bybit::{BybitHttpAuth, BybitOption};
-use serde_with::{serde_as, DisplayFromStr};
+use v_utils::{macros::ScreamIt, trades::Asset};
 
 use crate::core::AssetBalance;
-use v_utils::trades::Asset;
 
 pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset) -> Result<AssetBalance> {
 	let balances = balances(client).await?;
@@ -28,17 +27,14 @@ pub async fn balances(client: &v_exchanges_adapters::Client) -> Result<Vec<Asset
 
 	let mut balances = Vec::new();
 	for r in &account_info.coin {
-		balances.push(
-			AssetBalance {
-				asset: (&*r.coin).into(),
-				balance: r.wallet_balance,
-				timestamp: account_response.time,
-			}
-		);
+		balances.push(AssetBalance {
+			asset: (&*r.coin).into(),
+			balance: r.wallet_balance,
+			timestamp: account_response.time,
+		});
 	}
 	Ok(balances)
 }
-
 
 #[derive(Debug, Clone, ScreamIt, Copy)]
 pub enum AccountType {
@@ -91,7 +87,7 @@ pub struct AccountInfo {
 pub struct CoinInfo {
 	pub accrued_interest: String,
 	/// deprecated
-	pub available_to_borrow: Option<Value>, //? can I start it with __, will serde understand?
+	__available_to_borrow: Option<Value>, //? can I start it with __, will serde understand?
 	pub available_to_withdraw: String,
 	pub bonus: String,
 	pub borrow_amount: String,
