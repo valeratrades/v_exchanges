@@ -1,12 +1,10 @@
-use std::fmt::Display;
-
 use color_eyre::eyre::Result;
 use serde::Deserialize;
 use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::binance::{BinanceAuth, BinanceHttpUrl, BinanceOption};
 use v_utils::{
 	macros::ScreamIt,
-	trades::{Asset, Kline, Ohlc, Pair, Side, Timeframe},
+	trades::{Asset, Side},
 };
 
 use crate::core::AssetBalance;
