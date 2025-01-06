@@ -40,6 +40,9 @@ serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
 sha2.workspace = true
+thiserror.workspace = true
+derive-new.workspace = true
+derive_more.workspace = true
 tracing.workspace = true
 v_exchanges_api_generics = { version = "^0.3.1", path = "../v_exchanges_api_generics" }
 rand = { version = "0.8.5", optional = true }

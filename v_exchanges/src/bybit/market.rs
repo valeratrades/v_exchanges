@@ -6,26 +6,16 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
 use thiserror::Error;
-use v_exchanges_adapters::bybit::{BybitHttpUrl, BybitOption};
+use v_exchanges_adapters::{
+	bybit::{BybitHttpUrl, BybitOption},
+	errors::LimitOutOfRangeError,
+};
 use v_utils::{
 	trades::{Kline, Ohlc, Pair, Timeframe},
 	utils::filter_nulls,
 };
 
 use crate::core::{Klines, KlinesRequestRange};
-
-//MOVE: centralized error module
-#[derive(Debug)]
-struct LimitOutOfRangeError {
-	allowed: std::ops::RangeInclusive<u32>,
-	provided: u32,
-}
-impl fmt::Display for LimitOutOfRangeError {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "Limit out of range. Allowed: {:?}, provided: {}", self.allowed, self.provided)
-	}
-}
-impl std::error::Error for LimitOutOfRangeError {}
 
 pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
 	let range_json = match range {
@@ -36,11 +26,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timef
 		KlinesRequestRange::Limit(limit) => {
 			let allowed_range = 1..=1000;
 			if !allowed_range.contains(&limit) {
-				return Err(LimitOutOfRangeError {
-					allowed: allowed_range,
-					provided: limit,
-				}
-				.into());
+				return Err(LimitOutOfRangeError::new(allowed_range, limit).into());
 			}
 			json!({
 				"limit": limit,

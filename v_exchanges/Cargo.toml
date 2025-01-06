@@ -32,15 +32,13 @@ serde_with.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
-v_exchanges_adapters = { version = "^0.1.1", path = "../v_exchanges_adapters/", features = ["full"] }
-v_utils = { workspace = true }
-chrono = "0.4.39"
+derive_more.workspace = true
 derive-new.workspace = true
-env_logger = "0.11.5"
+v_utils = { workspace = true }
 
-# #dbg
-rust_decimal = { version = "1.36.0", features = ["serde-with-str", "serde-with-float"] }
-derive_more = { version = "1.0.0", features = ["deref", "deref_mut"] }
+v_exchanges_adapters = { version = "^0.1.1", path = "../v_exchanges_adapters/", features = ["full"] }
+chrono = "0.4.39"
+env_logger = "0.11.5"
 
 insta.workspace = true #dbg (for some reason is not loading in dev-dependencies rn
 

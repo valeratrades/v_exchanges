@@ -2985,7 +2985,6 @@ dependencies = [
  "derive_more",
  "env_logger",
  "insta",
- "rust_decimal",
  "serde",
  "serde_json",
  "serde_plain",
@@ -3001,6 +3000,8 @@ dependencies = [
 name = "v_exchanges_adapters"
 version = "0.1.1"
 dependencies = [
+ "derive-new",
+ "derive_more",
  "env_logger",
  "hex",
  "hmac",
@@ -3011,6 +3012,7 @@ dependencies = [
  "serde_urlencoded",
  "serde_with",
  "sha2",
+ "thiserror",
  "tokio",
  "tracing",
  "v_exchanges_api_generics",

@@ -9,6 +9,7 @@ use v_exchanges_api_generics::{
 	websocket::*,
 };
 
+pub mod errors;
 mod exchanges;
 pub mod traits;
 
