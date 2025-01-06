@@ -48,36 +48,43 @@ pub struct Klines {
 pub struct FullKlines(Klines);
 impl TryFrom<Klines> for FullKlines {
 	type Error = color_eyre::eyre::Report;
+
 	fn try_from(value: Klines) -> Result<Self> {
-	  todo!();
+		todo!();
 	}
 }
 
 #[derive(Clone, Debug, Copy)]
 pub enum KlinesRequestRange {
 	/// Preferred way of defining the range
-	StartEnd{start: DateTime<Utc>, end: DateTime<Utc>},
+	StartEnd { start: DateTime<Utc>, end: DateTime<Utc> },
 	/// For quick and dirty
 	Limit(u32),
 }
 impl Default for KlinesRequestRange {
 	fn default() -> Self {
-	  KlinesRequestRange::StartEnd { start: DateTime::default(), end: DateTime::default() }
+		KlinesRequestRange::StartEnd {
+			start: DateTime::default(),
+			end: DateTime::default(),
+		}
 	}
 }
 impl From<u32> for KlinesRequestRange {
 	fn from(value: u32) -> Self {
-	  KlinesRequestRange::Limit(value)
+		KlinesRequestRange::Limit(value)
 	}
 }
 impl From<(DateTime<Utc>, DateTime<Utc>)> for KlinesRequestRange {
 	fn from(value: (DateTime<Utc>, DateTime<Utc>)) -> Self {
-	  KlinesRequestRange::StartEnd { start: value.0, end: value.1 }
+		KlinesRequestRange::StartEnd { start: value.0, end: value.1 }
 	}
 }
 impl From<(i64, i64)> for KlinesRequestRange {
 	fn from(value: (i64, i64)) -> Self {
-	  KlinesRequestRange::StartEnd { start: DateTime::from_timestamp_millis(value.0).unwrap(), end: DateTime::from_timestamp_millis(value.1).unwrap()}
+		KlinesRequestRange::StartEnd {
+			start: DateTime::from_timestamp_millis(value.0).unwrap(),
+			end: DateTime::from_timestamp_millis(value.1).unwrap(),
+		}
 	}
 }
 //,}}}
