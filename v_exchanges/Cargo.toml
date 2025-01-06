@@ -2,7 +2,7 @@ cargo-features = ["codegen-backend"]
 
 [package]
 name = "v_exchanges"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 
 authors = ["negi-grass", "valeratrades"]
@@ -36,7 +36,7 @@ derive_more.workspace = true
 derive-new.workspace = true
 v_utils = { workspace = true }
 
-v_exchanges_adapters = { version = "^0.1.1", path = "../v_exchanges_adapters/", features = ["full"] }
+v_exchanges_adapters = { version = "^0.2.0", path = "../v_exchanges_adapters/", features = ["full"] }
 chrono = "0.4.39"
 env_logger = "0.11.5"
 
