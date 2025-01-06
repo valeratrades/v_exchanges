@@ -17,6 +17,7 @@ use v_utils::{
 
 use crate::core::{Klines, KlinesRequestRange};
 
+// klines {{{
 pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
 	let range_json = match range {
 		KlinesRequestRange::StartEnd { start, end } => json!({
@@ -95,3 +96,74 @@ pub struct KlineData(
 	#[serde_as(as = "DisplayFromStr")] pub f64,
 	#[serde_as(as = "DisplayFromStr")] pub f64,
 );
+//,}}}
+
+// price {{{
+pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> Result<f64> {
+	let params = filter_nulls(json!({
+		"category": "linear",
+		"symbol": pair.to_string(),
+	}));
+	let response: MarketTickerResponse = client.get("/v5/market/tickers", &params, [BybitOption::Default]).await?;
+	Ok(response.result.list[0].last_price)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketTickerResponse {
+	pub ret_code: i32,
+	pub ret_msg: String,
+	pub result: MarketTickerResult,
+	pub ret_ext_info: std::collections::HashMap<String, Value>,
+	pub time: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketTickerResult {
+	pub category: String,
+	pub list: Vec<MarketTickerData>,
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketTickerData {
+	pub symbol: String,
+	#[serde_as(as = "DisplayFromStr")]
+	pub last_price: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub index_price: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub mark_price: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub prev_price24h: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub price24h_pcnt: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub high_price24h: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub low_price24h: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub prev_price1h: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub open_interest: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub open_interest_value: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub turnover24h: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub volume24h: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub funding_rate: f64,
+	pub next_funding_time: String,
+	#[serde_as(as = "DisplayFromStr")]
+	pub bid1_price: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub bid1_size: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub ask1_price: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub ask1_size: f64,
+}
+//,}}}

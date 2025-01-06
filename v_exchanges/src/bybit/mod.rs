@@ -18,8 +18,7 @@ impl Exchange for Bybit {
 	}
 
 	async fn futures_price(&self, symbol: Pair) -> Result<f64> {
-		//futures::market::price(&self.0, symbol).await
-		todo!();
+		market::price(&self.0, symbol).await
 	}
 
 	async fn futures_asset_balance(&self, asset: Asset) -> Result<AssetBalance> {

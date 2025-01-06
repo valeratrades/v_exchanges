@@ -16,8 +16,10 @@ async fn main() {
 	//	.expect("failed to get ticker");
 	//println!("Ticker:\n{ticker}");
 
-	let klines = bb.futures_klines(("BTC", "USDT").into(), "1m".into(), 2.into()).await.unwrap();
-	dbg!(&klines);
+	//let klines = bb.futures_klines(("BTC", "USDT").into(), "1m".into(), 2.into()).await.unwrap();
+	//dbg!(&klines);
+	let price = bb.futures_price(("BTC", "USDT").into()).await.unwrap();
+	dbg!(&price);
 
 	if let (Ok(key), Ok(secret)) = (env::var("BYBIT_TIGER_READ_KEY"), env::var("BYBIT_TIGER_READ_SECRET")) {
 		bb.update_default_option(BybitOption::Key(key));
