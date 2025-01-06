@@ -46,6 +46,17 @@ cargo run -p v_exchanges --example binance_market
 - [crypto-botters](<https://github.com/negi-grass/crypto-botters>), from where I stole the entire `generic-api-client` (as `v_exchanges_api_generics`).
 - [binance-rs](<https://github.com/wisespace-io/binance-rs>), which provided a cheat-sheet for so many binance interactions and best-practices on testing.
 
+## Conventions
+Purely usage guidance, writing for myself to standardise interfacing with the library across my projects wherever possible.
+List acronyms / other conventions that are preferred when interfacing with the library.
+
+### Exchange names
+Binance: `bn`
+Bybit: `bb`
+Bitflyer: `bf`
+Coincheck: `ch`
+
+
 
 <br>
 

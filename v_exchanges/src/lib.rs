@@ -1,3 +1,5 @@
+pub extern crate v_exchanges_adapters as adapters;
+
 pub mod core;
 
 pub mod binance;
