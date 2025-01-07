@@ -3,6 +3,7 @@ use color_eyre::eyre::{Error, Result};
 use tokio::sync::mpsc;
 use v_exchanges_adapters::traits::HandlerOptions;
 use v_utils::trades::{Asset, Kline, Pair, Timeframe};
+use derive_more::{Deref, DerefMut};
 
 //TODO!!!!!!!!!!!!!: klines switch to defining the range via an Enum over either limit either start and end times
 
@@ -33,8 +34,10 @@ pub struct Oi {
 	pub timestamp: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Deref, DerefMut)]
 pub struct Klines {
+	#[deref_mut]
+	#[deref]
 	pub v: Vec<Kline>,
 	pub tf: Timeframe,
 	/// Doesn't have to be synchronized with klines; each track has its own timestamps.
