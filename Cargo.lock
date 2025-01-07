@@ -3036,7 +3036,7 @@ dependencies = [
 
 [[package]]
 name = "v_utils"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "chrono",
  "console-subscriber",
@@ -3061,7 +3061,7 @@ dependencies = [
 
 [[package]]
 name = "v_utils_macros"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "eyre",
  "heck",
