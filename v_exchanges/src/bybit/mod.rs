@@ -1,6 +1,7 @@
 mod account;
 mod market;
 
+use adapters::bybit::BybitOption;
 use color_eyre::eyre::Result;
 use derive_more::derive::{Deref, DerefMut};
 use v_exchanges_adapters::{Client, bybit};
@@ -13,6 +14,11 @@ pub struct Bybit(pub Client);
 
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
 impl Exchange for Bybit {
+	fn auth<S: Into<String>>(&mut self, key: S, secret: S) {
+		self.update_default_option(BybitOption::Key(key.into()));
+		self.update_default_option(BybitOption::Secret(secret.into()));
+	}
+
 	async fn futures_klines(&self, symbol: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
 		market::klines(&self.0, symbol, tf, range).await
 	}

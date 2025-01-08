@@ -1,11 +1,13 @@
 use chrono::{DateTime, TimeDelta, Utc};
 use color_eyre::eyre::Result;
-use v_utils::trades::{Asset, Kline, Pair, Timeframe};
 use derive_more::{Deref, DerefMut};
+use v_utils::trades::{Asset, Kline, Pair, Timeframe};
 
 //TODO!!!!!!!!!!!!!: klines switch to defining the range via an Enum over either limit either start and end times
 
 pub trait Exchange {
+	fn auth<S: Into<String>>(&mut self, key: S, secret: S);
+
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
 	fn futures_klines(&self, symbol: Pair, tf: Timeframe, range: KlinesRequestRange) -> impl std::future::Future<Output = Result<Klines>> + Send;
 	fn futures_price(&self, symbol: Pair) -> impl std::future::Future<Output = Result<f64>> + Send;
@@ -79,10 +81,7 @@ impl From<DateTime<Utc>> for KlinesRequestRange {
 impl From<TimeDelta> for KlinesRequestRange {
 	fn from(value: TimeDelta) -> Self {
 		let now = Utc::now();
-		KlinesRequestRange::StartEnd {
-			start: now - value,
-			end: None,
-		}
+		KlinesRequestRange::StartEnd { start: now - value, end: None }
 	}
 }
 impl From<u32> for KlinesRequestRange {
