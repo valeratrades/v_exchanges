@@ -1,11 +1,8 @@
-use std::fmt;
-
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{TimeZone, Utc};
 use color_eyre::eyre::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
-use thiserror::Error;
 use v_exchanges_adapters::{
 	bybit::{BybitHttpUrl, BybitOption},
 	errors::LimitOutOfRangeError,
@@ -22,7 +19,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timef
 	let range_json = match range {
 		KlinesRequestRange::StartEnd { start, end } => json!({
 			"startTime": start.timestamp_millis(),
-			"endTime": end.timestamp_millis(),
+			"endTime": end.map(|dt| dt.timestamp_millis()),
 		}),
 		KlinesRequestRange::Limit(limit) => {
 			let allowed_range = 1..=1000;
@@ -34,7 +31,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timef
 			})
 		}
 	};
-	let mut base_params = filter_nulls(json!({
+	let base_params = filter_nulls(json!({
 		"category": "linear", // can be ["linear", "inverse", "spot"] afaiu, could drive some generics with this later, but for now hardcode
 		"symbol": pair.to_string(),
 		"interval": tf.format_bybit()?,

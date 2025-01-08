@@ -20,6 +20,8 @@ jobs:
       run: "\t\t\t\t\t\tcargo machete\n\t\t\t\t\t\texit_code=$?\n\t\t\t\t\t\tif [\
         \ $exit_code = 0 ]; then\n\t\t\t\t\t\t\techo \"Found unused dependencies\"\
         \n\t\t\t\t\t\t\texit $exit_code\n\t\t\t\t\t\tfi\n\t\t\t"
+  pre_ci:
+    uses: valeratrades/.github/.github/workflows/pre_ci.yml@master
   sort:
     name: Cargo Sorted
     runs-on: ubuntu-latest

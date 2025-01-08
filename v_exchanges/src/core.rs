@@ -1,7 +1,5 @@
-use chrono::{DateTime, Utc};
-use color_eyre::eyre::{Error, Result};
-use tokio::sync::mpsc;
-use v_exchanges_adapters::traits::HandlerOptions;
+use chrono::{DateTime, TimeDelta, Utc};
+use color_eyre::eyre::Result;
 use v_utils::trades::{Asset, Kline, Pair, Timeframe};
 use derive_more::{Deref, DerefMut};
 
@@ -60,7 +58,7 @@ impl TryFrom<Klines> for FullKlines {
 #[derive(Clone, Debug, Copy)]
 pub enum KlinesRequestRange {
 	/// Preferred way of defining the range
-	StartEnd { start: DateTime<Utc>, end: DateTime<Utc> },
+	StartEnd { start: DateTime<Utc>, end: Option<DateTime<Utc>> },
 	/// For quick and dirty
 	Limit(u32),
 }
@@ -68,7 +66,22 @@ impl Default for KlinesRequestRange {
 	fn default() -> Self {
 		KlinesRequestRange::StartEnd {
 			start: DateTime::default(),
-			end: DateTime::default(),
+			end: None,
+		}
+	}
+}
+impl From<DateTime<Utc>> for KlinesRequestRange {
+	fn from(value: DateTime<Utc>) -> Self {
+		KlinesRequestRange::StartEnd { start: value, end: None }
+	}
+}
+/// funky
+impl From<TimeDelta> for KlinesRequestRange {
+	fn from(value: TimeDelta) -> Self {
+		let now = Utc::now();
+		KlinesRequestRange::StartEnd {
+			start: now - value,
+			end: None,
 		}
 	}
 }
@@ -77,16 +90,26 @@ impl From<u32> for KlinesRequestRange {
 		KlinesRequestRange::Limit(value)
 	}
 }
+impl From<u16> for KlinesRequestRange {
+	fn from(value: u16) -> Self {
+		KlinesRequestRange::Limit(value as u32)
+	}
+}
+impl From<u8> for KlinesRequestRange {
+	fn from(value: u8) -> Self {
+		KlinesRequestRange::Limit(value as u32)
+	}
+}
 impl From<(DateTime<Utc>, DateTime<Utc>)> for KlinesRequestRange {
 	fn from(value: (DateTime<Utc>, DateTime<Utc>)) -> Self {
-		KlinesRequestRange::StartEnd { start: value.0, end: value.1 }
+		KlinesRequestRange::StartEnd { start: value.0, end: Some(value.1) }
 	}
 }
 impl From<(i64, i64)> for KlinesRequestRange {
 	fn from(value: (i64, i64)) -> Self {
 		KlinesRequestRange::StartEnd {
 			start: DateTime::from_timestamp_millis(value.0).unwrap(),
-			end: DateTime::from_timestamp_millis(value.1).unwrap(),
+			end: Some(DateTime::from_timestamp_millis(value.1).unwrap()),
 		}
 	}
 }

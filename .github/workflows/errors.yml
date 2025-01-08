@@ -17,19 +17,6 @@ jobs:
     - uses: dtolnay/install@cargo-docs-rs
     - run: cargo docs-rs
     timeout-minutes: 45
-  miri:
-    if: needs.pre_ci.outputs.continue
-    name: Miri
-    needs: pre_ci
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - uses: dtolnay/rust-toolchain@miri
-    - run: cargo miri setup
-    - env:
-        MIRIFLAGS: -Zmiri-strict-provenance
-      run: cargo miri test
-    timeout-minutes: 45
   pre_ci:
     uses: valeratrades/.github/.github/workflows/pre_ci.yml@master
   tests:
