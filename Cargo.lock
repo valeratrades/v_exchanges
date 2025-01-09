@@ -2984,6 +2984,7 @@ dependencies = [
  "derive-new",
  "derive_more",
  "env_logger",
+ "eyre",
  "insta",
  "serde",
  "serde_json",

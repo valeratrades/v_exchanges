@@ -1,14 +1,11 @@
 use std::collections::VecDeque;
 
 use chrono::{DateTime, TimeZone};
-use color_eyre::eyre::Result;
+use eyre::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
-use v_exchanges_adapters::{
-	bybit::BybitOption,
-	errors::LimitOutOfRangeError,
-};
+use v_exchanges_adapters::{bybit::BybitOption, errors::LimitOutOfRangeError};
 use v_utils::{
 	trades::{Kline, Ohlc, Pair, Timeframe},
 	utils::filter_nulls,

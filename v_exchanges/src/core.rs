@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
 use chrono::{DateTime, TimeDelta, Utc};
-use color_eyre::eyre::Result;
 use derive_more::{Deref, DerefMut};
+use eyre::{Report, Result};
 use v_utils::trades::{Asset, Kline, Pair, Timeframe};
 
 //TODO!!!!!!!!!!!!!: klines switch to defining the range via an Enum over either limit either start and end times
@@ -10,11 +10,14 @@ use v_utils::trades::{Asset, Kline, Pair, Timeframe};
 pub trait Exchange {
 	fn auth<S: Into<String>>(&mut self, key: S, secret: S);
 
-	fn spot_klines(&self, symbol: Pair, tf: Timeframe, range: KlinesRequestRange) -> impl std::future::Future<Output = Result<Klines>> + Send;
+	fn spot_klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange) -> impl std::future::Future<Output = Result<Klines>> + Send;
+	fn spot_price(&self, pair: Pair) -> impl std::future::Future<Output = Result<f64>> + Send;
+	/// If no symbols are specified, returns all spot prices.
+	fn spot_prices(&self, pairs: Option<Vec<Pair>>) -> impl std::future::Future<Output = Result<Vec<(Pair, f64)>>> + Send;
 
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
-	fn futures_klines(&self, symbol: Pair, tf: Timeframe, range: KlinesRequestRange) -> impl std::future::Future<Output = Result<Klines>> + Send;
-	fn futures_price(&self, symbol: Pair) -> impl std::future::Future<Output = Result<f64>> + Send;
+	fn futures_klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange) -> impl std::future::Future<Output = Result<Klines>> + Send;
+	fn futures_price(&self, pair: Pair) -> impl std::future::Future<Output = Result<f64>> + Send;
 
 	// Defined in terms of actors
 	//TODO!!!: fn spawn_klines_listener(&self, symbol: Pair, tf: Timeframe) -> mpsc::Receiver<Kline>;
@@ -63,7 +66,7 @@ impl Iterator for Klines {
 #[derive(Clone, Debug, Default)]
 pub struct FullKlines(Klines);
 impl TryFrom<Klines> for FullKlines {
-	type Error = color_eyre::eyre::Report;
+	type Error = Report;
 
 	fn try_from(value: Klines) -> Result<Self> {
 		todo!();

@@ -2,8 +2,8 @@ mod futures;
 mod market;
 mod spot;
 use adapters::binance::BinanceOption;
-use color_eyre::eyre::Result;
 use derive_more::{Deref, DerefMut};
+use eyre::Result;
 use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
@@ -19,16 +19,24 @@ impl Exchange for Binance {
 		self.update_default_option(BinanceOption::Secret(secret.into()));
 	}
 
-	async fn spot_klines(&self, symbol: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
-		market::klines(&self.0, symbol, tf, range, Market::Spot).await
+	async fn spot_klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
+		market::klines(&self.0, pair, tf, range, Market::Spot).await
 	}
 
-	async fn futures_klines(&self, symbol: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
-		market::klines(&self.0, symbol, tf, range, Market::Futures).await
+	async fn spot_prices(&self, pairs: Option<Vec<Pair>>) -> Result<Vec<(Pair, f64)>> {
+		spot::market::prices(&self.0, pairs).await
 	}
 
-	async fn futures_price(&self, symbol: Pair) -> Result<f64> {
-		futures::market::price(&self.0, symbol).await
+	async fn spot_price(&self, pair: Pair) -> Result<f64> {
+		spot::market::price(&self.0, pair).await
+	}
+
+	async fn futures_klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
+		market::klines(&self.0, pair, tf, range, Market::Futures).await
+	}
+
+	async fn futures_price(&self, pair: Pair) -> Result<f64> {
+		futures::market::price(&self.0, pair).await
 	}
 
 	async fn futures_asset_balance(&self, asset: Asset) -> Result<AssetBalance> {

@@ -2,8 +2,8 @@ mod account;
 mod market;
 
 use adapters::bybit::BybitOption;
-use color_eyre::eyre::Result;
 use derive_more::derive::{Deref, DerefMut};
+use eyre::Result;
 use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
@@ -19,7 +19,15 @@ impl Exchange for Bybit {
 		self.update_default_option(BybitOption::Secret(secret.into()));
 	}
 
-	async fn spot_klines(&self, symbol: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
+	async fn spot_klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
+		todo!();
+	}
+
+	async fn spot_prices(&self, pairs: Option<Vec<Pair>>) -> Result<Vec<(Pair, f64)>> {
+		todo!();
+	}
+
+	async fn spot_price(&self, symbol: Pair) -> Result<f64> {
 		todo!();
 	}
 

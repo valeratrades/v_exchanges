@@ -16,9 +16,6 @@ async fn main() {
 	let price = bn.futures_price(("BTC", "USDT").into()).await.unwrap();
 	dbg!(&klines, price);
 
-	let spot_klines = bn.spot_klines(("BTC", "USDT").into(), "1m".into(), 2.into()).await.unwrap();
-	dbg!(&spot_klines);
-
 	if let (Ok(key), Ok(secret)) = (env::var("BINANCE_TIGER_READ_KEY"), env::var("BINANCE_TIGER_READ_SECRET")) {
 		bn.auth(key, secret);
 		let balance = bn.futures_asset_balance("USDT".into()).await.unwrap();

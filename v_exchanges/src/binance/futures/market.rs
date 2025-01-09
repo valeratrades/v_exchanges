@@ -1,21 +1,10 @@
-use std::collections::VecDeque;
-
-use chrono::{DateTime, TimeZone, Utc};
 //HACK: Methods should be implemented on the central interface struct, following <https://github.com/wisespace-io/binance-rs>.
-use color_eyre::eyre::Result;
+use eyre::Result;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::json;
 use serde_with::{DisplayFromStr, serde_as};
-use v_exchanges_adapters::{
-	binance::{BinanceHttpUrl, BinanceOption},
-	errors::LimitOutOfRangeError,
-};
-use v_utils::{
-	trades::{Kline, Ohlc, Pair, Timeframe},
-	utils::filter_nulls,
-};
-
-use crate::core::{Klines, KlinesRequestRange};
+use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
+use v_utils::trades::Pair;
 
 // price {{{
 //HACK: not sure this is _the_ thing to use for that (throwing away A LOT of data)

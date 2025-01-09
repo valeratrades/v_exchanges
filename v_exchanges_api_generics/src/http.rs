@@ -7,7 +7,7 @@ pub use reqwest::{
 };
 use serde::Serialize;
 use thiserror::Error;
-use tracing::{debug, instrument};
+use tracing::{Span, debug, field::Empty, instrument};
 
 /// The User Agent string
 pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_PKG_VERSION"));
@@ -34,22 +34,27 @@ impl Client {
 	///
 	/// The request is passed to `handler` before being sent, and the response is passed to `handler` before being returned.
 	/// Note, that as stated in the docs for [RequestBuilder::query()], parameter `query` only accepts a **sequence of** key-value pairs.
-	#[instrument(skip_all, fields(?url))] //TODO: get all generics to impl std::fmt::Debug
+	#[instrument(skip_all, fields(?url, request_builder = Empty))] //TODO: get all generics to impl std::fmt::Debug
 	pub async fn request<Q, B, H>(&self, method: Method, url: &str, query: Option<&Q>, body: Option<B>, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
 	where
-		Q: Serialize + ?Sized,
+		Q: Serialize + ?Sized + std::fmt::Debug,
 		H: RequestHandler<B>, {
 		let config = handler.request_config();
 		config.verify();
 
 		let url = config.url_prefix + url;
+		dbg!(&url);
 
 		for i in 1..=config.max_try {
 			//HACK: hate to create a new request every time, but I haven't yet figured out how to provide by reference
 			let mut request_builder = self.client.request(method.clone(), url.clone()).timeout(config.timeout);
+			dbg!(&query);
 			if let Some(query) = query {
 				request_builder = request_builder.query(query);
 			}
+			Span::current().record("request_builder", format!("{:?}", request_builder));
+
+			dbg!(&request_builder);
 			let request = handler.build_request(request_builder, &body, i).map_err(RequestError::BuildRequestError)?;
 			match self.client.execute(request).await {
 				Ok(mut response) => {
@@ -83,7 +88,7 @@ impl Client {
 	#[inline(always)]
 	pub async fn get<Q, H>(&self, url: &str, query: &Q, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
 	where
-		Q: Serialize + ?Sized,
+		Q: Serialize + ?Sized + Debug,
 		H: RequestHandler<()>, {
 		self.request::<Q, (), H>(Method::GET, url, Some(query), None, handler).await
 	}
@@ -160,7 +165,7 @@ impl Client {
 	#[inline(always)]
 	pub async fn delete<Q, H>(&self, url: &str, query: &Q, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
 	where
-		Q: Serialize + ?Sized,
+		Q: Serialize + ?Sized + Debug,
 		H: RequestHandler<()>, {
 		self.request::<Q, (), H>(Method::DELETE, url, Some(query), None, handler).await
 	}

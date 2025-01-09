@@ -24,7 +24,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
 
 [dependencies]
-color-eyre.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_plain.workspace = true
@@ -41,9 +40,11 @@ chrono = "0.4.39"
 env_logger = "0.11.5"
 
 insta.workspace = true #dbg (for some reason is not loading in dev-dependencies rn
+eyre = "0.6.12"
 
 [dev-dependencies]
 insta.workspace = true
+color-eyre = "^0.6.3"
 #
 
 [features]
@@ -56,8 +57,12 @@ bitflyer = ["v_exchanges_adapters/bitflyer"]
 coincheck = ["v_exchanges_adapters/coincheck"]
 
 [[example]]
-name = "binance_market"
-path = "../examples/binance/market.rs"
+name = "binance_market_futures"
+path = "../examples/binance/market_futures.rs"
+
+[[example]]
+name = "binance_market_spot"
+path = "../examples/binance/market_spot.rs"
 
 [[example]]
 name = "bybit_market"

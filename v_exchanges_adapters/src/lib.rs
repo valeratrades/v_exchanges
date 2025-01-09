@@ -68,7 +68,7 @@ impl Client {
 		O: HttpOption<'a, R, B>,
 		O::RequestHandler: RequestHandler<B>,
 		Self: GetOptions<O::Options>,
-		Q: Serialize + ?Sized, {
+		Q: Serialize + ?Sized + std::fmt::Debug, {
 		self.client.request(method, url, query, body, &O::request_handler(self.merged_options(options))).await
 	}
 
@@ -79,7 +79,7 @@ impl Client {
 		O: HttpOption<'a, R, ()>,
 		O::RequestHandler: RequestHandler<()>,
 		Self: GetOptions<O::Options>,
-		Q: Serialize + ?Sized, {
+		Q: Serialize + ?Sized + std::fmt::Debug, {
 		self.client.get(url, query, &O::request_handler(self.merged_options(options))).await
 	}
 
@@ -140,7 +140,7 @@ impl Client {
 		O: HttpOption<'a, R, ()>,
 		O::RequestHandler: RequestHandler<()>,
 		Self: GetOptions<O::Options>,
-		Q: Serialize + ?Sized, {
+		Q: Serialize + ?Sized + std::fmt::Debug, {
 		self.client.delete(url, query, &O::request_handler(self.merged_options(options))).await
 	}
 
