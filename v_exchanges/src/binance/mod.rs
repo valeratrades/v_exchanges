@@ -2,7 +2,7 @@ pub mod futures;
 use adapters::binance::BinanceOption;
 use color_eyre::eyre::Result;
 use derive_more::{Deref, DerefMut};
-use v_exchanges_adapters::{Client, binance};
+use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::core::{AssetBalance, Exchange, Klines, KlinesRequestRange};

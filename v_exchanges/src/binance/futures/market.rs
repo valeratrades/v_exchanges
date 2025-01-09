@@ -1,9 +1,8 @@
-use std::{collections::VecDeque, fmt};
+use std::collections::VecDeque;
 
 use chrono::{DateTime, TimeZone, Utc};
 //HACK: Methods should be implemented on the central interface struct, following <https://github.com/wisespace-io/binance-rs>.
-use color_eyre::eyre::{self, Error, Result};
-use color_eyre::eyre::{Report, eyre};
+use color_eyre::eyre::{Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
@@ -112,7 +111,7 @@ pub struct KlineResponse {
 // price {{{
 //HACK: not sure this is _the_ thing to use for that (throwing away A LOT of data)
 pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> Result<f64> {
-	let mut params = json!({
+	let params = json!({
 		"symbol": pair.to_string(),
 	});
 

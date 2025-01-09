@@ -4,7 +4,7 @@ mod market;
 use adapters::bybit::BybitOption;
 use color_eyre::eyre::Result;
 use derive_more::derive::{Deref, DerefMut};
-use v_exchanges_adapters::{Client, bybit};
+use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::core::{AssetBalance, Exchange, Klines, KlinesRequestRange};

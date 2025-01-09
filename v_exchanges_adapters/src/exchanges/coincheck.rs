@@ -103,7 +103,7 @@ pub struct CoincheckWebSocketHandler {
 	options: CoincheckOptions,
 }
 
-impl<'a, B, R> RequestHandler<B> for CoincheckRequestHandler<'a, R>
+impl<B, R> RequestHandler<B> for CoincheckRequestHandler<'_, R>
 where
 	B: Serialize,
 	R: DeserializeOwned,

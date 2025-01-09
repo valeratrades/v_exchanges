@@ -113,7 +113,7 @@ pub struct BitFlyerWebSocketHandler {
 	options: BitFlyerOptions,
 }
 
-impl<'a, B, R> RequestHandler<B> for BitFlyerRequestHandler<'a, R>
+impl<B, R> RequestHandler<B> for BitFlyerRequestHandler<'_, R>
 where
 	B: Serialize,
 	R: DeserializeOwned,

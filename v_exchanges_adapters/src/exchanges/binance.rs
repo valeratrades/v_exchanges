@@ -154,7 +154,7 @@ pub struct BinanceWebSocketHandler {
 }
 
 // https://binance-docs.github.io/apidocs/spot/en/#general-api-information
-impl<'a, B, R> RequestHandler<B> for BinanceRequestHandler<'a, R>
+impl<B, R> RequestHandler<B> for BinanceRequestHandler<'_, R>
 where
 	B: Serialize,
 	R: DeserializeOwned,

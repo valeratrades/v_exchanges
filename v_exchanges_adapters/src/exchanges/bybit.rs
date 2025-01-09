@@ -134,7 +134,7 @@ pub struct BybitWebSocketHandler {
 	options: BybitOptions,
 }
 
-impl<'a, B, R> RequestHandler<B> for BybitRequestHandler<'a, R>
+impl<B, R> RequestHandler<B> for BybitRequestHandler<'_, R>
 where
 	B: Serialize,
 	R: DeserializeOwned,

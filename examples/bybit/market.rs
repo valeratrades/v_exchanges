@@ -1,7 +1,6 @@
 use std::env;
 
 use v_exchanges::{bybit::Bybit, core::Exchange};
-use v_exchanges_adapters::bybit::{BybitHttpAuth, BybitHttpUrl, BybitOption};
 
 #[tokio::main]
 async fn main() {

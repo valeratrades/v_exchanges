@@ -1,7 +1,6 @@
 use std::fmt;
 
 use derive_more::Debug;
-use thiserror::Error;
 
 #[derive(Debug, derive_new::new)]
 pub struct LimitOutOfRangeError {
