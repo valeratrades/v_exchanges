@@ -1,4 +1,6 @@
-use chrono::{TimeZone, Utc};
+use std::collections::VecDeque;
+
+use chrono::{DateTime, TimeZone, Utc};
 use color_eyre::eyre::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -44,11 +46,11 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timef
 
 	let kline_response: KlineResponse = client.get("/v5/market/kline", &params, [BybitOption::Default]).await.unwrap();
 
-	let mut klines = Vec::new();
+	let mut klines = VecDeque::with_capacity(kline_response.result.list.len());
 	for k in kline_response.result.list {
 		if kline_response.time > k.0 + tf.duration().num_milliseconds() {
-			klines.push(Kline {
-				open_time: Utc.timestamp_millis(k.0),
+			klines.push_back(Kline {
+				open_time: DateTime::from_timestamp_millis(k.0).unwrap(),
 				ohlc: Ohlc {
 					open: k.1,
 					close: k.2,

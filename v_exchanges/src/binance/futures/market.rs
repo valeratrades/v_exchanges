@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{collections::VecDeque, fmt};
 
 use chrono::{DateTime, TimeZone, Utc};
 //HACK: Methods should be implemented on the central interface struct, following <https://github.com/wisespace-io/binance-rs>.
@@ -48,7 +48,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timef
 	let kline_responses: Vec<KlineResponse> = client.get("/fapi/v1/klines", &params, [BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)]).await.unwrap();
 
 	let r_len = kline_responses.len();
-	let mut klines = Vec::with_capacity(r_len);
+	let mut klines = VecDeque::with_capacity(r_len);
 	for (i, k) in kline_responses.into_iter().enumerate() {
 		//HACK: have to check against [now](Utc::now) instead, because binance returns some dumb shit instead of actual close. Here structured this way in case they fix it in the future.
 		let close_time = Utc::now().timestamp_millis();
@@ -60,7 +60,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timef
 					low: k.low,
 					close: k.close,
 				};
-				klines.push(Kline {
+				klines.push_front(Kline {
 					open_time: DateTime::from_timestamp_millis(k.open_time).unwrap(),
 					ohlc,
 					volume_quote: k.quote_asset_volume,

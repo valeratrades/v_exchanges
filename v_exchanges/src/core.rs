@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use chrono::{DateTime, TimeDelta, Utc};
 use color_eyre::eyre::Result;
 use derive_more::{Deref, DerefMut};
@@ -34,14 +36,23 @@ pub struct Oi {
 	pub timestamp: DateTime<Utc>,
 }
 
+//Q: maybe add a `vectorize` method? Should add, question is really if it should be returning a) df b) all fields, including optional and oi c) t, o, h, l, c, v
+// probably should figure out rust-typed dataframes for this first
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
 pub struct Klines {
 	#[deref_mut]
 	#[deref]
-	pub v: Vec<Kline>,
+	pub v: VecDeque<Kline>,
 	pub tf: Timeframe,
 	/// Doesn't have to be synchronized with klines; each track has its own timestamps.
 	pub oi: Vec<Oi>,
+}
+impl Iterator for Klines {
+	type Item = Kline;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		self.v.pop_front()
+	}
 }
 
 //MOVE: v_utils (along with [Klines])
