@@ -89,6 +89,11 @@ impl From<u32> for KlinesRequestRange {
 		KlinesRequestRange::Limit(value)
 	}
 }
+impl From<i32> for KlinesRequestRange {
+	fn from(value: i32) -> Self {
+		KlinesRequestRange::Limit(value as u32)
+	}
+}
 impl From<u16> for KlinesRequestRange {
 	fn from(value: u16) -> Self {
 		KlinesRequestRange::Limit(value as u32)

@@ -1,7 +1,7 @@
 use std::env;
 
 use v_exchanges::{binance::Binance, core::Exchange};
-use v_exchanges_adapters::binance::{self, BinanceHttpUrl, BinanceOption};
+use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
 
 #[tokio::main]
 async fn main() {
@@ -17,8 +17,7 @@ async fn main() {
 	dbg!(&klines, price);
 
 	if let (Ok(key), Ok(secret)) = (env::var("BINANCE_TIGER_READ_KEY"), env::var("BINANCE_TIGER_READ_SECRET")) {
-		b.update_default_option(BinanceOption::Key(key));
-		b.update_default_option(BinanceOption::Secret(secret));
+		b.auth(key, secret);
 		let balance = b.futures_asset_balance("USDT".into()).await.unwrap();
 		dbg!(&balance);
 	} else {

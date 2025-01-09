@@ -22,8 +22,7 @@ async fn main() {
 	dbg!(&price);
 
 	if let (Ok(key), Ok(secret)) = (env::var("BYBIT_TIGER_READ_KEY"), env::var("BYBIT_TIGER_READ_SECRET")) {
-		bb.update_default_option(BybitOption::Key(key));
-		bb.update_default_option(BybitOption::Secret(secret));
+		bb.auth(key, secret);
 		private(&mut bb).await;
 	} else {
 		eprintln!("BYBIT_TIGER_READ_KEY or BYBIT_TIGER_READ_SECRET is missing, skipping private API methods.");
