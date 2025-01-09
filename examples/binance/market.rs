@@ -8,17 +8,20 @@ async fn main() {
 	color_eyre::install().unwrap();
 	v_utils::utils::init_subscriber(v_utils::utils::LogDestination::xdg("v_exchanges"));
 
-	let mut b = Binance::default();
+	let mut bn = Binance::default();
 
-	b.update_default_option(BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM));
+	bn.update_default_option(BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM));
 
-	let klines = b.futures_klines(("BTC", "USDT").into(), "1m".into(), 2.into()).await.unwrap();
-	let price = b.futures_price(("BTC", "USDT").into()).await.unwrap();
+	let klines = bn.futures_klines(("BTC", "USDT").into(), "1m".into(), 2.into()).await.unwrap();
+	let price = bn.futures_price(("BTC", "USDT").into()).await.unwrap();
 	dbg!(&klines, price);
 
+	let spot_klines = bn.spot_klines(("BTC", "USDT").into(), "1m".into(), 2.into()).await.unwrap();
+	dbg!(&spot_klines);
+
 	if let (Ok(key), Ok(secret)) = (env::var("BINANCE_TIGER_READ_KEY"), env::var("BINANCE_TIGER_READ_SECRET")) {
-		b.auth(key, secret);
-		let balance = b.futures_asset_balance("USDT".into()).await.unwrap();
+		bn.auth(key, secret);
+		let balance = bn.futures_asset_balance("USDT".into()).await.unwrap();
 		dbg!(&balance);
 	} else {
 		eprintln!("BINANCE_TIGER_READ_KEY or BINANCE_TIGER_READ_SECRET is missing, skipping private API methods.");

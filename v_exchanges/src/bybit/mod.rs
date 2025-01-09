@@ -19,6 +19,10 @@ impl Exchange for Bybit {
 		self.update_default_option(BybitOption::Secret(secret.into()));
 	}
 
+	async fn spot_klines(&self, symbol: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
+		todo!();
+	}
+
 	async fn futures_klines(&self, symbol: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
 		market::klines(&self.0, symbol, tf, range).await
 	}

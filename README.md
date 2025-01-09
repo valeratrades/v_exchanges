@@ -42,9 +42,12 @@ cargo run -p v_exchanges --example binance_market
 
 [^1] where allowed, otherwise use min position size or just skip problematic endpoints
 
-## Relevant projects
+## Relevant projects and documentations
 - [crypto-botters](<https://github.com/negi-grass/crypto-botters>), from where I stole the entire `generic-api-client` (as `v_exchanges_api_generics`).
 - [binance-rs](<https://github.com/wisespace-io/binance-rs>), which provided a cheat-sheet for so many binance interactions and best-practices on testing.
+
+Binance main docs: <https://developers.binance.com/docs>
+Binance spot docs: <https://github.com/binance/binance-spot-api-docs?tab=readme-ov-file>
 
 ## Conventions
 Purely usage guidance, writing for myself to standardise interfacing with the library across my projects wherever possible.

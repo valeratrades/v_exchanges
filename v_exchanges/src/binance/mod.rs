@@ -1,4 +1,6 @@
-pub mod futures;
+mod futures;
+mod market;
+mod spot;
 use adapters::binance::BinanceOption;
 use color_eyre::eyre::Result;
 use derive_more::{Deref, DerefMut};
@@ -17,8 +19,12 @@ impl Exchange for Binance {
 		self.update_default_option(BinanceOption::Secret(secret.into()));
 	}
 
+	async fn spot_klines(&self, symbol: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
+		market::klines(&self.0, symbol, tf, range, Market::Spot).await
+	}
+
 	async fn futures_klines(&self, symbol: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
-		futures::market::klines(&self.0, symbol, tf, range).await
+		market::klines(&self.0, symbol, tf, range, Market::Futures).await
 	}
 
 	async fn futures_price(&self, symbol: Pair) -> Result<f64> {
@@ -32,6 +38,12 @@ impl Exchange for Binance {
 	async fn futures_balances(&self) -> Result<Vec<AssetBalance>> {
 		futures::account::balances(&self.0).await
 	}
+}
 
-	//DO: async fn balance(&self,
+#[derive(Clone, Debug, Default, derive_new::new, Copy)]
+pub enum Market {
+	#[default]
+	Futures,
+	Spot,
+	Margin,
 }

@@ -25,3 +25,7 @@ Implementation of each exchange's interactions, consists of blocks for
 - `binance-rs`-like function call for all the ones I care about. They return predefined Response structs
 - impl of `Exchange` trait
 	so say `binance` would have a `struct Binance(BinanceSettings)`, where all the `Exchange` functions first call native method on `BinanceSettings`, then just apply translation
+
+#### models
+any models shared across different markets (futures, spot, margin, etc), are defined in well a shared `models/` directory at the root of associated exchange's directory. Say if `KlinesResponse` matches for
+`/binance/futures/market.rs` and `/binance/spot/market.rs`, the model is defined and exported from `/binance/models/market.rs`

@@ -10,6 +10,8 @@ use v_utils::trades::{Asset, Kline, Pair, Timeframe};
 pub trait Exchange {
 	fn auth<S: Into<String>>(&mut self, key: S, secret: S);
 
+	fn spot_klines(&self, symbol: Pair, tf: Timeframe, range: KlinesRequestRange) -> impl std::future::Future<Output = Result<Klines>> + Send;
+
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
 	fn futures_klines(&self, symbol: Pair, tf: Timeframe, range: KlinesRequestRange) -> impl std::future::Future<Output = Result<Klines>> + Send;
 	fn futures_price(&self, symbol: Pair) -> impl std::future::Future<Output = Result<f64>> + Send;
