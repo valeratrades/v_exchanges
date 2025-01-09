@@ -1,7 +1,6 @@
 use std::env;
 
 use v_exchanges::{binance::Binance, core::Exchange};
-use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
 
 #[tokio::main]
 async fn main() {
@@ -9,8 +8,6 @@ async fn main() {
 	v_utils::utils::init_subscriber(v_utils::utils::LogDestination::xdg("v_exchanges"));
 
 	let mut bn = Binance::default();
-
-	bn.update_default_option(BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM));
 
 	let klines = bn.futures_klines(("BTC", "USDT").into(), "1m".into(), 2.into()).await.unwrap();
 	let price = bn.futures_price(("BTC", "USDT").into()).await.unwrap();

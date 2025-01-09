@@ -8,7 +8,7 @@ use serde_with::{DisplayFromStr, serde_as};
 use tracing::instrument;
 use v_utils::trades::Pair;
 
-#[instrument]
+#[instrument(skip_all, fields(?pairs))]
 pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>) -> Result<Vec<(Pair, f64)>> {
 	let r: PricesResponse = match pairs {
 		//TODO!!!: fix this branch

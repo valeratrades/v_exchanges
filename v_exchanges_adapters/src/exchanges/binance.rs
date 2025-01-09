@@ -171,6 +171,8 @@ where
 		config
 	}
 
+	//XXX: could print creds
+	#[tracing::instrument(skip_all, fields(?builder))]
 	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, Self::BuildError> {
 		if let Some(body) = request_body {
 			let encoded = serde_urlencoded::to_string(body).or(Err("could not serialize body as application/x-www-form-urlencoded"))?;

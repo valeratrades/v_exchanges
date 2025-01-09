@@ -29,3 +29,7 @@ Implementation of each exchange's interactions, consists of blocks for
 #### models
 any models shared across different markets (futures, spot, margin, etc), are defined in well a shared `models/` directory at the root of associated exchange's directory. Say if `KlinesResponse` matches for
 `/binance/futures/market.rs` and `/binance/spot/market.rs`, the model is defined and exported from `/binance/models/market.rs`
+
+
+#### data endpoints
+Some exchanges provide specialized `data` endpoints. Those can't be part of `Exchange` trait, but then I just trivially expose them natively on the associated structs of each exchange, without any traits whatsoever. 
