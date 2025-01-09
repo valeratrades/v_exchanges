@@ -7,3 +7,6 @@ pub use binance::Binance;
 
 pub mod bybit;
 pub use bybit::Bybit;
+
+pub mod bitmex;
+pub use bitmex::Bitmex;

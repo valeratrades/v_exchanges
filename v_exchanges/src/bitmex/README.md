@@ -1,0 +1,1 @@
+Does not implement `Exchange`, as mostly I couldn't care less for price movements on this exchange (for now at least), but it is here for the purposes of exposing some of its data endpoints outside of `Exchange` spec

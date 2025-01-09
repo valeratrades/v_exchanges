@@ -3006,6 +3006,7 @@ dependencies = [
  "env_logger",
  "eyre",
  "insta",
+ "reqwest",
  "serde",
  "serde_json",
  "serde_plain",
