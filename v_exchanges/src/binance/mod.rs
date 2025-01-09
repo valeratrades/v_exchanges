@@ -1,3 +1,4 @@
+mod data;
 mod futures;
 mod market;
 mod spot;

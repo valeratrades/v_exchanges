@@ -1,4 +1,4 @@
-use v_exchanges::bitmex::Bitmex;
+use v_exchanges::{binance::Binance, bitmex::Bitmex};
 
 #[tokio::main]
 async fn main() {
@@ -7,4 +7,8 @@ async fn main() {
 	let bm = Bitmex::default();
 	let bvol = bm.bvol(2).await.unwrap();
 	dbg!(&bvol);
+
+	let bn = Binance::default();
+	let lsr = bn.global_lsr_account(("BTC", "USDT").into(), "5m".into(), 24 * 12 + 1, "Global".into()).await.unwrap();
+	dbg!(&lsr[..2]);
 }
