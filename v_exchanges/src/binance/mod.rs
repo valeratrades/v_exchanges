@@ -3,7 +3,7 @@ mod futures;
 mod market;
 mod spot;
 use adapters::binance::BinanceOption;
-use derive_more::{Deref, DerefMut};
+use derive_more::{Deref, DerefMut, Display, FromStr};
 use eyre::Result;
 use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
@@ -49,7 +49,7 @@ impl Exchange for Binance {
 	}
 }
 
-#[derive(Clone, Debug, Default, derive_new::new, Copy)]
+#[derive(Debug, Clone, Default, Copy, Display, FromStr)]
 pub enum Market {
 	#[default]
 	Futures,

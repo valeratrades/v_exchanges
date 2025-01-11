@@ -78,6 +78,7 @@ pub enum KlinesRequestRange {
 	/// Preferred way of defining the range
 	StartEnd { start: DateTime<Utc>, end: Option<DateTime<Utc>> },
 	/// For quick and dirty
+	//TODO!: have it contain an enum, with either exact value, either just `Max`, then each exchange matches on it
 	Limit(u32),
 }
 impl Default for KlinesRequestRange {

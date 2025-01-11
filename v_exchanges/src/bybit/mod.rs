@@ -1,6 +1,7 @@
 mod account;
 mod market;
 
+use derive_more::{Display, FromStr};
 use adapters::bybit::BybitOption;
 use derive_more::derive::{Deref, DerefMut};
 use eyre::Result;
@@ -48,4 +49,13 @@ impl Exchange for Bybit {
 	}
 
 	//DO: async fn balance(&self,
+}
+
+
+#[derive(Debug, Clone, Default, Copy, Display, FromStr)]
+pub enum Market {
+	#[default]
+	Linear,
+	Spot,
+	Inverse,
 }
