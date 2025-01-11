@@ -156,6 +156,8 @@ pub trait MarketTrait {
 
 
 //TODO!: figure out how can I expose one central `Market` enum, so client doesn't have to bring into the scope `MarketTrait` and deal with the exchange-specific `Market`'s type
+// Maybe [enum_dispatch](<https://docs.rs/enum_dispatch/latest/enum_dispatch/>) crate could help?
+
 //#[derive(Debug, Clone, Copy)]
 //pub enum Market {
 //	Binance(crate::binance::Market),
