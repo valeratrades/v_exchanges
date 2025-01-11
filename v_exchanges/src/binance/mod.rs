@@ -8,7 +8,7 @@ use eyre::Result;
 use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
-use crate::core::{AssetBalance, Exchange, Klines, KlinesRequestRange};
+use crate::core::{AssetBalance, Exchange, ExchangeInfo, Klines, KlinesRequestRange};
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
 pub struct Binance(pub Client);
@@ -20,6 +20,13 @@ impl Exchange for Binance {
 	fn auth<S: Into<String>>(&mut self, key: S, secret: S) {
 		self.update_default_option(BinanceOption::Key(key.into()));
 		self.update_default_option(BinanceOption::Secret(secret.into()));
+	}
+
+	async fn exchange_info(&self, m: Self::M) -> Result<ExchangeInfo> {
+		match m {
+			Market::Futures => futures::general::exchange_info(&self.0).await,
+			_ => unimplemented!(),
+		}
 	}
 
 	async fn klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange, m: Self::M) -> Result<Klines> {

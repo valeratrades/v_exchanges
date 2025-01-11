@@ -13,6 +13,9 @@ async fn main() {
 	let m = binance::Market::Futures;
 	let mut bn = m.client();
 
+	let exchange_info = bn.exchange_info(m).await.unwrap();
+	dbg!( &exchange_info .pairs .iter() .take(2) .collect::<Vec<_>>());
+
 	let klines = bn.klines(("BTC", "USDT").into(), "1m".into(), 2.into(), m).await.unwrap();
 	let price = bn.price(("BTC", "USDT").into(), m).await.unwrap();
 	dbg!(&klines, price);

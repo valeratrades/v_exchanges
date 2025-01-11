@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 use chrono::{DateTime, TimeDelta, Utc};
 use derive_more::{Deref, DerefMut};
@@ -11,6 +11,8 @@ pub trait Exchange {
 	type M: MarketTrait;
 
 	fn auth<S: Into<String>>(&mut self, key: S, secret: S);
+
+	fn exchange_info(&self, m: Self::M) -> impl std::future::Future<Output = Result<ExchangeInfo>> + Send;
 
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
 	fn klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange, m: Self::M) -> impl std::future::Future<Output = Result<Klines>> + Send;
@@ -32,6 +34,78 @@ pub trait Exchange {
 
 	//? could implement many things that are _explicitly_ combinatorial. I can imagine several cases, where knowing that say the specified limit for the klines is wayyy over the max and that you may be opting into a long wait by calling it, could be useful.
 }
+
+// Market {{{
+pub trait MarketTrait {
+	type Client: Exchange;
+	fn client(&self) -> Self::Client;
+}
+//TODO!: figure out how can I expose one central `Market` enum, so client doesn't have to bring into the scope `MarketTrait` and deal with the exchange-specific `Market`'s type
+// Maybe [enum_dispatch](<https://docs.rs/enum_dispatch/latest/enum_dispatch/>) crate could help?
+
+//#[derive(Debug, Clone, Copy)]
+//pub enum Market {
+//	Binance(crate::binance::Market),
+//	Bybit(crate::bybit::Market),
+//	//TODO
+//}
+//
+//impl Default for Market {
+//	fn default() -> Self {
+//		Self::Binance(crate::binance::Market::default())
+//	}
+//}
+//
+//impl std::fmt::Display for Market {
+//	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//		match self {
+//			Market::Binance(m) => write!(f, "Binance/{}", m),
+//			Market::Bybit(m) => write!(f, "Bybit/{}", m),
+//		}
+//	}
+//}
+//
+//impl std::str::FromStr for Market {
+//	type Err = eyre::Error;
+//
+//	fn from_str(s: &str) -> Result<Self> {
+//		let parts: Vec<&str> = s.split('/').collect();
+//		if parts.len() != 2 {
+//			return Err(eyre::eyre!("Invalid market string: {}", s));
+//		}
+//		let exchange = parts[0];
+//		let sub_market = parts[1];
+//		match exchange.to_lowercase().as_str() {
+//			"binance" => Ok(Self::Binance(sub_market.parse()?)),
+//			"bybit" => Ok(Self::Bybit({
+//				match sub_market.parse() {
+//					Ok(m) => m,
+//					Err(e) => match sub_market.to_lowercase() == "futures" {
+//						true => crate::bybit::Market::Linear,
+//						false => eyre::bail!(e),
+//					}
+//				}
+//			})),
+//			_ => bail!("Invalid market string: {}", s),
+//		}
+//	}
+//}
+//impl From<Market> for String {
+//	fn from(value: Market) -> Self {
+//		value.to_string()
+//	}
+//}
+//impl From<String> for Market {
+//	fn from(value: String) -> Self {
+//		value.parse().unwrap()
+//	}
+//}
+//impl From<&str> for Market {
+//	fn from(value: &str) -> Self {
+//		value.parse().unwrap()
+//	}
+//}
+//,}}}
 
 // Klines {{{
 #[derive(Clone, Debug, Default, Copy)]
@@ -148,75 +222,12 @@ pub struct AssetBalance {
 	pub timestamp: i64,
 }
 
-pub trait MarketTrait {
-	type Client: Exchange;
-	fn client(&self) -> Self::Client;
+#[derive(Clone, Debug, Default)]
+pub struct ExchangeInfo {
+	pub server_time: DateTime<Utc>,
+	pub pairs: HashMap<Pair, PairInfo>,
 }
-
-
-
-//TODO!: figure out how can I expose one central `Market` enum, so client doesn't have to bring into the scope `MarketTrait` and deal with the exchange-specific `Market`'s type
-// Maybe [enum_dispatch](<https://docs.rs/enum_dispatch/latest/enum_dispatch/>) crate could help?
-
-//#[derive(Debug, Clone, Copy)]
-//pub enum Market {
-//	Binance(crate::binance::Market),
-//	Bybit(crate::bybit::Market),
-//	//TODO
-//}
-//
-//impl Default for Market {
-//	fn default() -> Self {
-//		Self::Binance(crate::binance::Market::default())
-//	}
-//}
-//
-//impl std::fmt::Display for Market {
-//	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//		match self {
-//			Market::Binance(m) => write!(f, "Binance/{}", m),
-//			Market::Bybit(m) => write!(f, "Bybit/{}", m),
-//		}
-//	}
-//}
-//
-//impl std::str::FromStr for Market {
-//	type Err = eyre::Error;
-//
-//	fn from_str(s: &str) -> Result<Self> {
-//		let parts: Vec<&str> = s.split('/').collect();
-//		if parts.len() != 2 {
-//			return Err(eyre::eyre!("Invalid market string: {}", s));
-//		}
-//		let exchange = parts[0];
-//		let sub_market = parts[1];
-//		match exchange.to_lowercase().as_str() {
-//			"binance" => Ok(Self::Binance(sub_market.parse()?)),
-//			"bybit" => Ok(Self::Bybit({
-//				match sub_market.parse() {
-//					Ok(m) => m,
-//					Err(e) => match sub_market.to_lowercase() == "futures" {
-//						true => crate::bybit::Market::Linear,
-//						false => eyre::bail!(e),
-//					}
-//				}
-//			})),
-//			_ => bail!("Invalid market string: {}", s),
-//		}
-//	}
-//}
-//impl From<Market> for String {
-//	fn from(value: Market) -> Self {
-//		value.to_string()
-//	}
-//}
-//impl From<String> for Market {
-//	fn from(value: String) -> Self {
-//		value.parse().unwrap()
-//	}
-//}
-//impl From<&str> for Market {
-//	fn from(value: &str) -> Self {
-//		value.parse().unwrap()
-//	}
-//}
+#[derive(Clone, Debug, Default)]
+pub struct PairInfo {
+	pub price_precision: u8,
+}
