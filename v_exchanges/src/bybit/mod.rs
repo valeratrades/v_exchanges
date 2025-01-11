@@ -1,9 +1,11 @@
 mod account;
 mod market;
 
-use derive_more::{Display, FromStr};
 use adapters::bybit::BybitOption;
-use derive_more::derive::{Deref, DerefMut};
+use derive_more::{
+	Display, FromStr,
+	derive::{Deref, DerefMut},
+};
 use eyre::Result;
 use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
@@ -42,19 +44,18 @@ impl Exchange for Bybit {
 
 	async fn asset_balance(&self, asset: Asset, m: Self::M) -> Result<AssetBalance> {
 		match m {
-		Market::Linear => account::asset_balance(&self.0, asset).await,
+			Market::Linear => account::asset_balance(&self.0, asset).await,
 			_ => unimplemented!(),
 		}
 	}
 
 	async fn balances(&self, m: Self::M) -> Result<Vec<AssetBalance>> {
-		match m{
+		match m {
 			Market::Linear => account::balances(&self.0).await,
 			_ => unimplemented!(),
 		}
 	}
 }
-
 
 #[derive(Debug, Clone, Default, Copy, Display, FromStr)]
 pub enum Market {
@@ -65,6 +66,7 @@ pub enum Market {
 }
 impl crate::core::MarketTrait for Market {
 	type Client = Bybit;
+
 	fn client(&self) -> Bybit {
 		Bybit::default()
 	}

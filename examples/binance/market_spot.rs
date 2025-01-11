@@ -1,5 +1,5 @@
 use v_exchanges::{
-	binance::{self},
+	binance,
 	core::{Exchange, MarketTrait as _},
 };
 

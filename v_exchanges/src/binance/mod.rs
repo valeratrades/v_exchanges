@@ -65,6 +65,7 @@ pub enum Market {
 }
 impl crate::core::MarketTrait for Market {
 	type Client = Binance;
+
 	fn client(&self) -> Binance {
 		Binance::default()
 	}

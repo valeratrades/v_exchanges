@@ -1,6 +1,9 @@
 use std::env;
 
-use v_exchanges::{bybit::{self, Bybit}, core::{Exchange, MarketTrait as _}};
+use v_exchanges::{
+	bybit::{self, Bybit},
+	core::{Exchange, MarketTrait as _},
+};
 
 #[tokio::main]
 async fn main() {
@@ -8,8 +11,8 @@ async fn main() {
 	v_utils::utils::init_subscriber(v_utils::utils::LogDestination::xdg("v_exchanges"));
 
 	//let m: Market = "Bybit/Linear".into(); // would be nice to be able to do it like this
-	let m =  bybit::Market::Linear;
-	let mut bb = m.client();	
+	let m = bybit::Market::Linear;
+	let mut bb = m.client();
 
 	//let ticker: serde_json::Value =
 	//bb.get("/v5/market/tickers", &[("category", "spot"), ("symbol", "BTCUSDT")], [BybitOption::Default])
