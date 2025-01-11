@@ -8,6 +8,7 @@ async fn main() {
 	color_eyre::install().unwrap();
 	v_utils::utils::init_subscriber(v_utils::utils::LogDestination::xdg("v_exchanges"));
 
+	//let m: Market = "Binance/Spot".into(); // would be nice to be able to do it like this, without having to carry around exchange-specific type
 	let m = binance::Market::Spot;
 	let bn = m.client();
 

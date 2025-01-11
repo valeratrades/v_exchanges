@@ -153,15 +153,19 @@ pub trait MarketTrait {
 	fn client(&self) -> Self::Client;
 }
 
+
+
+//TODO!: figure out how can I expose one central `Market` enum, so client doesn't have to bring into the scope `MarketTrait` and deal with the exchange-specific `Market`'s type
 //#[derive(Debug, Clone, Copy)]
 //pub enum Market {
-//	Binance(binance::Market),
-//	Bybit(bybit::Market),
+//	Binance(crate::binance::Market),
+//	Bybit(crate::bybit::Market),
 //	//TODO
 //}
+//
 //impl Default for Market {
 //	fn default() -> Self {
-//		Self::Binance(binance::Market::default())
+//		Self::Binance(crate::binance::Market::default())
 //	}
 //}
 //
@@ -190,8 +194,8 @@ pub trait MarketTrait {
 //				match sub_market.parse() {
 //					Ok(m) => m,
 //					Err(e) => match sub_market.to_lowercase() == "futures" {
-//						true => bybit::Market::Linear,
-//						false => bail!(e),
+//						true => crate::bybit::Market::Linear,
+//						false => eyre::bail!(e),
 //					}
 //				}
 //			})),
