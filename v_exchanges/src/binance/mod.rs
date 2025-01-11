@@ -15,37 +15,44 @@ pub struct Binance(pub Client);
 
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
 impl Exchange for Binance {
+	type M = Market;
+
 	fn auth<S: Into<String>>(&mut self, key: S, secret: S) {
 		self.update_default_option(BinanceOption::Key(key.into()));
 		self.update_default_option(BinanceOption::Secret(secret.into()));
 	}
 
-	async fn spot_klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
-		market::klines(&self.0, pair, tf, range, Market::Spot).await
+	async fn klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange, m: Self::M) -> Result<Klines> {
+		market::klines(&self.0, pair, tf, range, m).await
 	}
 
-	async fn spot_prices(&self, pairs: Option<Vec<Pair>>) -> Result<Vec<(Pair, f64)>> {
-		spot::market::prices(&self.0, pairs).await
+	async fn prices(&self, pairs: Option<Vec<Pair>>, m: Self::M) -> Result<Vec<(Pair, f64)>> {
+		match m {
+			Market::Spot => spot::market::prices(&self.0, pairs).await,
+			_ => unimplemented!(),
+		}
 	}
 
-	async fn spot_price(&self, pair: Pair) -> Result<f64> {
-		spot::market::price(&self.0, pair).await
+	async fn price(&self, pair: Pair, m: Self::M) -> Result<f64> {
+		match m {
+			Market::Spot => spot::market::price(&self.0, pair).await,
+			Market::Futures => futures::market::price(&self.0, pair).await,
+			_ => unimplemented!(),
+		}
 	}
 
-	async fn futures_klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
-		market::klines(&self.0, pair, tf, range, Market::Futures).await
+	async fn asset_balance(&self, asset: Asset, m: Self::M) -> Result<AssetBalance> {
+		match m {
+			Market::Futures => futures::account::asset_balance(self, asset).await,
+			_ => unimplemented!(),
+		}
 	}
 
-	async fn futures_price(&self, pair: Pair) -> Result<f64> {
-		futures::market::price(&self.0, pair).await
-	}
-
-	async fn futures_asset_balance(&self, asset: Asset) -> Result<AssetBalance> {
-		futures::account::asset_balance(&self.0, asset).await
-	}
-
-	async fn futures_balances(&self) -> Result<Vec<AssetBalance>> {
-		futures::account::balances(&self.0).await
+	async fn balances(&self, m: Self::M) -> Result<Vec<AssetBalance>> {
+		match m {
+			Market::Futures => futures::account::balances(&self.0).await,
+			_ => unimplemented!(),
+		}
 	}
 }
 
@@ -55,4 +62,10 @@ pub enum Market {
 	Futures,
 	Spot,
 	Margin,
+}
+impl crate::core::MarketTrait for Market {
+	type Client = Binance;
+	fn client(&self) -> Binance {
+		Binance::default()
+	}
 }
