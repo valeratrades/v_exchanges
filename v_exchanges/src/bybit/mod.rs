@@ -8,7 +8,7 @@ use eyre::Result;
 use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
-use crate::core::{AssetBalance, Exchange, Klines, KlinesRequestRange};
+use crate::core::{Market as M, AssetBalance, Exchange, Klines, KlinesRequestRange};
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
 pub struct Bybit(pub Client);
@@ -20,35 +20,37 @@ impl Exchange for Bybit {
 		self.update_default_option(BybitOption::Secret(secret.into()));
 	}
 
-	async fn spot_klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
+	async fn klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange, m: M) -> Result<Klines> {
+		match m {
+			M::Bybit(Market::Linear) => market::klines(&self.0, pair, tf, range).await,
+			_ => unimplemented!(),
+		}
+	}
+
+	async fn price(&self, pair: Pair, m: M) -> Result<f64> {
+		match m {
+			M::Bybit(Market::Linear) => market::price(&self.0, pair).await,
+			_ => unimplemented!(),
+		}
+	}
+
+	async fn prices(&self, pairs: Option<Vec<Pair>>, m: M) -> Result<Vec<(Pair, f64)>> {
 		todo!();
 	}
 
-	async fn spot_prices(&self, pairs: Option<Vec<Pair>>) -> Result<Vec<(Pair, f64)>> {
-		todo!();
+	async fn asset_balance(&self, asset: Asset, m: M) -> Result<AssetBalance> {
+		match m {
+		M::Bybit(Market::Linear) => account::asset_balance(&self.0, asset).await,
+			_ => unimplemented!(),
+		}
 	}
 
-	async fn spot_price(&self, symbol: Pair) -> Result<f64> {
-		todo!();
+	async fn balances(&self, m: M) -> Result<Vec<AssetBalance>> {
+		match m{
+			M::Bybit(Market::Linear) => account::balances(&self.0).await,
+			_ => unimplemented!(),
+		}
 	}
-
-	async fn futures_klines(&self, symbol: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
-		market::klines(&self.0, symbol, tf, range).await
-	}
-
-	async fn futures_price(&self, symbol: Pair) -> Result<f64> {
-		market::price(&self.0, symbol).await
-	}
-
-	async fn futures_asset_balance(&self, asset: Asset) -> Result<AssetBalance> {
-		account::asset_balance(&self.0, asset).await
-	}
-
-	async fn futures_balances(&self) -> Result<Vec<AssetBalance>> {
-		account::balances(&self.0).await
-	}
-
-	//DO: async fn balance(&self,
 }
 
 
@@ -58,4 +60,9 @@ pub enum Market {
 	Linear,
 	Spot,
 	Inverse,
+}
+impl Market {
+	pub fn client(&self) -> Box<impl Exchange> {
+		Box::new(Bybit::default())
+	}
 }

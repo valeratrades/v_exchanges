@@ -1,12 +1,14 @@
 use std::env;
 
-use v_exchanges::{bybit::Bybit, core::Exchange};
+use v_exchanges::{bybit::Bybit, core::Exchange, Market};
 
 #[tokio::main]
 async fn main() {
 	color_eyre::install().unwrap();
 	v_utils::utils::init_subscriber(v_utils::utils::LogDestination::xdg("v_exchanges"));
 
+	let m: Market = "Bybit/Linear".into();
+	let mut bb = m.client();	
 	let mut bb = Bybit::default();
 
 	//let ticker: serde_json::Value =
@@ -17,7 +19,7 @@ async fn main() {
 
 	//let klines = bb.futures_klines(("BTC", "USDT").into(), "1m".into(), 2.into()).await.unwrap();
 	//dbg!(&klines);
-	let price = bb.futures_price(("BTC", "USDT").into()).await.unwrap();
+	let price = bb.price(("BTC", "USDT").into(), m).await.unwrap();
 	dbg!(&price);
 
 	if let (Ok(key), Ok(secret)) = (env::var("BYBIT_TIGER_READ_KEY"), env::var("BYBIT_TIGER_READ_SECRET")) {

@@ -1,5 +1,6 @@
 pub extern crate v_exchanges_adapters as adapters;
 
+pub use core::Market;
 pub mod core;
 
 pub mod binance;

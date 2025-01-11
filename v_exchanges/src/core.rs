@@ -4,6 +4,7 @@ use chrono::{DateTime, TimeDelta, Utc};
 use derive_more::{Deref, DerefMut};
 use eyre::{Report, Result};
 use v_utils::trades::{Asset, Kline, Pair, Timeframe};
+use eyre::bail;
 use crate::{binance, bybit};
 
 //TODO!!!!!!!!!!!!!: klines switch to defining the range via an Enum over either limit either start and end times
@@ -11,22 +12,20 @@ use crate::{binance, bybit};
 pub trait Exchange {
 	fn auth<S: Into<String>>(&mut self, key: S, secret: S);
 
-	fn spot_klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange) -> impl std::future::Future<Output = Result<Klines>> + Send;
-	fn spot_price(&self, pair: Pair) -> impl std::future::Future<Output = Result<f64>> + Send;
-	/// If no symbols are specified, returns all spot prices.
-	fn spot_prices(&self, pairs: Option<Vec<Pair>>) -> impl std::future::Future<Output = Result<Vec<(Pair, f64)>>> + Send;
-
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
-	fn futures_klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange) -> impl std::future::Future<Output = Result<Klines>> + Send;
-	fn futures_price(&self, pair: Pair) -> impl std::future::Future<Output = Result<f64>> + Send;
+	fn klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange, market: Market) -> impl std::future::Future<Output = Result<Klines>> + Send;
+
+	/// If no pairs are specified, returns for all;
+	fn prices(&self, pairs: Option<Vec<Pair>>, market: Market) -> impl std::future::Future<Output = Result<Vec<(Pair, f64)>>> + Send;
+	fn price(&self, pair: Pair, market: Market) -> impl std::future::Future<Output = Result<f64>> + Send;
 
 	// Defined in terms of actors
 	//TODO!!!: fn spawn_klines_listener(&self, symbol: Pair, tf: Timeframe) -> mpsc::Receiver<Kline>;
 
 	/// balance of a specific asset
-	fn futures_asset_balance(&self, asset: Asset) -> impl std::future::Future<Output = Result<AssetBalance>> + Send;
+	fn asset_balance(&self, asset: Asset, market: Market) -> impl std::future::Future<Output = Result<AssetBalance>> + Send;
 	/// vec of balances of specific assets
-	fn futures_balances(&self) -> impl std::future::Future<Output = Result<Vec<AssetBalance>>> + Send;
+	fn balances(&self, market: Market) -> impl std::future::Future<Output = Result<Vec<AssetBalance>>> + Send;
 	//? potentially `total_balance`? Would return precompiled USDT-denominated balance of a (bybit::wallet/binance::account)
 	// balances are defined for each margin type: [futures_balance, spot_balance, margin_balance], but note that on some exchanges, (like bybit), some of these may point to the same exact call
 	// to negate confusion could add a `total_balance` endpoint
@@ -155,6 +154,14 @@ pub enum Market {
 	Bybit(bybit::Market),
 	//TODO
 }
+impl Market {
+	pub fn client(&self) -> Box<impl Exchange> {
+		match self {
+			Market::Binance(m) => m.client(),
+			Market::Bybit(m) => m.client(),
+		}
+	}
+}
 impl Default for Market {
 	fn default() -> Self {
 		Self::Binance(binance::Market::default())
@@ -178,12 +185,35 @@ impl std::str::FromStr for Market {
 		if parts.len() != 2 {
 			return Err(eyre::eyre!("Invalid market string: {}", s));
 		}
-		let market = parts[0];
-		let exchange = parts[1];
-		match market.to_lowercase().as_str() {
-			"binance" => Ok(Self::Binance(exchange.parse()?)),
-			"bybit" => Ok(Self::Bybit(exchange.parse()?)),
-			_ => Err(eyre::eyre!("Invalid market string: {}", s)),
+		let exchange = parts[0];
+		let sub_market = parts[1];
+		match exchange.to_lowercase().as_str() {
+			"binance" => Ok(Self::Binance(sub_market.parse()?)),
+			"bybit" => Ok(Self::Bybit({
+				match sub_market.parse() {
+					Ok(m) => m,
+					Err(e) => match sub_market.to_lowercase() == "futures" {
+						true => bybit::Market::Linear,
+						false => bail!(e),
+					}
+				}
+			})),
+			_ => bail!("Invalid market string: {}", s),
 		}
+	}
+}
+impl From<Market> for String {
+	fn from(value: Market) -> Self {
+		value.to_string()
+	}
+}
+impl From<String> for Market {
+	fn from(value: String) -> Self {
+		value.parse().unwrap()
+	}
+}
+impl From<&str> for Market {
+	fn from(value: &str) -> Self {
+		value.parse().unwrap()
 	}
 }
