@@ -19,6 +19,27 @@ repository = "https://github.com/valeratrades/v_exchanges/tree/master/v_exchange
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
+[dependencies]
+derive-new.workspace = true
+derive_more.workspace = true
+hex.workspace = true
+hmac.workspace = true
+rand = { version = "0.8.5", optional = true }
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+v_exchanges_api_generics = { version = "^0.4.1", path = "../v_exchanges_api_generics" }
+
+serde_urlencoded = { version = "0.7.1", optional = true }
+
+[dev-dependencies]
+env_logger = "0.11.5"
+rust_decimal = { version = "1.36.0", features = ["serde-with-str", "serde-with-float"] }
+tokio = { version = "1.42.0", features = ["rt-multi-thread", "macros"] }
+
 [features]
 default = ["native-tls"]
 
@@ -32,24 +53,3 @@ native-tls = ["v_exchanges_api_generics/native-tls"]
 native-tls-vendored = ["v_exchanges_api_generics/native-tls-vendored"]
 rustls-tls-native-roots = ["v_exchanges_api_generics/rustls-tls-native-roots"]
 rustls-tls-webpki-roots = ["v_exchanges_api_generics/rustls-tls-webpki-roots"]
-
-[dependencies]
-hex.workspace = true
-hmac.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-serde_with.workspace = true
-sha2.workspace = true
-thiserror.workspace = true
-derive-new.workspace = true
-derive_more.workspace = true
-tracing.workspace = true
-v_exchanges_api_generics = { version = "^0.4.1", path = "../v_exchanges_api_generics" }
-rand = { version = "0.8.5", optional = true }
-
-serde_urlencoded = { version = "0.7.1", optional = true }
-
-[dev-dependencies]
-env_logger = "0.11.5"
-rust_decimal = { version = "1.36.0", features = ["serde-with-str", "serde-with-float"] }
-tokio = { version = "1.42.0", features = ["rt-multi-thread", "macros"] }

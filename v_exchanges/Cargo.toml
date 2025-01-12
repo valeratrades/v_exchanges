@@ -24,30 +24,30 @@ rustdoc-args = ["--cfg", "docsrs"]
 ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
 
 [dependencies]
+chrono = { version = "0.4.39", features = ["serde"] }
+derive-new.workspace = true
+derive_more.workspace = true
+env_logger = "0.11.5"
 serde.workspace = true
 serde_json.workspace = true
 serde_plain.workspace = true
 serde_with.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-thiserror.workspace = true
-derive_more.workspace = true
-derive-new.workspace = true
 v_utils = { workspace = true }
 
 v_exchanges_adapters = { version = "^0.2.1", path = "../v_exchanges_adapters/", features = ["full"] }
-chrono = { version = "0.4.39", features = ["serde"] }
-env_logger = "0.11.5"
+enum_dispatch = "0.3.13"
+eyre = "0.6.12"
 
-reqwest = { version = "^0.12.12", optional = true}
+reqwest = { version = "^0.12.12", optional = true }
 
 insta.workspace = true #dbg (for some reason is not loading in dev-dependencies rn
-eyre = "0.6.12"
-enum_dispatch = "0.3.13"
 
 [dev-dependencies]
-insta.workspace = true
 color-eyre = "^0.6.3"
+insta.workspace = true
 #
 
 [features]
