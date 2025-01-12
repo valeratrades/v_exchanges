@@ -13,23 +13,16 @@ flowchart TD
 ### `v_exchanges_api_generics`
 Provides a standardized interface for defining how an exchange wants to be communicated with.
 
-### `v_exchanges_core`
+### `v_exchanges`
+
+#### `::core`
 Defines `Exchange` trait and associated structs. If some interactions/methods can be generalized _on top of_ the specified standard objects, they can also be exposed here (under a feature flag probably).
 
+#### other
+Split into sections for each implemented exchange.
+In each we make the calls and deserialize the responses from the endpoints we care about, following `Exchange` trait specialization. They are then immediately translated into a general form, which is the same across all exchanges (even if at the cost of some data).
 
-### `v_exchanges`
-Implementation of each exchange's interactions, consists of blocks for
+Some functions on specific exchange+endpoint pairs, on `Exchange` trait or not, could build upon other calls (eg stitching together a longer `/aggrTrade` response than what's allowed). When doing so, we still use general forms of return from each established endpoint interaction.
 
-- `Settings` struct that persists keys, session tokens, etc
-- enum with all API endpoints
-- `binance-rs`-like function call for all the ones I care about. They return predefined Response structs
-- impl of `Exchange` trait
-	so say `binance` would have a `struct Binance(BinanceSettings)`, where all the `Exchange` functions first call native method on `BinanceSettings`, then just apply translation
-
-#### models
-any models shared across different markets (futures, spot, margin, etc), are defined in well a shared `models/` directory at the root of associated exchange's directory. Say if `KlinesResponse` matches for
-`/binance/futures/market.rs` and `/binance/spot/market.rs`, the model is defined and exported from `/binance/models/market.rs`
-
-
-#### data endpoints
+### data endpoints
 Some exchanges provide specialized `data` endpoints. Those can't be part of `Exchange` trait, but then I just trivially expose them natively on the associated structs of each exchange, without any traits whatsoever. 
