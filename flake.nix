@@ -5,9 +5,10 @@
     flake-utils.url = "github:numtide/flake-utils";
     pre-commit-hooks.url = "github:cachix/git-hooks.nix";
     workflow-parts.url = "github:valeratrades/.github?dir=.github/workflows/nix-parts";
+    hooks.url = "github:valeratrades/.github?dir=hooks";
   };
 
-  outputs = { nixpkgs, rust-overlay, flake-utils, pre-commit-hooks, workflow-parts, ... }:
+  outputs = { nixpkgs, rust-overlay, flake-utils, pre-commit-hooks, workflow-parts, hooks, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         overlays = builtins.trace "flake.nix sourced" [ (import rust-overlay) ];
@@ -18,7 +19,16 @@
           pre-commit-check = pre-commit-hooks.lib.${system}.run {
             src = ./.;
             hooks = {
-              nixpkgs-fmt.enable = true;
+              treefmt = {
+                enable = true;
+                settings = {
+                  #BUG: this option does NOTHING
+                  fail-on-change = false; # that's GHA's job, pre-commit hooks stricty *do*
+                  formatters = with pkgs; [
+                    nixpkgs-fmt
+                  ];
+                };
+              };
             };
           };
         };
@@ -28,9 +38,16 @@
         packages =
           let
             manifest = (pkgs.lib.importTOML ./Cargo.toml).package;
+            rust = (pkgs.rust-bin.fromRustupToolchainFile ./.cargo/rust-toolchain.toml);
+            rustc = rust;
+            cargo = rust;
+            stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv;
+            rustPlatform = pkgs.makeRustPlatform {
+              inherit rustc cargo stdenv;
+            };
           in
           {
-            default = pkgs.rustPlatform.buildRustPackage rec {
+            default = rustPlatform.buildRustPackage rec {
               pname = manifest.name;
               version = manifest.version;
 
@@ -47,11 +64,14 @@
           };
 
         devShells.default = with pkgs; mkShell {
+          inherit stdenv;
           shellHook = checks.pre-commit-check.shellHook + ''
             rm -f ./.github/workflows/errors.yml; cp ${workflowContents.errors} ./.github/workflows/errors.yml
             rm -f ./.github/workflows/warnings.yml; cp ${workflowContents.warnings} ./.github/workflows/warnings.yml
+
+            cargo -Zscript -q ${hooks.appendCustom} ./.git/hooks/pre-commit
+            cp -f ${(import hooks.treefmt {inherit pkgs;})} ./.treefmt.toml
           '';
-          stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv;
           packages = [
             mold-wrapped
             openssl
