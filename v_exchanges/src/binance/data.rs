@@ -23,7 +23,7 @@ impl From<&str> for LsrWho {
 }
 
 impl Binance {
-	pub async fn global_lsr_account(&self, pair: Pair, tf: Timeframe, limit: u32, who: LsrWho) -> Result<Vec<Lsr>> {
+	pub async fn lsr(&self, pair: Pair, tf: Timeframe, limit: u32, who: LsrWho) -> Result<Vec<Lsr>> {
 		let allowed_range = 1..=500;
 		//TODO!!: add a `limit outside of range` error, generic for all exchanges
 		assert!(allowed_range.contains(&limit));
@@ -58,12 +58,22 @@ pub struct LsrResponse {
 pub struct Lsr {
 	pub time: DateTime<Utc>,
 	pub pair: Pair,
-	pub long: Percent,
-	pub short: Percent,
+	pub p_long: Percent,
 }
+//Q: couldn't decide if `short()` and `long(0` should return `f64` or `Percent`. Postponing the decision.
 impl Lsr {
 	pub fn ratio(&self) -> f64 {
-		*self.long / *self.short
+		*self.p_long / self.short()
+	}
+
+	/// Percentage of short positions
+	pub fn short(&self) -> f64 {
+		1.0 - *self.p_long
+	}
+
+	/// Percentage of long positions. // here only for consistency with `short`
+	pub fn long(&self) -> f64 {
+		*self.p_long
 	}
 }
 impl From<LsrResponse> for Lsr {
@@ -71,8 +81,7 @@ impl From<LsrResponse> for Lsr {
 		Self {
 			time: DateTime::from_timestamp_millis(r.timestamp).unwrap(),
 			pair: Pair::from_str(&r.symbol).unwrap(),
-			long: Percent::from_str(&r.long_account).unwrap(),
-			short: Percent::from_str(&r.short_account).unwrap(),
+			p_long: Percent::from_str(&r.long_account).unwrap(),
 		}
 	}
 }
