@@ -27,7 +27,9 @@ ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
 chrono = { version = "0.4.39", features = ["serde"] }
 derive-new.workspace = true
 derive_more.workspace = true
+enum_dispatch = "0.3.13"
 env_logger = "0.11.5"
+eyre = "0.6.12"
 serde.workspace = true
 serde_json.workspace = true
 serde_plain.workspace = true
@@ -36,8 +38,6 @@ thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 v_utils = { workspace = true }
-enum_dispatch = "0.3.13"
-eyre = "0.6.12"
 
 v_exchanges_adapters = { version = "^0.2.1", path = "../v_exchanges_adapters/", features = ["full"] }
 
