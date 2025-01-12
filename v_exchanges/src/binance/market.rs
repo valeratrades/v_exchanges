@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, TimeZone as _, Utc};
 //HACK: Methods should be implemented on the central interface struct, following <https://github.com/wisespace-io/binance-rs>.
 use eyre::Result;
 use serde::{Deserialize, Serialize};
@@ -58,7 +58,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timef
 		Market::Margin => unimplemented!(),
 	};
 
-	let kline_responses: Vec<KlineResponse> = client.get(&format!("{endpoint_prefix}/klines"), &params, [BinanceOption::HttpUrl(base_url)]).await.unwrap();
+	let kline_responses: Vec<KlineResponse> = client.get(&format!("{endpoint_prefix}/klines"), &params, [BinanceOption::HttpUrl(base_url)]).await?;
 
 	let r_len = kline_responses.len();
 	let mut klines = VecDeque::with_capacity(r_len);

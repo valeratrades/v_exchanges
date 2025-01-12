@@ -39,6 +39,8 @@ pub trait Exchange {
 pub trait MarketTrait {
 	type Client: Exchange;
 	fn client(&self) -> Self::Client;
+	fn fmt_abs(&self) -> String;
+	//TODO; require them to impl Display and FromStr
 }
 //TODO!: figure out how can I expose one central `Market` enum, so client doesn't have to bring into the scope `MarketTrait` and deal with the exchange-specific `Market`'s type
 // Maybe [enum_dispatch](<https://docs.rs/enum_dispatch/latest/enum_dispatch/>) crate could help?
@@ -226,6 +228,11 @@ pub struct AssetBalance {
 pub struct ExchangeInfo {
 	pub server_time: DateTime<Utc>,
 	pub pairs: HashMap<Pair, PairInfo>,
+}
+impl ExchangeInfo {
+	pub fn usdt_pairs(&self) -> impl Iterator<Item = Pair> {
+		self.pairs.keys().filter(|p| p.is_usdt()).copied()
+	}
 }
 #[derive(Clone, Debug, Default)]
 pub struct PairInfo {

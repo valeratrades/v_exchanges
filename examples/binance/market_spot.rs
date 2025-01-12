@@ -9,6 +9,7 @@ async fn main() {
 	v_utils::utils::init_subscriber(v_utils::utils::LogDestination::xdg("v_exchanges"));
 
 	//let m: Market = "Binance/Spot".into(); // would be nice to be able to do it like this, without having to carry around exchange-specific type
+	// Currently if I want to pass around the market struct in my code after initializing it, I have to pass around eg `binance::Market`, which is a ridiculous thing to hardcode into function signatures
 	let m = binance::Market::Spot;
 	let bn = m.client();
 

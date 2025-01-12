@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 
 use adapters::binance::{BinanceHttpUrl, BinanceOption};
 use chrono::DateTime;

@@ -76,4 +76,8 @@ impl crate::core::MarketTrait for Market {
 	fn client(&self) -> Binance {
 		Binance::default()
 	}
+
+	fn fmt_abs(&self) -> String {
+	  format!("Binance/{self}")
+	}
 }

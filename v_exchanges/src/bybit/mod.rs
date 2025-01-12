@@ -25,7 +25,7 @@ impl Exchange for Bybit {
 	}
 
 	async fn exchange_info(&self, m: Self::M) -> Result<ExchangeInfo> {
-	  todo!();
+		todo!();
 	}
 
 	async fn klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange, m: Self::M) -> Result<Klines> {
@@ -73,5 +73,9 @@ impl crate::core::MarketTrait for Market {
 
 	fn client(&self) -> Bybit {
 		Bybit::default()
+	}
+
+	fn fmt_abs(&self) -> String {
+		format!("Bybit/{self}")
 	}
 }
