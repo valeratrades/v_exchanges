@@ -14,14 +14,8 @@ async fn main() {
 	let m = bybit::Market::Linear;
 	let mut bb = m.client();
 
-	//let ticker: serde_json::Value =
-	//bb.get("/v5/market/tickers", &[("category", "spot"), ("symbol", "BTCUSDT")], [BybitOption::Default])
-	//	.await
-	//	.expect("failed to get ticker");
-	//println!("Ticker:\n{ticker}");
-
-	//let klines = bb.futures_klines(("BTC", "USDT").into(), "1m".into(), 2.into()).await.unwrap();
-	//dbg!(&klines);
+	let klines = bb.klines(("BTC", "USDT").into(), "1m".into(), 2.into(), m).await.unwrap();
+	dbg!(&klines);
 	let price = bb.price(("BTC", "USDT").into(), m).await.unwrap();
 	dbg!(&price);
 

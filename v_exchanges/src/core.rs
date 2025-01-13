@@ -41,8 +41,8 @@ pub trait Exchange {
 
 // Market {{{
 pub trait MarketTrait {
-	type Client: Exchange;
-	fn client(&self) -> Self::Client;
+	type Ex: Exchange;
+	fn client(&self) -> Self::Ex;
 	fn fmt_abs(&self) -> String;
 	//TODO; require them to impl Display and FromStr
 }

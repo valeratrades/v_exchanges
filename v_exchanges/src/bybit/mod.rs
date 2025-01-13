@@ -69,7 +69,7 @@ pub enum Market {
 	Inverse,
 }
 impl crate::core::MarketTrait for Market {
-	type Client = Bybit;
+	type Ex = Bybit;
 
 	fn client(&self) -> Bybit {
 		Bybit::default()
