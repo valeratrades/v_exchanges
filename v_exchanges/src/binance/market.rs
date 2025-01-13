@@ -6,46 +6,24 @@ use eyre::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
-use v_exchanges_adapters::{
-	binance::{BinanceHttpUrl, BinanceOption},
-	errors::LimitOutOfRangeError,
-};
-use v_utils::{
-	trades::{Kline, Ohlc, Pair, Timeframe},
-	utils::filter_nulls,
-};
+use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
+use v_utils::trades::{Kline, Ohlc, Pair, Timeframe};
 
 use crate::{
 	binance::Market,
-	core::{Klines, KlinesRequestRange},
+	core::{Klines, RequestRange},
+	utils::join_params,
 };
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: KlinesRequestRange, market: Market) -> Result<Klines> {
-	let range_json = match range {
-		KlinesRequestRange::StartEnd { start, end } => json!({
-			"startTime": start.timestamp_millis(),
-			"endTime": end.map(|dt| dt.timestamp_millis()),
-		}),
-		KlinesRequestRange::Limit(limit) => {
-			let allowed_range = 1..=1000;
-			if !allowed_range.contains(&limit) {
-				return Err(LimitOutOfRangeError::new(allowed_range, limit).into());
-			}
-			json!({
-				"limit": limit,
-			})
-		}
-	};
-	let base_params = filter_nulls(json!({
+pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: RequestRange, market: Market) -> Result<Klines> {
+	range.ensure_allowed(1..=1000, tf)?;
+	let range_params = range.serialize();
+	let base_params = json!({
 		"symbol": pair.to_string(),
 		"interval": tf.format_binance()?,
-	}));
-
-	let mut base_map = base_params.as_object().unwrap().clone();
-	let range_map = range_json.as_object().unwrap();
-	base_map.extend(range_map.clone());
-	let params = filter_nulls(serde_json::Value::Object(base_map));
+	});
+	let params = join_params(base_params, range_params);
 
 	let endpoint_prefix = match market {
 		Market::Spot => "/api/v3",

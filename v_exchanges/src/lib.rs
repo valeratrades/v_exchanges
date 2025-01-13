@@ -2,6 +2,7 @@ pub extern crate v_exchanges_adapters as adapters;
 
 //pub use core::Marktt;
 pub mod core;
+pub mod utils;
 
 pub mod binance;
 pub use binance::Binance;

@@ -5,31 +5,18 @@ use eyre::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
-use v_exchanges_adapters::{bybit::BybitOption, errors::LimitOutOfRangeError};
+use v_exchanges_adapters::bybit::BybitOption;
 use v_utils::{
 	trades::{Kline, Ohlc, Pair, Timeframe},
 	utils::filter_nulls,
 };
 
-use crate::core::{Klines, KlinesRequestRange};
+use crate::core::{Klines, RequestRange};
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: KlinesRequestRange) -> Result<Klines> {
-	let range_json = match range {
-		KlinesRequestRange::StartEnd { start, end } => json!({
-			"startTime": start.timestamp_millis(),
-			"endTime": end.map(|dt| dt.timestamp_millis()),
-		}),
-		KlinesRequestRange::Limit(limit) => {
-			let allowed_range = 1..=1000;
-			if !allowed_range.contains(&limit) {
-				return Err(LimitOutOfRangeError::new(allowed_range, limit).into());
-			}
-			json!({
-				"limit": limit,
-			})
-		}
-	};
+pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: RequestRange) -> Result<Klines> {
+	range.ensure_allowed(1..=1000, tf)?;
+	let range_json = range.serialize();
 	let base_params = filter_nulls(json!({
 		"category": "linear", // can be ["linear", "inverse", "spot"] afaiu, could drive some generics with this later, but for now hardcode
 		"symbol": pair.to_string(),

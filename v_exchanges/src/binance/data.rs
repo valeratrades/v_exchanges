@@ -10,6 +10,7 @@ use v_utils::{
 };
 
 use super::Binance;
+use crate::{core::RequestRange, utils::join_params};
 
 #[derive(Clone, Debug, Display, FromStr)]
 pub enum LsrWho {
@@ -23,20 +24,19 @@ impl From<&str> for LsrWho {
 }
 
 impl Binance {
-	pub async fn lsr(&self, pair: Pair, tf: Timeframe, limit: u32, who: LsrWho) -> Result<Vec<Lsr>> {
-		let allowed_range = 1..=500;
-		//TODO!!: add a `limit outside of range` error, generic for all exchanges
-		assert!(allowed_range.contains(&limit));
+	pub async fn lsr(&self, pair: Pair, tf: Timeframe, range: RequestRange, who: LsrWho) -> Result<Vec<Lsr>> {
+		range.ensure_allowed(0..=500, tf)?;
+		let range_json = range.serialize();
 
 		let ending = match who {
 			LsrWho::Global => "globalLongShortAccountRatio",
 			LsrWho::Top => "topLongShortPositionRatio",
 		};
-		let params = json!({
+		let base_json = json!({
 			"symbol": pair.to_string(),
 			"period": tf.format_binance()?,
-			"limit": limit,
 		});
+		let params = join_params(base_json, range_json);
 		let r: serde_json::Value = self
 			.0
 			.get(&format!("/futures/data/{ending}"), &params, [BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)])
@@ -58,22 +58,22 @@ pub struct LsrResponse {
 pub struct Lsr {
 	pub time: DateTime<Utc>,
 	pub pair: Pair,
-	pub p_long: Percent,
+	pub long: Percent,
 }
 //Q: couldn't decide if `short()` and `long(0` should return `f64` or `Percent`. Postponing the decision.
 impl Lsr {
 	pub fn ratio(&self) -> f64 {
-		*self.p_long / self.short()
+		*self.long / self.short()
 	}
 
 	/// Percentage of short positions
 	pub fn short(&self) -> f64 {
-		1.0 - *self.p_long
+		1.0 - *self.long
 	}
 
 	/// Percentage of long positions. // here only for consistency with `short`
 	pub fn long(&self) -> f64 {
-		*self.p_long
+		*self.long
 	}
 }
 impl From<LsrResponse> for Lsr {
@@ -81,7 +81,7 @@ impl From<LsrResponse> for Lsr {
 		Self {
 			time: DateTime::from_timestamp_millis(r.timestamp).unwrap(),
 			pair: Pair::from_str(&r.symbol).unwrap(),
-			p_long: Percent::from_str(&r.long_account).unwrap(),
+			long: Percent::from_str(&r.long_account).unwrap(),
 		}
 	}
 }

@@ -10,7 +10,7 @@ use eyre::Result;
 use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
-use crate::core::{AssetBalance, Exchange, ExchangeInfo, Klines, KlinesRequestRange};
+use crate::core::{AssetBalance, Exchange, ExchangeInfo, Klines, RequestRange};
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
 pub struct Bybit(pub Client);
@@ -28,7 +28,7 @@ impl Exchange for Bybit {
 		todo!();
 	}
 
-	async fn klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange, m: Self::M) -> Result<Klines> {
+	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, m: Self::M) -> Result<Klines> {
 		match m {
 			Market::Linear => market::klines(&self.0, pair, tf, range).await,
 			_ => unimplemented!(),

@@ -9,6 +9,6 @@ async fn main() {
 	dbg!(&bvol);
 
 	let bn = Binance::default();
-	let lsr = bn.lsr(("BTC", "USDT").into(), "5m".into(), 24 * 12 + 1, "Global".into()).await.unwrap();
+	let lsr = bn.lsr(("BTC", "USDT").into(), "5m".into(), (24 * 12 + 1).into(), "Global".into()).await.unwrap();
 	dbg!(&lsr[..2]);
 }

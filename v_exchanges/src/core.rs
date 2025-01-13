@@ -1,9 +1,13 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
 
 use chrono::{DateTime, TimeDelta, Utc};
 use derive_more::{Deref, DerefMut};
-use eyre::{Report, Result};
-use v_utils::trades::{Asset, Kline, Pair, Timeframe};
+use eyre::{Report, Result, bail};
+use serde_json::json;
+use v_utils::{
+	trades::{Asset, Kline, Pair, Timeframe},
+	utils::filter_nulls,
+};
 
 //TODO!!!!!!!!!!!!!: klines switch to defining the range via an Enum over either limit either start and end times
 
@@ -15,7 +19,7 @@ pub trait Exchange {
 	fn exchange_info(&self, m: Self::M) -> impl std::future::Future<Output = Result<ExchangeInfo>> + Send;
 
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
-	fn klines(&self, pair: Pair, tf: Timeframe, range: KlinesRequestRange, m: Self::M) -> impl std::future::Future<Output = Result<Klines>> + Send;
+	fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, m: Self::M) -> impl std::future::Future<Output = Result<Klines>> + Send;
 
 	/// If no pairs are specified, returns for all;
 	fn prices(&self, pairs: Option<Vec<Pair>>, m: Self::M) -> impl std::future::Future<Output = Result<Vec<(Pair, f64)>>> + Send;
@@ -148,68 +152,122 @@ impl TryFrom<Klines> for FullKlines {
 		todo!();
 	}
 }
+//,}}}
 
+// RequestRange {{{
 #[derive(Clone, Debug, Copy)]
-pub enum KlinesRequestRange {
+pub enum RequestRange {
 	/// Preferred way of defining the range
 	StartEnd { start: DateTime<Utc>, end: Option<DateTime<Utc>> },
 	/// For quick and dirty
 	//TODO!: have it contain an enum, with either exact value, either just `Max`, then each exchange matches on it
 	Limit(u32),
 }
-impl Default for KlinesRequestRange {
+impl RequestRange {
+	pub fn ensure_allowed(&self, allowed: std::ops::RangeInclusive<u32>, tf: Timeframe) -> Result<()> {
+		match self {
+			RequestRange::StartEnd { start, end } =>
+				if let Some(end) = end {
+					if start > end {
+						bail!("Start time is greater than end time");
+					}
+					let effective_limit = ((*end - start).num_milliseconds() / tf.duration().num_milliseconds()) as u32;
+					if effective_limit > *allowed.end() {
+						return Err(OutOfRangeError::new(allowed, effective_limit).into());
+					}
+				},
+			RequestRange::Limit(limit) =>
+				if !allowed.contains(limit) {
+					return Err(OutOfRangeError::new(allowed, *limit).into());
+				},
+		}
+		Ok(())
+	}
+
+	//XXX
+	//TODO!!!!!!!!!: MUST be generic over Market. But with current Market representation is impossible.
+	pub fn serialize(&self) -> serde_json::Value {
+		filter_nulls(match self {
+			RequestRange::StartEnd { start, end } => json!({
+				"startTime": start.timestamp_millis(),
+				"endTime": end.map(|dt| dt.timestamp_millis()),
+			}),
+			RequestRange::Limit(limit) => json!({
+				"limit": limit,
+			}),
+		})
+	}
+}
+impl Default for RequestRange {
 	fn default() -> Self {
-		KlinesRequestRange::StartEnd {
+		RequestRange::StartEnd {
 			start: DateTime::default(),
 			end: None,
 		}
 	}
 }
-impl From<DateTime<Utc>> for KlinesRequestRange {
+impl From<DateTime<Utc>> for RequestRange {
 	fn from(value: DateTime<Utc>) -> Self {
-		KlinesRequestRange::StartEnd { start: value, end: None }
+		RequestRange::StartEnd { start: value, end: None }
 	}
 }
 /// funky
-impl From<TimeDelta> for KlinesRequestRange {
+impl From<TimeDelta> for RequestRange {
 	fn from(value: TimeDelta) -> Self {
 		let now = Utc::now();
-		KlinesRequestRange::StartEnd { start: now - value, end: None }
+		RequestRange::StartEnd { start: now - value, end: None }
 	}
 }
-impl From<u32> for KlinesRequestRange {
+impl From<u32> for RequestRange {
 	fn from(value: u32) -> Self {
-		KlinesRequestRange::Limit(value)
+		RequestRange::Limit(value)
 	}
 }
-impl From<i32> for KlinesRequestRange {
+impl From<i32> for RequestRange {
 	fn from(value: i32) -> Self {
-		KlinesRequestRange::Limit(value as u32)
+		RequestRange::Limit(value as u32)
 	}
 }
-impl From<u16> for KlinesRequestRange {
+impl From<u16> for RequestRange {
 	fn from(value: u16) -> Self {
-		KlinesRequestRange::Limit(value as u32)
+		RequestRange::Limit(value as u32)
 	}
 }
-impl From<u8> for KlinesRequestRange {
+impl From<u8> for RequestRange {
 	fn from(value: u8) -> Self {
-		KlinesRequestRange::Limit(value as u32)
+		RequestRange::Limit(value as u32)
 	}
 }
-impl From<(DateTime<Utc>, DateTime<Utc>)> for KlinesRequestRange {
+impl From<(DateTime<Utc>, DateTime<Utc>)> for RequestRange {
 	fn from(value: (DateTime<Utc>, DateTime<Utc>)) -> Self {
-		KlinesRequestRange::StartEnd { start: value.0, end: Some(value.1) }
+		RequestRange::StartEnd { start: value.0, end: Some(value.1) }
 	}
 }
-impl From<(i64, i64)> for KlinesRequestRange {
+impl From<(i64, i64)> for RequestRange {
 	fn from(value: (i64, i64)) -> Self {
-		KlinesRequestRange::StartEnd {
+		RequestRange::StartEnd {
 			start: DateTime::from_timestamp_millis(value.0).unwrap(),
 			end: Some(DateTime::from_timestamp_millis(value.1).unwrap()),
 		}
 	}
 }
+
+#[derive(derive_more::Debug, derive_new::new)]
+pub struct OutOfRangeError {
+	allowed: std::ops::RangeInclusive<u32>,
+	provided: u32,
+}
+//TODO!: generalize to both create,display and check for Ranges defined by time too.
+impl std::fmt::Display for OutOfRangeError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"Effective provided limit is out of range (could be translated from Start:End / tf). Allowed: {:?}, provided: {}",
+			self.allowed, self.provided
+		)
+	}
+}
+impl std::error::Error for OutOfRangeError {}
 //,}}}
 
 #[derive(Clone, Debug, Default, Copy)]
@@ -227,7 +285,7 @@ pub struct AssetBalance {
 #[derive(Clone, Debug, Default)]
 pub struct ExchangeInfo {
 	pub server_time: DateTime<Utc>,
-	pub pairs: HashMap<Pair, PairInfo>,
+	pub pairs: BTreeMap<Pair, PairInfo>,
 }
 impl ExchangeInfo {
 	pub fn usdt_pairs(&self) -> impl Iterator<Item = Pair> {
