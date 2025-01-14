@@ -7,7 +7,6 @@ async fn main() {
 	color_eyre::install().unwrap();
 	v_utils::utils::init_subscriber(v_utils::utils::LogDestination::xdg("v_exchanges"));
 
-	//let m: Market = "Bybit/Linear".into(); // would be nice to be able to do it like this
 	let m: AbsMarket = "Bybit/Linear".into();
 	let mut c = m.client();
 
