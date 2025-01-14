@@ -11,13 +11,22 @@ use v_utils::trades::{Asset, Pair, Timeframe};
 use crate::core::{AbsMarket, AssetBalance, Exchange, ExchangeInfo, Klines, RequestRange, WrongExchangeError};
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
-pub struct Binance(pub Client);
+pub struct Binance {
+	#[deref_mut]
+	#[deref]
+	client: Client,
+	source_market: AbsMarket,
+}
 
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
 #[async_trait::async_trait]
 impl Exchange for Binance {
+	fn source_market(&self) -> AbsMarket {
+		self.source_market
+	}
+
 	fn exchange_name(&self) -> &'static str {
-		"Binance"
+		self.source_market().exchange_name()
 	}
 
 	fn auth(&mut self, key: String, secret: String) {
@@ -28,7 +37,7 @@ impl Exchange for Binance {
 	async fn exchange_info(&self, am: AbsMarket) -> Result<ExchangeInfo> {
 		match am {
 			AbsMarket::Binance(m) => match m {
-				Market::Futures => futures::general::exchange_info(&self.0).await,
+				Market::Futures => futures::general::exchange_info(&self.client).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -37,7 +46,7 @@ impl Exchange for Binance {
 
 	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, am: AbsMarket) -> Result<Klines> {
 		match am {
-			AbsMarket::Binance(m) => market::klines(&self.0, pair, tf, range, m).await,
+			AbsMarket::Binance(m) => market::klines(&self.client, pair, tf, range, m).await,
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
 		}
 	}
@@ -45,7 +54,7 @@ impl Exchange for Binance {
 	async fn prices(&self, pairs: Option<Vec<Pair>>, am: AbsMarket) -> Result<Vec<(Pair, f64)>> {
 		match am {
 			AbsMarket::Binance(m) => match m {
-				Market::Spot => spot::market::prices(&self.0, pairs).await,
+				Market::Spot => spot::market::prices(&self.client, pairs).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -55,8 +64,8 @@ impl Exchange for Binance {
 	async fn price(&self, pair: Pair, am: AbsMarket) -> Result<f64> {
 		match am {
 			AbsMarket::Binance(m) => match m {
-				Market::Spot => spot::market::price(&self.0, pair).await,
-				Market::Futures => futures::market::price(&self.0, pair).await,
+				Market::Spot => spot::market::price(&self.client, pair).await,
+				Market::Futures => futures::market::price(&self.client, pair).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -76,7 +85,7 @@ impl Exchange for Binance {
 	async fn balances(&self, am: AbsMarket) -> Result<Vec<AssetBalance>> {
 		match am {
 			AbsMarket::Binance(m) => match m {
-				Market::Futures => futures::account::balances(&self.0).await,
+				Market::Futures => futures::account::balances(&self.client).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),

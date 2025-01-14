@@ -38,7 +38,7 @@ impl Binance {
 		});
 		let params = join_params(base_json, range_json);
 		let r: serde_json::Value = self
-			.0
+			.client
 			.get(&format!("/futures/data/{ending}"), &params, [BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)])
 			.await?;
 		let r: Vec<LsrResponse> = serde_json::from_value(r).unwrap();

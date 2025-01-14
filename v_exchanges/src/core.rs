@@ -12,6 +12,7 @@ use v_utils::{
 //TODO!!!!!!!!!!!!!: klines switch to defining the range via an Enum over either limit either start and end times
 #[async_trait::async_trait]
 pub trait Exchange: std::fmt::Debug {
+	fn source_market(&self) -> AbsMarket;
 	fn exchange_name(&self) -> &'static str;
 	fn auth(&mut self, key: String, secret: String);
 
@@ -57,7 +58,7 @@ pub trait MarketTrait {
 	//TODO; require them to impl Display and FromStr
 }
 
-#[derive(Debug, Clone, Copy, derive_more::Display/*TODO:, derive_more::FromStr*/)]
+#[derive(Debug, Clone, Copy)]
 pub enum AbsMarket {
 	Binance(crate::binance::Market),
 	Bybit(crate::bybit::Market),
@@ -70,21 +71,27 @@ impl AbsMarket {
 			Self::Bybit(m) => m.client(),
 		}
 	}
+	pub fn exchange_name(&self) -> &'static str {
+		match self {
+			Self::Binance(_) => "Binance",
+			Self::Bybit(_) => "Bybit",
+		}
+	}
 }
 impl Default for AbsMarket {
 	fn default() -> Self {
 		Self::Binance(crate::binance::Market::default())
 	}
 }
-//impl std::fmt::Display for Market {
-//	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//		match self {
-//			Market::Binance(m) => write!(f, "Binance/{}", m),
-//			Market::Bybit(m) => write!(f, "Bybit/{}", m),
-//		}
-//	}
-//}
-//
+impl std::fmt::Display for AbsMarket {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Binance(m) => write!(f, "Binance/{}", m),
+			Self::Bybit(m) => write!(f, "Bybit/{}", m),
+		}
+	}
+}
+
 impl std::str::FromStr for AbsMarket {
 	type Err = eyre::Error;
 

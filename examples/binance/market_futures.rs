@@ -1,8 +1,6 @@
 use std::env;
 
-use v_exchanges::{
-	prelude::*,
-};
+use v_exchanges::prelude::*;
 
 #[tokio::main]
 async fn main() {
@@ -11,6 +9,8 @@ async fn main() {
 
 	let m: AbsMarket = "Binance/Futures".into();
 	let mut c = m.client();
+
+	println!("m: {m}");
 
 	let exchange_info = c.exchange_info(m).await.unwrap();
 	dbg!(&exchange_info.pairs.iter().take(2).collect::<Vec<_>>());
