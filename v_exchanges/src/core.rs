@@ -11,7 +11,7 @@ use v_utils::{
 
 //TODO!!!!!!!!!!!!!: klines switch to defining the range via an Enum over either limit either start and end times
 #[async_trait::async_trait]
-pub trait Exchange: std::fmt::Debug {
+pub trait Exchange: std::fmt::Debug + Send {
 	fn source_market(&self) -> AbsMarket;
 	fn exchange_name(&self) -> &'static str;
 	fn auth(&mut self, key: String, secret: String);

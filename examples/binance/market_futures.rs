@@ -4,13 +4,13 @@ use v_exchanges::prelude::*;
 
 #[tokio::main]
 async fn main() {
-	color_eyre::install().unwrap();
-	v_utils::utils::init_subscriber(v_utils::utils::LogDestination::xdg("v_exchanges"));
+	v_utils::clientside!();
 
 	let m: AbsMarket = "Binance/Futures".into();
 	let mut c = m.client();
 
-	println!("m: {m}");
+	println!("market: {m}");
+	println!("source client: {}", c.source_market());
 
 	let exchange_info = c.exchange_info(m).await.unwrap();
 	dbg!(&exchange_info.pairs.iter().take(2).collect::<Vec<_>>());

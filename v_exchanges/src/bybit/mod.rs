@@ -24,7 +24,7 @@ pub struct Bybit {
 #[async_trait::async_trait]
 impl Exchange for Bybit {
 	fn source_market(&self) -> AbsMarket {
-		todo!()
+		self.source_market
 	}
 
 	fn exchange_name(&self) -> &'static str {

@@ -2,8 +2,7 @@ use v_exchanges::prelude::*;
 
 #[tokio::main]
 async fn main() {
-	color_eyre::install().unwrap();
-	v_utils::utils::init_subscriber(v_utils::utils::LogDestination::xdg("v_exchanges"));
+	v_utils::clientside!();
 
 	let m: AbsMarket = "Binance/Spot".into();
 	let c = m.client();
