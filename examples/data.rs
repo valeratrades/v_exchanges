@@ -13,3 +13,9 @@ async fn main() {
 	let lsr = bn.lsr(("BTC", "USDT").into(), "5m".into(), (24 * 12 + 1).into(), "Global".into()).await.unwrap();
 	dbg!(&lsr[..2]);
 }
+
+#[cfg(test)]
+#[test]
+fn test_main() {
+	main();
+}

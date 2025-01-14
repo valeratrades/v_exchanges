@@ -16,9 +16,7 @@ async fn main() {
 }
 
 #[cfg(test)]
-mod tests {
-	#[test]
-	fn test_main() {
-		super::main();
-	}
+#[test]
+fn test_main() {
+	main();
 }

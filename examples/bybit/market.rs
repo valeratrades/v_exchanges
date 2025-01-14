@@ -33,9 +33,7 @@ async fn private(c: &mut Box<dyn Exchange>, m: AbsMarket) {
 }
 
 #[cfg(test)]
-mod tests {
-	#[test]
-	fn test_main() {
-		super::main();
-	}
+#[test]
+fn test_main() {
+	main();
 }
