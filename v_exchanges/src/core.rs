@@ -10,28 +10,28 @@ use v_utils::{
 };
 
 //TODO!!!!!!!!!!!!!: klines switch to defining the range via an Enum over either limit either start and end times
-
+#[async_trait::async_trait]
 pub trait Exchange {
 	type M: MarketTrait;
 
-	fn auth<S: Into<String>>(&mut self, key: S, secret: S);
+	fn auth(&mut self, key: String, secret: String);
 
-	fn exchange_info(&self, m: Self::M) -> impl std::future::Future<Output = Result<ExchangeInfo>> + Send;
+	async fn exchange_info(&self, m: Self::M) -> Result<ExchangeInfo>;
 
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
-	fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, m: Self::M) -> impl std::future::Future<Output = Result<Klines>> + Send;
+	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, m: Self::M) -> Result<Klines>;
 
 	/// If no pairs are specified, returns for all;
-	fn prices(&self, pairs: Option<Vec<Pair>>, m: Self::M) -> impl std::future::Future<Output = Result<Vec<(Pair, f64)>>> + Send;
-	fn price(&self, pair: Pair, m: Self::M) -> impl std::future::Future<Output = Result<f64>> + Send;
+	async fn prices(&self, pairs: Option<Vec<Pair>>, m: Self::M) -> Result<Vec<(Pair, f64)>>;
+	async fn price(&self, pair: Pair, m: Self::M) -> Result<f64>;
 
 	// Defined in terms of actors
-	//TODO!!!: fn spawn_klines_listener(&self, symbol: Pair, tf: Timeframe) -> mpsc::Receiver<Kline>;
+	//TODO!!!: async fn spawn_klines_listener(&self, symbol: Pair, tf: Timeframe) -> mpsc::Receiver<Kline>;
 
 	/// balance of a specific asset
-	fn asset_balance(&self, asset: Asset, m: Self::M) -> impl std::future::Future<Output = Result<AssetBalance>> + Send;
+	async fn asset_balance(&self, asset: Asset, m: Self::M) -> Result<AssetBalance>;
 	/// vec of balances of specific assets
-	fn balances(&self, m: Self::M) -> impl std::future::Future<Output = Result<Vec<AssetBalance>>> + Send;
+	async fn balances(&self, m: Self::M) -> Result<Vec<AssetBalance>>;
 	//? potentially `total_balance`? Would return precompiled USDT-denominated balance of a (bybit::wallet/binance::account)
 	// balances are defined for each margin type: [futures_balance, spot_balance, margin_balance], but note that on some exchanges, (like bybit), some of these may point to the same exact call
 	// to negate confusion could add a `total_balance` endpoint
@@ -41,8 +41,7 @@ pub trait Exchange {
 
 // Market {{{
 pub trait MarketTrait {
-	type Ex: Exchange;
-	fn client(&self) -> Self::Ex;
+	fn client(&self) -> Box<dyn Exchange<M = Self>>;
 	fn fmt_abs(&self) -> String;
 	//TODO; require them to impl Display and FromStr
 }
@@ -55,6 +54,14 @@ pub enum Market {
 	Bybit(crate::bybit::Market),
 	//TODO
 }
+//impl Market {
+//	pub fn client(&self) -> Box<dyn Exchange<M = dyn Market>> {
+//		match self {
+//			Market::Binance(m) => m.client(),
+//			Market::Bybit(m) => m.client(),
+//		}
+//	}
+//}
 //
 //impl Default for Market {
 //	fn default() -> Self {

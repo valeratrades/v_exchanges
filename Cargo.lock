@@ -3013,6 +3013,7 @@ checksum = "b913a3b5fe84142e269d63cc62b64319ccaf89b748fc31fe025177f767a756c4"
 name = "v_exchanges"
 version = "0.3.0"
 dependencies = [
+ "async-trait",
  "chrono",
  "color-eyre",
  "derive-new",

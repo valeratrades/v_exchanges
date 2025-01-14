@@ -16,12 +16,13 @@ use crate::core::{AssetBalance, Exchange, ExchangeInfo, Klines, RequestRange};
 pub struct Bybit(pub Client);
 
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
+#[async_trait::async_trait]
 impl Exchange for Bybit {
 	type M = Market;
 
-	fn auth<S: Into<String>>(&mut self, key: S, secret: S) {
-		self.update_default_option(BybitOption::Key(key.into()));
-		self.update_default_option(BybitOption::Secret(secret.into()));
+		fn auth(&mut self, key: String, secret: String) {
+		self.update_default_option(BybitOption::Key(key));
+		self.update_default_option(BybitOption::Secret(secret));
 	}
 
 	async fn exchange_info(&self, m: Self::M) -> Result<ExchangeInfo> {
@@ -69,10 +70,8 @@ pub enum Market {
 	Inverse,
 }
 impl crate::core::MarketTrait for Market {
-	type Ex = Bybit;
-
-	fn client(&self) -> Bybit {
-		Bybit::default()
+	fn client(&self) -> Box<dyn Exchange<M = Self>> {
+		Box::new(Bybit::default())
 	}
 
 	fn fmt_abs(&self) -> String {
