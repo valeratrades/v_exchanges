@@ -49,11 +49,19 @@ pub trait MarketTrait {
 // Maybe [enum_dispatch](<https://docs.rs/enum_dispatch/latest/enum_dispatch/>) crate could help?
 
 #[derive(Debug, Clone, Copy)]
-pub enum Market {
+pub enum AbsMarket {
 	Binance(crate::binance::Market),
 	Bybit(crate::bybit::Market),
 	//TODO
 }
+//impl AbsMarket {
+//	pub fn inner(&self) -> &dyn MarketTrait {
+//		match self {
+//			Market::Binance(m) => m,
+//			Market::Bybit(m) => m,
+//		}
+//	}
+//}
 //impl Market {
 //	pub fn client(&self) -> Box<dyn Exchange<M = dyn Market>> {
 //		match self {
