@@ -31,3 +31,11 @@ async fn private(c: &mut Box<dyn Exchange>, m: AbsMarket) {
 	let balances = c.balances(m).await.unwrap();
 	dbg!(&balances);
 }
+
+#[cfg(test)]
+mod tests {
+	#[test]
+	fn test_main() {
+		super::main();
+	}
+}

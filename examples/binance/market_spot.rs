@@ -14,3 +14,11 @@ async fn main() {
 	let spot_prices = c.prices(None, m).await.unwrap();
 	dbg!(&spot_prices[..5]);
 }
+
+#[cfg(test)]
+mod tests {
+	#[test]
+	fn test_main() {
+		super::main();
+	}
+}

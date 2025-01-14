@@ -14,82 +14,82 @@ use crate::core::{AbsMarket, AssetBalance, Exchange, ExchangeInfo, Klines, Reque
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
 pub struct Bybit {
-    #[deref_mut]
-    #[deref]
-    client: Client,
-    source_market: AbsMarket,
+	#[deref_mut]
+	#[deref]
+	client: Client,
+	source_market: AbsMarket,
 }
 
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
 #[async_trait::async_trait]
 impl Exchange for Bybit {
-    fn source_market(&self) -> AbsMarket {
-        todo!()
-    }
-    fn exchange_name(&self) -> &'static str {
-        self.source_market().exchange_name()
-    }
+	fn source_market(&self) -> AbsMarket {
+		todo!()
+	}
 
-    fn auth(&mut self, key: String, secret: String) {
-        self.update_default_option(BybitOption::Key(key));
-        self.update_default_option(BybitOption::Secret(secret));
-    }
+	fn exchange_name(&self) -> &'static str {
+		self.source_market().exchange_name()
+	}
 
-    async fn exchange_info(&self, am: AbsMarket) -> Result<ExchangeInfo> {
-        match am {
-            AbsMarket::Bybit(_) => todo!(),
-            _ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
-        }
-    }
+	fn auth(&mut self, key: String, secret: String) {
+		self.update_default_option(BybitOption::Key(key));
+		self.update_default_option(BybitOption::Secret(secret));
+	}
 
-    async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, am: AbsMarket) -> Result<Klines> {
-        match am {
-            AbsMarket::Bybit(m) => match m {
-                Market::Linear => market::klines(&self.client, pair, tf, range).await,
-                _ => unimplemented!(),
-            },
-            _ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
-        }
-    }
+	async fn exchange_info(&self, am: AbsMarket) -> Result<ExchangeInfo> {
+		match am {
+			AbsMarket::Bybit(_) => todo!(),
+			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
+		}
+	}
 
-    async fn price(&self, pair: Pair, am: AbsMarket) -> Result<f64> {
-        match am {
-            AbsMarket::Bybit(m) => match m {
-                Market::Linear => market::price(&self.client, pair).await,
-                _ => unimplemented!(),
-            },
-            _ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
-        }
-    }
+	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, am: AbsMarket) -> Result<Klines> {
+		match am {
+			AbsMarket::Bybit(m) => match m {
+				Market::Linear => market::klines(&self.client, pair, tf, range).await,
+				_ => unimplemented!(),
+			},
+			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
+		}
+	}
 
-    async fn prices(&self, pairs: Option<Vec<Pair>>, am: AbsMarket) -> Result<Vec<(Pair, f64)>> {
-        match am {
-            AbsMarket::Bybit(_) => todo!(),
-            _ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
-        }
-    }
+	async fn price(&self, pair: Pair, am: AbsMarket) -> Result<f64> {
+		match am {
+			AbsMarket::Bybit(m) => match m {
+				Market::Linear => market::price(&self.client, pair).await,
+				_ => unimplemented!(),
+			},
+			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
+		}
+	}
 
-    async fn asset_balance(&self, asset: Asset, am: AbsMarket) -> Result<AssetBalance> {
-        match am {
-            AbsMarket::Bybit(m) => match m {
-                Market::Linear => account::asset_balance(&self.client, asset).await,
-                _ => unimplemented!(),
-            },
-            _ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
-        }
-    }
+	async fn prices(&self, pairs: Option<Vec<Pair>>, am: AbsMarket) -> Result<Vec<(Pair, f64)>> {
+		match am {
+			AbsMarket::Bybit(_) => todo!(),
+			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
+		}
+	}
 
-    async fn balances(&self, am: AbsMarket) -> Result<Vec<AssetBalance>> {
-        match am {
-            AbsMarket::Bybit(m) => match m {
-                Market::Linear => account::balances(&self.client).await,
-                _ => unimplemented!()
-            },
-            _ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
-        }
-    }
+	async fn asset_balance(&self, asset: Asset, am: AbsMarket) -> Result<AssetBalance> {
+		match am {
+			AbsMarket::Bybit(m) => match m {
+				Market::Linear => account::asset_balance(&self.client, asset).await,
+				_ => unimplemented!(),
+			},
+			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
+		}
+	}
+
+	async fn balances(&self, am: AbsMarket) -> Result<Vec<AssetBalance>> {
+		match am {
+			AbsMarket::Bybit(m) => match m {
+				Market::Linear => account::balances(&self.client).await,
+				_ => unimplemented!(),
+			},
+			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
+		}
+	}
 }
-
 
 #[derive(Debug, Clone, Default, Copy, Display, FromStr)]
 pub enum Market {

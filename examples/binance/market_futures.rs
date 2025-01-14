@@ -27,3 +27,11 @@ async fn main() {
 		eprintln!("BINANCE_TIGER_READ_KEY or BINANCE_TIGER_READ_SECRET is missing, skipping private API methods.");
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	#[test]
+	fn test_main() {
+		super::main();
+	}
+}

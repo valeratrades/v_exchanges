@@ -39,7 +39,6 @@ pub trait Exchange: std::fmt::Debug {
 	//? could implement many things that are _explicitly_ combinatorial. I can imagine several cases, where knowing that say the specified limit for the klines is wayyy over the max and that you may be opting into a long wait by calling it, could be useful.
 }
 
-
 // AbsMarket {{{
 #[derive(derive_more::Debug, derive_new::new, thiserror::Error)]
 pub struct WrongExchangeError {
@@ -48,7 +47,11 @@ pub struct WrongExchangeError {
 }
 impl std::fmt::Display for WrongExchangeError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "Wrong exchange provided. Accessible object: {:?}, provided \"abs market path\": {}", self.correct, self.provided)
+		write!(
+			f,
+			"Wrong exchange provided. Accessible object: {:?}, provided \"abs market path\": {}",
+			self.correct, self.provided
+		)
 	}
 }
 
@@ -71,6 +74,7 @@ impl AbsMarket {
 			Self::Bybit(m) => m.client(),
 		}
 	}
+
 	pub fn exchange_name(&self) -> &'static str {
 		match self {
 			Self::Binance(_) => "Binance",
@@ -110,7 +114,7 @@ impl std::str::FromStr for AbsMarket {
 					Err(e) => match sub_market.to_lowercase() == "futures" {
 						true => crate::bybit::Market::Linear,
 						false => bail!(e),
-					}
+					},
 				}
 			})),
 			_ => bail!("Invalid market string: {}", s),
