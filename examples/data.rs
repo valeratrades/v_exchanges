@@ -1,5 +1,6 @@
 use v_exchanges::{binance::Binance, bitmex::Bitmex};
 
+/// things in here are not on [Exchange](v_exchanges::core::Exchange) trait, so can't use generics, must specify exact exchange client methods are referenced from.
 #[tokio::main]
 async fn main() {
 	color_eyre::install().unwrap();

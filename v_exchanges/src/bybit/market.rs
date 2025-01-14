@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use chrono::{DateTime, TimeZone};
+use chrono::DateTime;
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

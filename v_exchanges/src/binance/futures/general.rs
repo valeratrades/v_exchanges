@@ -1,4 +1,3 @@
-
 use adapters::binance::{BinanceHttpUrl, BinanceOption};
 use chrono::DateTime;
 use eyre::Result;
