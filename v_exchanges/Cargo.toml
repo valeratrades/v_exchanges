@@ -24,6 +24,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
 
 [dependencies]
+async-trait = "0.1.85"
 chrono = { version = "0.4.39", features = ["serde"] }
 derive-new.workspace = true
 derive_more.workspace = true
@@ -40,7 +41,6 @@ tracing.workspace = true
 v_utils = { workspace = true }
 
 v_exchanges_adapters = { version = "^0.3.0", path = "../v_exchanges_adapters/", features = ["full"] }
-async-trait = "0.1.85"
 
 reqwest = { version = "^0.12.12", optional = true }
 

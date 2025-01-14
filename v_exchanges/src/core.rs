@@ -11,27 +11,26 @@ use v_utils::{
 
 //TODO!!!!!!!!!!!!!: klines switch to defining the range via an Enum over either limit either start and end times
 #[async_trait::async_trait]
-pub trait Exchange {
-	type M: MarketTrait;
-
+pub trait Exchange: std::fmt::Debug {
+	fn exchange_name(&self) -> &'static str;
 	fn auth(&mut self, key: String, secret: String);
 
-	async fn exchange_info(&self, m: Self::M) -> Result<ExchangeInfo>;
+	async fn exchange_info(&self, m: AbsMarket) -> Result<ExchangeInfo>;
 
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
-	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, m: Self::M) -> Result<Klines>;
+	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, m: AbsMarket) -> Result<Klines>;
 
 	/// If no pairs are specified, returns for all;
-	async fn prices(&self, pairs: Option<Vec<Pair>>, m: Self::M) -> Result<Vec<(Pair, f64)>>;
-	async fn price(&self, pair: Pair, m: Self::M) -> Result<f64>;
+	async fn prices(&self, pairs: Option<Vec<Pair>>, m: AbsMarket) -> Result<Vec<(Pair, f64)>>;
+	async fn price(&self, pair: Pair, m: AbsMarket) -> Result<f64>;
 
 	// Defined in terms of actors
 	//TODO!!!: async fn spawn_klines_listener(&self, symbol: Pair, tf: Timeframe) -> mpsc::Receiver<Kline>;
 
 	/// balance of a specific asset
-	async fn asset_balance(&self, asset: Asset, m: Self::M) -> Result<AssetBalance>;
+	async fn asset_balance(&self, asset: Asset, m: AbsMarket) -> Result<AssetBalance>;
 	/// vec of balances of specific assets
-	async fn balances(&self, m: Self::M) -> Result<Vec<AssetBalance>>;
+	async fn balances(&self, m: AbsMarket) -> Result<Vec<AssetBalance>>;
 	//? potentially `total_balance`? Would return precompiled USDT-denominated balance of a (bybit::wallet/binance::account)
 	// balances are defined for each margin type: [futures_balance, spot_balance, margin_balance], but note that on some exchanges, (like bybit), some of these may point to the same exact call
 	// to negate confusion could add a `total_balance` endpoint
@@ -39,44 +38,44 @@ pub trait Exchange {
 	//? could implement many things that are _explicitly_ combinatorial. I can imagine several cases, where knowing that say the specified limit for the klines is wayyy over the max and that you may be opting into a long wait by calling it, could be useful.
 }
 
-// Market {{{
+
+// AbsMarket {{{
+#[derive(derive_more::Debug, derive_new::new, thiserror::Error)]
+pub struct WrongExchangeError {
+	correct: &'static str,
+	provided: AbsMarket,
+}
+impl std::fmt::Display for WrongExchangeError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "Wrong exchange provided. Accessible object: {:?}, provided \"abs market path\": {}", self.correct, self.provided)
+	}
+}
+
 pub trait MarketTrait {
-	fn client(&self) -> Box<dyn Exchange<M = Self>>;
+	fn client(&self) -> Box<dyn Exchange>;
 	fn fmt_abs(&self) -> String;
 	//TODO; require them to impl Display and FromStr
 }
-//TODO!: figure out how can I expose one central `Market` enum, so client doesn't have to bring into the scope `MarketTrait` and deal with the exchange-specific `Market`'s type
-// Maybe [enum_dispatch](<https://docs.rs/enum_dispatch/latest/enum_dispatch/>) crate could help?
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, derive_more::Display/*TODO:, derive_more::FromStr*/)]
 pub enum AbsMarket {
 	Binance(crate::binance::Market),
 	Bybit(crate::bybit::Market),
 	//TODO
 }
-//impl AbsMarket {
-//	pub fn inner(&self) -> &dyn MarketTrait {
-//		match self {
-//			Market::Binance(m) => m,
-//			Market::Bybit(m) => m,
-//		}
-//	}
-//}
-//impl Market {
-//	pub fn client(&self) -> Box<dyn Exchange<M = dyn Market>> {
-//		match self {
-//			Market::Binance(m) => m.client(),
-//			Market::Bybit(m) => m.client(),
-//		}
-//	}
-//}
-//
-//impl Default for Market {
-//	fn default() -> Self {
-//		Self::Binance(crate::binance::Market::default())
-//	}
-//}
-//
+impl AbsMarket {
+	pub fn client(&self) -> Box<dyn Exchange> {
+		match self {
+			Self::Binance(m) => m.client(),
+			Self::Bybit(m) => m.client(),
+		}
+	}
+}
+impl Default for AbsMarket {
+	fn default() -> Self {
+		Self::Binance(crate::binance::Market::default())
+	}
+}
 //impl std::fmt::Display for Market {
 //	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 //		match self {
@@ -86,46 +85,46 @@ pub enum AbsMarket {
 //	}
 //}
 //
-//impl std::str::FromStr for Market {
-//	type Err = eyre::Error;
-//
-//	fn from_str(s: &str) -> Result<Self> {
-//		let parts: Vec<&str> = s.split('/').collect();
-//		if parts.len() != 2 {
-//			return Err(eyre::eyre!("Invalid market string: {}", s));
-//		}
-//		let exchange = parts[0];
-//		let sub_market = parts[1];
-//		match exchange.to_lowercase().as_str() {
-//			"binance" => Ok(Self::Binance(sub_market.parse()?)),
-//			"bybit" => Ok(Self::Bybit({
-//				match sub_market.parse() {
-//					Ok(m) => m,
-//					Err(e) => match sub_market.to_lowercase() == "futures" {
-//						true => crate::bybit::Market::Linear,
-//						false => eyre::bail!(e),
-//					}
-//				}
-//			})),
-//			_ => bail!("Invalid market string: {}", s),
-//		}
-//	}
-//}
-//impl From<Market> for String {
-//	fn from(value: Market) -> Self {
-//		value.to_string()
-//	}
-//}
-//impl From<String> for Market {
-//	fn from(value: String) -> Self {
-//		value.parse().unwrap()
-//	}
-//}
-//impl From<&str> for Market {
-//	fn from(value: &str) -> Self {
-//		value.parse().unwrap()
-//	}
-//}
+impl std::str::FromStr for AbsMarket {
+	type Err = eyre::Error;
+
+	fn from_str(s: &str) -> Result<Self> {
+		let parts: Vec<&str> = s.split('/').collect();
+		if parts.len() != 2 {
+			bail!("Invalid market string: {}", s);
+		}
+		let exchange = parts[0];
+		let sub_market = parts[1];
+		match exchange.to_lowercase().as_str() {
+			"binance" => Ok(Self::Binance(sub_market.parse()?)),
+			"bybit" => Ok(Self::Bybit({
+				match sub_market.parse() {
+					Ok(m) => m,
+					Err(e) => match sub_market.to_lowercase() == "futures" {
+						true => crate::bybit::Market::Linear,
+						false => bail!(e),
+					}
+				}
+			})),
+			_ => bail!("Invalid market string: {}", s),
+		}
+	}
+}
+impl From<AbsMarket> for String {
+	fn from(value: AbsMarket) -> Self {
+		value.to_string()
+	}
+}
+impl From<String> for AbsMarket {
+	fn from(value: String) -> Self {
+		value.parse().unwrap()
+	}
+}
+impl From<&str> for AbsMarket {
+	fn from(value: &str) -> Self {
+		value.parse().unwrap()
+	}
+}
 //,}}}
 
 // Klines {{{
@@ -267,12 +266,11 @@ impl From<(i64, i64)> for RequestRange {
 	}
 }
 
-#[derive(derive_more::Debug, derive_new::new)]
+#[derive(derive_more::Debug, derive_new::new, thiserror::Error)]
 pub struct OutOfRangeError {
 	allowed: std::ops::RangeInclusive<u32>,
 	provided: u32,
 }
-//TODO!: generalize to both create,display and check for Ranges defined by time too.
 impl std::fmt::Display for OutOfRangeError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(
@@ -282,7 +280,6 @@ impl std::fmt::Display for OutOfRangeError {
 		)
 	}
 }
-impl std::error::Error for OutOfRangeError {}
 //,}}}
 
 #[derive(Clone, Debug, Default, Copy)]
