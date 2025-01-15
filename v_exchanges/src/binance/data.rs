@@ -24,7 +24,7 @@ impl From<&str> for LsrWho {
 }
 
 impl Binance {
-	pub async fn lsr(&self, pair: Pair, tf: Timeframe, range: RequestRange, who: LsrWho) -> Result<Vec<Lsr>> {
+	pub async fn lsr(&self, pair: Pair, tf: Timeframe, range: RequestRange, who: LsrWho) -> Result<Lsrs> {
 		range.ensure_allowed(0..=500, tf)?;
 		let range_json = range.serialize();
 
@@ -42,7 +42,10 @@ impl Binance {
 			.get(&format!("/futures/data/{ending}"), &params, [BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)])
 			.await?;
 		let r: Vec<LsrResponse> = serde_json::from_value(r).unwrap();
-		Ok(r.into_iter().map(|r| r.into()).collect())
+		Ok(Lsrs {
+			values: r.into_iter().map(|r| r.into()).collect(),
+			pair,
+		})
 	}
 }
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -57,8 +60,14 @@ pub struct LsrResponse {
 #[derive(Clone, Debug, Default, Copy)]
 pub struct Lsr {
 	pub time: DateTime<Utc>,
-	pub pair: Pair,
 	pub long: Percent,
+}
+#[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
+pub struct Lsrs {
+	#[deref_mut]
+	#[deref]
+	pub values: Vec<Lsr>,
+	pub pair: Pair,
 }
 //Q: couldn't decide if `short()` and `long(0` should return `f64` or `Percent`. Postponing the decision.
 impl Lsr {
@@ -80,7 +89,6 @@ impl From<LsrResponse> for Lsr {
 	fn from(r: LsrResponse) -> Self {
 		Self {
 			time: DateTime::from_timestamp_millis(r.timestamp).unwrap(),
-			pair: Pair::from_str(&r.symbol).unwrap(),
 			long: Percent::from_str(&r.long_account).unwrap(),
 		}
 	}
