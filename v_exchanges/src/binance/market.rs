@@ -25,14 +25,9 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timef
 	});
 	let params = join_params(base_params, range_params);
 
-	let endpoint_prefix = match market {
-		Market::Spot => "/api/v3",
-		Market::Futures => "/fapi/v1",
-		Market::Margin => unimplemented!(),
-	};
-	let base_url: BinanceHttpUrl = match market {
-		Market::Spot => BinanceHttpUrl::Spot,
-		Market::Futures => BinanceHttpUrl::FuturesUsdM,
+	let (endpoint_prefix, base_url) = match market {
+		Market::Spot => ("/api/v3", BinanceHttpUrl::Spot),
+		Market::Futures => ("/fapi/v1", BinanceHttpUrl::FuturesUsdM),
 		Market::Margin => unimplemented!(),
 	};
 
@@ -51,7 +46,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timef
 					low: k.low,
 					close: k.close,
 				};
-				klines.push_front(Kline {
+				klines.push_back(Kline {
 					open_time: DateTime::from_timestamp_millis(k.open_time).unwrap(),
 					ohlc,
 					volume_quote: k.quote_asset_volume,
@@ -61,7 +56,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timef
 			}
 			false => match i == r_len - 1 {
 				true => tracing::trace!("Skipped last kline in binance request, as it's incomplete (expected behavior)"),
-				false => tracing::warn!("Skipped kline in binance request, as it's incomplete"),
+				false => tracing::warn!("Skipped a kline in binance request, as it's incomplete"),
 			},
 		}
 	}

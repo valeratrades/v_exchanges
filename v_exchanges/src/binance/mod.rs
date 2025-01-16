@@ -1,4 +1,4 @@
-mod data;
+pub mod data; // interfaced with directly, not through `Exchange` trait, thus must be public.
 mod futures;
 mod market;
 mod spot;

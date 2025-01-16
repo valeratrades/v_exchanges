@@ -278,7 +278,7 @@ impl Default for RequestConfig {
 #[derive(Error, std::fmt::Debug)]
 pub enum RequestError<E, R> {
 	/// An error which occurred while sending a HTTP request.
-	#[error("failed to send reqeust")]
+	#[error("failed to send request")]
 	SendRequest(#[source] reqwest::Error),
 	/// An error which occurred while receiving a HTTP response.
 	#[error("failed to receive response")]
