@@ -3074,7 +3074,7 @@ dependencies = [
 
 [[package]]
 name = "v_utils"
-version = "2.0.5"
+version = "2.1.0"
 dependencies = [
  "chrono",
  "console-subscriber",
