@@ -45,11 +45,12 @@ pub enum CoincheckOption {
 }
 
 /// A `struct` that represents a set of [CoincheckOption] s.
-#[derive(Clone, Debug)]
+#[derive(Clone, derive_more::Debug)]
 pub struct CoincheckOptions {
 	/// see [CoincheckOption::Key]
 	pub key: Option<String>,
 	/// see [CoincheckOption::Secret]
+	#[debug("[REDACTED]")]
 	pub secret: Option<String>,
 	/// see [CoincheckOption::HttpUrl]
 	pub http_url: CoincheckHttpUrl,

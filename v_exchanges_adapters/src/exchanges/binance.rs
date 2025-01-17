@@ -41,11 +41,12 @@ pub enum BinanceOption {
 }
 
 /// A `struct` that represents a set of [BinanceOption] s.
-#[derive(Clone, Debug)]
+#[derive(Clone, derive_more::Debug)]
 pub struct BinanceOptions {
 	/// see [BinanceOption::Key]
 	pub key: Option<String>,
 	/// see [BinanceOption::Secret]
+	#[debug("[REDACTED]")]
 	pub secret: Option<String>,
 	/// see [BinanceOption::HttpUrl]
 	pub http_url: BinanceHttpUrl,

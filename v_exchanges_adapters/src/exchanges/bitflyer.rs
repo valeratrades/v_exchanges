@@ -47,11 +47,12 @@ pub enum BitFlyerOption {
 }
 
 /// A `struct` that represents a set of [BitFlyerOption] s.
-#[derive(Clone, Debug)]
+#[derive(Clone, derive_more::Debug)]
 pub struct BitFlyerOptions {
 	/// see [BitFlyerOption::Key]
 	pub key: Option<String>,
 	/// see [BitFlyerOption::Secret]
+	#[debug("[REDACTED]")]
 	pub secret: Option<String>,
 	/// see [BitFlyerOption::HttpUrl]
 	pub http_url: BitFlyerHttpUrl,

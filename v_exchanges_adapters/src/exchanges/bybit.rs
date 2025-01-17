@@ -48,11 +48,12 @@ pub enum BybitOption {
 }
 
 /// A `struct` that represents a set of [BybitOption] s.
-#[derive(Clone, Debug)]
+#[derive(Clone, derive_more::Debug)]
 pub struct BybitOptions {
 	/// see [BybitOption::Key]
 	pub key: Option<String>,
 	/// see [BybitOption::Secret]
+	#[debug("[REDACTED]")]
 	pub secret: Option<String>,
 	/// see [BybitOption::HttpUrl]
 	pub http_url: BybitHttpUrl,
