@@ -25,10 +25,6 @@ impl Exchange for Binance {
 		self.source_market
 	}
 
-	fn exchange_name(&self) -> &'static str {
-		self.source_market().exchange_name()
-	}
-
 	fn auth(&mut self, key: String, secret: String) {
 		self.update_default_option(BinanceOption::Key(key));
 		self.update_default_option(BinanceOption::Secret(secret));
@@ -103,9 +99,5 @@ pub enum Market {
 impl crate::core::MarketTrait for Market {
 	fn client(&self) -> Box<dyn Exchange> {
 		Box::new(Binance::default())
-	}
-
-	fn fmt_abs(&self) -> String {
-		format!("Binance/{self}")
 	}
 }

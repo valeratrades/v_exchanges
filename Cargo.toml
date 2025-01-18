@@ -17,11 +17,11 @@ futures-util = "^0.3.31"
 reqwest = { version = "^0.12.12", features = ["blocking", "json"] }
 serde = { version = "^1.0.217", features = ["derive"] }
 serde_plain = "^1.0.2" #TEST
-serde_json = "^1.0.134"
+serde_json = "^1.0.135"
 serde_with = "^3.12.0"
-thiserror = "^2.0.9"
+thiserror = "^2.0.11"
 derive_more = { version = "^1.0.0", features = ["deref", "deref_mut"] }
-tokio = { version = "^1.42.0", features = ["full"] }
+tokio = { version = "^1.43.0", features = ["full"] }
 tracing = "^0.1.41"
 hmac = "^0.12.1"
 sha2 = "^0.10.8"
@@ -29,4 +29,4 @@ hex = "^0.4.3"
 derive-new = "^0.7.0"
 
 #[dev-dependencies]
-insta = "1.41.1"
+insta = "1.42.0"

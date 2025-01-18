@@ -10,3 +10,6 @@ pub mod bybit;
 #[cfg(feature = "coincheck")]
 #[cfg_attr(docsrs, doc(cfg(feature = "coincheck")))]
 pub mod coincheck;
+#[cfg(feature = "mexc")]
+#[cfg_attr(docsrs, doc(cfg(feature = "mexc")))]
+pub mod mexc;

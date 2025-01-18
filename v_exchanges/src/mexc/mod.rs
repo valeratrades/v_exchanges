@@ -1,5 +1,4 @@
 mod account;
-mod market;
 
 use adapters::bybit::BybitOption;
 use derive_more::{
@@ -13,7 +12,7 @@ use v_utils::trades::{Asset, Pair, Timeframe};
 use crate::core::{AbsMarket, AssetBalance, Exchange, ExchangeInfo, Klines, RequestRange, WrongExchangeError};
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
-pub struct Bybit {
+pub struct Mexc {
 	#[deref_mut]
 	#[deref]
 	client: Client,
@@ -22,7 +21,7 @@ pub struct Bybit {
 
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
 #[async_trait::async_trait]
-impl Exchange for Bybit {
+impl Exchange for Mexc {
 	fn source_market(&self) -> AbsMarket {
 		self.source_market
 	}
@@ -34,15 +33,14 @@ impl Exchange for Bybit {
 
 	async fn exchange_info(&self, am: AbsMarket) -> Result<ExchangeInfo> {
 		match am {
-			AbsMarket::Bybit(_) => todo!(),
+			AbsMarket::Mexc(_) => todo!(),
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
 		}
 	}
 
 	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, am: AbsMarket) -> Result<Klines> {
 		match am {
-			AbsMarket::Bybit(m) => match m {
-				Market::Linear => market::klines(&self.client, pair, tf, range).await,
+			AbsMarket::Mexc(m) => match m {
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -51,8 +49,7 @@ impl Exchange for Bybit {
 
 	async fn price(&self, pair: Pair, am: AbsMarket) -> Result<f64> {
 		match am {
-			AbsMarket::Bybit(m) => match m {
-				Market::Linear => market::price(&self.client, pair).await,
+			AbsMarket::Mexc(m) => match m {
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -61,15 +58,15 @@ impl Exchange for Bybit {
 
 	async fn prices(&self, pairs: Option<Vec<Pair>>, am: AbsMarket) -> Result<Vec<(Pair, f64)>> {
 		match am {
-			AbsMarket::Bybit(_) => todo!(),
+			AbsMarket::Mexc(_) => todo!(),
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
 		}
 	}
 
 	async fn asset_balance(&self, asset: Asset, am: AbsMarket) -> Result<AssetBalance> {
 		match am {
-			AbsMarket::Bybit(m) => match m {
-				Market::Linear => account::asset_balance(&self.client, asset).await,
+			AbsMarket::Mexc(m) => match m {
+				Market::Futures => account::asset_balance(&self.client, asset).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -78,8 +75,8 @@ impl Exchange for Bybit {
 
 	async fn balances(&self, am: AbsMarket) -> Result<Vec<AssetBalance>> {
 		match am {
-			AbsMarket::Bybit(m) => match m {
-				Market::Linear => account::balances(&self.client).await,
+			AbsMarket::Mexc(m) => match m {
+				Market::Futures => account::balances(&self.client).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -90,12 +87,12 @@ impl Exchange for Bybit {
 #[derive(Debug, Clone, Default, Copy, Display, FromStr)]
 pub enum Market {
 	#[default]
-	Linear,
+	Futures,
 	Spot,
 	Inverse,
 }
 impl crate::core::MarketTrait for Market {
 	fn client(&self) -> Box<dyn Exchange> {
-		Box::new(Bybit::default())
+		Box::new(Mexc::default())
 	}
 }

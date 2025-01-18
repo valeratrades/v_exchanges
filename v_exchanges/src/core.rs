@@ -13,7 +13,10 @@ use v_utils::{
 #[async_trait::async_trait]
 pub trait Exchange: std::fmt::Debug + Send {
 	fn source_market(&self) -> AbsMarket;
-	fn exchange_name(&self) -> &'static str;
+	fn exchange_name(&self) -> &'static str {
+		self.source_market().exchange_name()
+	}
+
 	fn auth(&mut self, key: String, secret: String);
 
 	async fn exchange_info(&self, m: AbsMarket) -> Result<ExchangeInfo>;
@@ -57,21 +60,33 @@ impl std::fmt::Display for WrongExchangeError {
 
 pub trait MarketTrait {
 	fn client(&self) -> Box<dyn Exchange>;
-	fn fmt_abs(&self) -> String;
-	//TODO; require them to impl Display and FromStr
+	fn client_authenticated(&self, key: String, secret: String) -> Box<dyn Exchange> {
+		let mut client = self.client();
+		client.auth(key, secret);
+		client
+	}
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum AbsMarket {
 	Binance(crate::binance::Market),
 	Bybit(crate::bybit::Market),
-	//TODO
+	Mexc(crate::mexc::Market),
 }
 impl AbsMarket {
 	pub fn client(&self) -> Box<dyn Exchange> {
 		match self {
 			Self::Binance(m) => m.client(),
 			Self::Bybit(m) => m.client(),
+			Self::Mexc(m) => m.client(),
+		}
+	}
+
+	pub fn client_authenticated(&self, key: String, secret: String) -> Box<dyn Exchange> {
+		match self {
+			Self::Binance(m) => m.client_authenticated(key, secret),
+			Self::Bybit(m) => m.client_authenticated(key, secret),
+			Self::Mexc(m) => m.client_authenticated(key, secret),
 		}
 	}
 
@@ -79,6 +94,7 @@ impl AbsMarket {
 		match self {
 			Self::Binance(_) => "Binance",
 			Self::Bybit(_) => "Bybit",
+			Self::Mexc(_) => "Mexc",
 		}
 	}
 }
@@ -90,8 +106,9 @@ impl Default for AbsMarket {
 impl std::fmt::Display for AbsMarket {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			Self::Binance(m) => write!(f, "Binance/{}", m),
-			Self::Bybit(m) => write!(f, "Bybit/{}", m),
+			Self::Binance(m) => write!(f, "{}/{}", self.exchange_name(), m),
+			Self::Bybit(m) => write!(f, "{}/{}", self.exchange_name(), m),
+			Self::Mexc(m) => write!(f, "{}/{}", self.exchange_name(), m),
 		}
 	}
 }

@@ -74,5 +74,9 @@ name = "bybit_market"
 path = "../examples/bybit/market.rs"
 
 [[example]]
+name = "mexc"
+path = "../examples/mexc.rs"
+
+[[example]]
 name = "data"
 path = "../examples/data.rs"

@@ -36,9 +36,9 @@ rand = { version = "0.8.5", optional = true }
 serde_urlencoded = { version = "0.7.1", optional = true }
 
 [dev-dependencies]
-env_logger = "0.11.5"
+env_logger = "0.11.6"
 rust_decimal = { version = "1.36.0", features = ["serde-with-str", "serde-with-float"] }
-tokio = { version = "1.42.0", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.43.0", features = ["rt-multi-thread", "macros"] }
 
 [features]
 default = ["native-tls"]
@@ -48,6 +48,7 @@ binance = ["dep:serde_urlencoded"]
 bitflyer = ["dep:rand"]
 bybit = ["dep:serde_urlencoded", "dep:rand"]
 coincheck = ["dep:serde_urlencoded"]
+mexc = ["dep:serde_urlencoded"]
 
 native-tls = ["v_exchanges_api_generics/native-tls"]
 native-tls-vendored = ["v_exchanges_api_generics/native-tls-vendored"]

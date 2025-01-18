@@ -2,6 +2,7 @@ jobs:
   clippy:
     if: github.event_name != 'pull_request'
     name: Clippy
+    needs: pre_ci
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
