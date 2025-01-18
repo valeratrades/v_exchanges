@@ -12,6 +12,7 @@ use v_utils::{
 //TODO!!!!!!!!!!!!!: klines switch to defining the range via an Enum over either limit either start and end times
 #[async_trait::async_trait]
 pub trait Exchange: std::fmt::Debug + Send {
+	/// will always be `Some` when created from `AbsMarket`. When creating client manually could lead to weird errors from this method being used elsewhere, like displaying a `AbsMarket` object.
 	fn source_market(&self) -> AbsMarket;
 	fn exchange_name(&self) -> &'static str {
 		self.source_market().exchange_name()
@@ -59,9 +60,9 @@ impl std::fmt::Display for WrongExchangeError {
 }
 
 pub trait MarketTrait {
-	fn client(&self) -> Box<dyn Exchange>;
-	fn client_authenticated(&self, key: String, secret: String) -> Box<dyn Exchange> {
-		let mut client = self.client();
+	fn client(&self, source_market: AbsMarket) -> Box<dyn Exchange>;
+	fn client_authenticated(&self, key: String, secret: String, source_market: AbsMarket) -> Box<dyn Exchange> {
+		let mut client = self.client(source_market);
 		client.auth(key, secret);
 		client
 	}
@@ -76,18 +77,18 @@ pub enum AbsMarket {
 impl AbsMarket {
 	pub fn client(&self) -> Box<dyn Exchange> {
 		match self {
-			Self::Binance(m) => m.client(),
-			Self::Bybit(m) => m.client(),
-			Self::Mexc(m) => m.client(),
+			Self::Binance(m) => m.client(*self),
+			Self::Bybit(m) => m.client(*self),
+			Self::Mexc(m) => m.client(*self),
 		}
 	}
 
 	//Q: more I think about it, more this seems redundant / stupid according to Tiger Style
 	pub fn client_authenticated(&self, key: String, secret: String) -> Box<dyn Exchange> {
 		match self {
-			Self::Binance(m) => m.client_authenticated(key, secret),
-			Self::Bybit(m) => m.client_authenticated(key, secret),
-			Self::Mexc(m) => m.client_authenticated(key, secret),
+			Self::Binance(m) => m.client_authenticated(key, secret, *self),
+			Self::Bybit(m) => m.client_authenticated(key, secret, *self),
+			Self::Mexc(m) => m.client_authenticated(key, secret, *self),
 		}
 	}
 
@@ -97,11 +98,6 @@ impl AbsMarket {
 			Self::Bybit(_) => "Bybit",
 			Self::Mexc(_) => "Mexc",
 		}
-	}
-}
-impl Default for AbsMarket {
-	fn default() -> Self {
-		Self::Binance(crate::binance::Market::default())
 	}
 }
 impl std::fmt::Display for AbsMarket {

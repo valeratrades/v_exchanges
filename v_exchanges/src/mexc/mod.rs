@@ -16,14 +16,14 @@ pub struct Mexc {
 	#[deref_mut]
 	#[deref]
 	client: Client,
-	source_market: AbsMarket,
+	source_market: Option<AbsMarket>,
 }
 
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
 #[async_trait::async_trait]
 impl Exchange for Mexc {
 	fn source_market(&self) -> AbsMarket {
-		self.source_market
+		self.source_market.unwrap()
 	}
 
 	fn auth(&mut self, key: String, secret: String) {
@@ -91,7 +91,10 @@ pub enum Market {
 	Spot,
 }
 impl crate::core::MarketTrait for Market {
-	fn client(&self) -> Box<dyn Exchange> {
-		Box::new(Mexc::default())
+	fn client(&self, source_market: AbsMarket) -> Box<dyn Exchange> {
+		Box::new(Mexc {
+			source_market: Some(source_market),
+			..Default::default()
+		})
 	}
 }

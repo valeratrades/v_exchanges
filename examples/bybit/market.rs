@@ -17,19 +17,22 @@ async fn main() {
 
 	if let (Ok(key), Ok(secret)) = (env::var("BYBIT_TIGER_READ_KEY"), env::var("BYBIT_TIGER_READ_SECRET")) {
 		c.auth(key, secret);
-		private(&mut c, m).await;
+		private(&*c, m).await;
 	} else {
 		eprintln!("BYBIT_TIGER_READ_KEY or BYBIT_TIGER_READ_SECRET is missing, skipping private API methods.");
 	}
 }
 
-async fn private(c: &mut Box<dyn Exchange>, m: AbsMarket) {
+async fn private(c: &dyn Exchange, m: AbsMarket) {
 	//let key_permissions: serde_json::Value = bb.get_no_query("/v5/user/query-api", [BybitOption::HttpAuth(BybitHttpAuth::V3AndAbove)])
 	//	.await
 	//	.unwrap();
 
 	let balances = c.balances(m).await.unwrap();
 	dbg!(&balances);
+
+	let balance_usdc = c.asset_balance("USDC".into(), c.source_market()).await.unwrap();
+	dbg!(&balance_usdc);
 }
 
 #[cfg(test)]
