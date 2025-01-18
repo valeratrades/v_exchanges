@@ -13,6 +13,8 @@ use v_exchanges_api_generics::{http::*, websocket::*};
 
 use crate::traits::*;
 
+static MAX_RECV_WINDOW: u16 = 60000; // as of (2025/01/18)
+
 /// The type returned by Client::request().
 pub type MexcRequestResult<T> = Result<T, MexcRequestError>;
 pub type MexcRequestError = RequestError<&'static str, MexcHandlerError>;
@@ -29,6 +31,8 @@ pub enum MexcOption {
 	HttpUrl(MexcHttpUrl),
 	/// Authentication type for HTTP requests
 	HttpAuth(MexcAuth),
+	/// receive window parameter used for requests
+	RecvWindow(u16),
 	/// RequestConfig used when sending requests
 	RequestConfig(RequestConfig),
 	/// Base url for WebSocket connections
@@ -49,6 +53,8 @@ pub struct MexcOptions {
 	pub http_url: MexcHttpUrl,
 	/// see [MexcOption::HttpAuth]
 	pub http_auth: MexcAuth,
+	/// see [MexcOption::RecvWindow]
+	pub recv_window: Option<u16>,
 	/// see [MexcOption::RequestConfig]
 	pub request_config: RequestConfig,
 	/// see [MexcOption::WebSocketUrl]
@@ -61,24 +67,44 @@ pub struct MexcOptions {
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[non_exhaustive]
 pub enum MexcHttpUrl {
-	/// Main API endpoint
 	Spot,
-	/// Testnet API endpoint
 	SpotTest,
-	/// The url will not be modified by MexcRequestHandler
+	Futures,
 	None,
+}
+impl MexcHttpUrl {
+	/// The URL that this variant represents
+	#[inline(always)]
+	fn as_str(&self) -> &'static str {
+		match self {
+			Self::Spot => "https://api.mexc.com",
+			Self::SpotTest => "https://api-testnet.mexc.com",
+			Self::Futures => "https://contract.mexc.com",
+			Self::None => "",
+		}
+	}
 }
 
 /// Enum that represents the base url of the MEXC WebSocket API
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[non_exhaustive]
 pub enum MexcWebSocketUrl {
-	/// Main WebSocket endpoint
 	Spot,
-	/// Testnet WebSocket endpoint
 	SpotTest,
-	/// The url will not be modified by MexcWebSocketHandler
+	Futures,
 	None,
+}
+impl MexcWebSocketUrl {
+	/// The URL that this variant represents
+	#[inline(always)]
+	pub fn as_str(&self) -> &'static str {
+		match self {
+			Self::Spot => "wss://stream.mexc.com/ws",
+			Self::SpotTest => "wss://stream-testnet.mexc.com/ws",
+			Self::Futures => "wss://contract.mexc.com/ws",
+			Self::None => "",
+		}
+	}
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -135,29 +161,41 @@ where
 		if let Some(body) = request_body {
 			let encoded = serde_urlencoded::to_string(body).or(Err("could not serialize body as application/x-www-form-urlencoded"))?;
 			builder = builder.header(header::CONTENT_TYPE, "application/x-www-form-urlencoded").body(encoded);
+			//builder = builder.header(header::CONTENT_TYPE, "application/json");
 		}
 
 		if self.options.http_auth != MexcAuth::None {
 			let key = self.options.key.as_deref().ok_or("API key not set")?;
-			builder = builder.header("X-MEXC-APIKEY", key);
+			builder = builder.header("ApiKey", key);
+
+			let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
+			let timestamp = time.as_millis();
+			builder = builder.header("Request-Time", timestamp.to_string());
+
+			if let Some(recv_window) = self.options.recv_window {
+				builder = builder.header("Recv-Window", recv_window.to_string());
+			}
 
 			if self.options.http_auth == MexcAuth::Sign {
-				let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
-				let timestamp = time.as_millis();
-
-				builder = builder.query(&[("timestamp", timestamp)]);
-
 				let secret = self.options.secret.as_deref().ok_or("API secret not set")?;
 				let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
 
 				let mut request = builder.build().or(Err("Failed to build request"))?;
-				let query = request.url().query().unwrap();
-				let body = request.body().and_then(|body| body.as_bytes()).unwrap_or_default();
+				let param_string = if request.method() == Method::GET || request.method() == Method::DELETE {
+					if let Some(body) = request_body {
+						serde_urlencoded::to_string(body).or(Err("could not serialize parameters"))?
+					} else {
+						String::new()
+					}
+				} else {
+					// For POST, use body as JSON string
+					String::from_utf8(request.body().and_then(|body| body.as_bytes()).unwrap_or_default().to_vec()).unwrap_or_default()
+				};
 
-				hmac.update(&[query.as_bytes(), body].concat());
+				let signature_base = format!("{}{}{}", key, timestamp, param_string);
+				hmac.update(signature_base.as_bytes());
 				let signature = hex::encode(hmac.finalize().into_bytes());
-
-				request.url_mut().query_pairs_mut().append_pair("signature", &signature);
+				request.headers_mut().insert("Signature", signature.parse().unwrap());
 
 				return Ok(request);
 			}
@@ -227,30 +265,6 @@ impl WebSocketHandler for MexcWebSocketHandler {
 	}
 }
 
-impl MexcHttpUrl {
-	/// The URL that this variant represents
-	#[inline(always)]
-	fn as_str(&self) -> &'static str {
-		match self {
-			Self::Spot => "https://api.mexc.com",
-			Self::SpotTest => "https://api-testnet.mexc.com",
-			Self::None => "",
-		}
-	}
-}
-
-impl MexcWebSocketUrl {
-	/// The URL that this variant represents
-	#[inline(always)]
-	pub fn as_str(&self) -> &'static str {
-		match self {
-			Self::Spot => "wss://stream.mexc.com/ws",
-			Self::SpotTest => "wss://stream-testnet.mexc.com/ws",
-			Self::None => "",
-		}
-	}
-}
-
 impl HandlerOptions for MexcOptions {
 	type OptionItem = MexcOption;
 
@@ -261,6 +275,13 @@ impl HandlerOptions for MexcOptions {
 			MexcOption::Secret(v) => self.secret = Some(v),
 			MexcOption::HttpUrl(v) => self.http_url = v,
 			MexcOption::HttpAuth(v) => self.http_auth = v,
+			MexcOption::RecvWindow(v) =>
+				if v > MAX_RECV_WINDOW {
+					tracing::warn!("recvWindow is too large, overwriting with maximum value of {MAX_RECV_WINDOW}");
+					self.recv_window = Some(MAX_RECV_WINDOW);
+				} else {
+					self.recv_window = Some(v);
+				},
 			MexcOption::RequestConfig(v) => self.request_config = v,
 			MexcOption::WebSocketUrl(v) => self.websocket_url = v,
 			MexcOption::WebSocketConfig(v) => self.websocket_config = v,
@@ -278,6 +299,7 @@ impl Default for MexcOptions {
 			secret: None,
 			http_url: MexcHttpUrl::None,
 			http_auth: MexcAuth::None,
+			recv_window: None,
 			request_config: RequestConfig::default(),
 			websocket_url: MexcWebSocketUrl::None,
 			websocket_config,

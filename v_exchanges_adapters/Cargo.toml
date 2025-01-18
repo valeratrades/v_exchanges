@@ -43,7 +43,7 @@ tokio = { version = "1.43.0", features = ["rt-multi-thread", "macros"] }
 [features]
 default = ["native-tls"]
 
-full = ["binance", "bitflyer", "bybit", "coincheck"]
+full = ["binance", "bitflyer", "bybit", "coincheck", "mexc"]
 binance = ["dep:serde_urlencoded"]
 bitflyer = ["dep:rand"]
 bybit = ["dep:serde_urlencoded", "dep:rand"]

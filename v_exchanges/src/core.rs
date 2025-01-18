@@ -82,6 +82,7 @@ impl AbsMarket {
 		}
 	}
 
+	//Q: more I think about it, more this seems redundant / stupid according to Tiger Style
 	pub fn client_authenticated(&self, key: String, secret: String) -> Box<dyn Exchange> {
 		match self {
 			Self::Binance(m) => m.client_authenticated(key, secret),
@@ -123,9 +124,10 @@ impl std::str::FromStr for AbsMarket {
 		}
 		let exchange = parts[0];
 		let sub_market = parts[1];
-		match exchange.to_lowercase().as_str() {
-			"binance" => Ok(Self::Binance(sub_market.parse()?)),
-			"bybit" => Ok(Self::Bybit({
+		match exchange {
+			"Binance" => Ok(Self::Binance(sub_market.parse()?)),
+
+			"Bybit" => Ok(Self::Bybit({
 				match sub_market.parse() {
 					Ok(m) => m,
 					Err(e) => match sub_market.to_lowercase() == "futures" {
@@ -134,6 +136,7 @@ impl std::str::FromStr for AbsMarket {
 					},
 				}
 			})),
+			"Mexc" => Ok(Self::Mexc(sub_market.parse()?)),
 			_ => bail!("Invalid market string: {}", s),
 		}
 	}
@@ -310,16 +313,29 @@ impl std::fmt::Display for OutOfRangeError {
 }
 //,}}}
 
-#[derive(Clone, Debug, Default, Copy)]
+#[derive(Clone, Debug, Default, Copy, derive_more::Deref, derive_more::DerefMut)]
 pub struct AssetBalance {
 	pub asset: Asset,
+	#[deref_mut]
+	#[deref]
 	pub balance: f64,
+	// Binance
 	//cross_wallet_balance: f64,
 	//cross_unrealized_pnl: f64,
 	//available_balance: f64,
 	//max_withdraw_amount: f64,
 	//margin_available: bool,
-	pub timestamp: i64,
+	// Mexc
+	//available_balance: f64,
+	//available_cash: f64,
+	//available_open: f64,
+	//bonus: f64,
+	//cash_balance: f64,
+	//currency: String,
+	//equity: f64,
+	//frozen_balance: f64,
+	//position_margin: f64,
+	//unrealized: f64,
 }
 
 #[derive(Clone, Debug, Default)]

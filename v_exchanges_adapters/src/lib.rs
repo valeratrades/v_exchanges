@@ -36,6 +36,8 @@ pub struct Client {
 	bybit: bybit::BybitOptions,
 	#[cfg(feature = "coincheck")]
 	coincheck: coincheck::CoincheckOptions,
+	#[cfg(feature = "mexc")]
+	mexc: mexc::MexcOptions,
 }
 
 impl Client {
@@ -221,5 +223,18 @@ impl GetOptions<coincheck::CoincheckOptions> for Client {
 	#[inline(always)]
 	fn default_options_mut(&mut self) -> &mut coincheck::CoincheckOptions {
 		&mut self.coincheck
+	}
+}
+#[cfg(feature = "mexc")]
+#[cfg_attr(docsrs, doc(cfg(feature = "mexc")))]
+impl GetOptions<mexc::MexcOptions> for Client {
+	#[inline(always)]
+	fn default_options(&self) -> &mexc::MexcOptions {
+		&self.mexc
+	}
+
+	#[inline(always)]
+	fn default_options_mut(&mut self) -> &mut mexc::MexcOptions {
+		&mut self.mexc
 	}
 }

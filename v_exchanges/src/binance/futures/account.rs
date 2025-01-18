@@ -16,7 +16,6 @@ pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset) 
 	Ok(balance)
 }
 
-/// Accepts recvWindow provision
 pub async fn balances(client: &v_exchanges_adapters::Client) -> Result<Vec<AssetBalance>> {
 	let r: Vec<AssetBalanceResponse> = client
 		.get_no_query("/fapi/v3/balance", [
@@ -52,7 +51,6 @@ impl From<AssetBalanceResponse> for AssetBalance {
 		Self {
 			asset: r.asset.into(),
 			balance: r.balance,
-			timestamp: r.update_time as i64,
 		}
 	}
 }

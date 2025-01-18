@@ -1,6 +1,6 @@
 mod account;
 
-use adapters::bybit::BybitOption;
+use adapters::mexc::MexcOption;
 use derive_more::{
 	Display, FromStr,
 	derive::{Deref, DerefMut},
@@ -27,8 +27,8 @@ impl Exchange for Mexc {
 	}
 
 	fn auth(&mut self, key: String, secret: String) {
-		self.update_default_option(BybitOption::Key(key));
-		self.update_default_option(BybitOption::Secret(secret));
+		self.update_default_option(MexcOption::Key(key));
+		self.update_default_option(MexcOption::Secret(secret));
 	}
 
 	async fn exchange_info(&self, am: AbsMarket) -> Result<ExchangeInfo> {
@@ -89,7 +89,6 @@ pub enum Market {
 	#[default]
 	Futures,
 	Spot,
-	Inverse,
 }
 impl crate::core::MarketTrait for Market {
 	fn client(&self) -> Box<dyn Exchange> {

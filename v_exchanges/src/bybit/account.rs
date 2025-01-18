@@ -28,7 +28,6 @@ pub async fn balances(client: &v_exchanges_adapters::Client) -> Result<Vec<Asset
 		balances.push(AssetBalance {
 			asset: (&*r.coin).into(),
 			balance: r.wallet_balance,
-			timestamp: account_response.time,
 		});
 	}
 	Ok(balances)
