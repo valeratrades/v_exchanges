@@ -1,20 +1,20 @@
-use eyre::Result;
+use eyre::{Result, eyre};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::bybit::{BybitHttpAuth, BybitOption};
 use v_utils::{macros::ScreamIt, trades::Asset};
 
-use crate::core::AssetBalance;
+use crate::core::{AssetBalance, Balances};
 
 pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset) -> Result<AssetBalance> {
-	let balances = balances(client).await?;
-	let balance = balances.into_iter().find(|b| b.asset == asset).unwrap();
-	Ok(balance)
+	let balances: Balances = balances(client).await?;
+	let balance: &AssetBalance = balances.iter().find(|b| b.asset == asset).ok_or_else(|| eyre!("No balance found for asset: {:?}", asset))?;
+	Ok(*balance)
 }
 
 /// Should be calling https://bybit-exchange.github.io/docs/v5/asset/balance/all-balance, but with how I'm registered on bybit, my key doesn't have permissions for that (they require it to be able to `transfer` for some reason)
-pub async fn balances(client: &v_exchanges_adapters::Client) -> Result<Vec<AssetBalance>> {
+pub async fn balances(client: &v_exchanges_adapters::Client) -> Result<Balances> {
 	let value: serde_json::Value = client
 		.get("/v5/account/wallet-balance", &[("accountType", "UNIFIED")], [BybitOption::HttpAuth(BybitHttpAuth::V3AndAbove)])
 		.await?;
@@ -23,13 +23,15 @@ pub async fn balances(client: &v_exchanges_adapters::Client) -> Result<Vec<Asset
 	assert_eq!(account_response.result.list.len(), 1);
 	let account_info = account_response.result.list.first().unwrap();
 
-	let mut balances = Vec::new();
+	let mut vec_balance = Vec::new();
 	for r in &account_info.coin {
-		balances.push(AssetBalance {
+		vec_balance.push(AssetBalance {
 			asset: (&*r.coin).into(),
-			balance: r.wallet_balance,
+			underlying: r.wallet_balance,
+			usd: Some(r.usd_value.into()),
 		});
 	}
+	let balances = Balances::new(vec_balance, account_info.total_equity.into());
 	Ok(balances)
 }
 
@@ -57,6 +59,7 @@ pub struct AccountResult {
 	pub list: Vec<AccountInfo>,
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountInfo {
@@ -68,38 +71,57 @@ pub struct AccountInfo {
 	pub account_mm_rate: Option<Value>,
 	pub account_type: AccountType,
 	pub coin: Vec<CoinInfo>,
-	pub total_available_balance: String,
-	pub total_equity: String,
-	pub total_initial_margin: String,
-	pub total_maintenance_margin: String,
-	pub total_margin_balance: String,
+	#[serde_as(as = "DisplayFromStr")]
+	pub total_available_balance: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	/// in USD
+	pub total_equity: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub total_initial_margin: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub total_maintenance_margin: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub total_margin_balance: f64,
 	#[serde(rename = "totalPerpUPL")]
-	pub total_perp_upl: String,
-	pub total_wallet_balance: String,
+	#[serde_as(as = "DisplayFromStr")]
+	pub total_perp_upl: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub total_wallet_balance: f64,
 }
 
+//XXX: some fields are `String`s instead of `f64` because bybit can just send an empty string for some of them.
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CoinInfo {
+	#[serde_as(as = "DisplayFromStr")]
 	pub accrued_interest: String,
 	/// deprecated
-	__available_to_borrow: Option<Value>, //? can I start it with __, will serde understand?
-	pub available_to_withdraw: String,
-	pub bonus: String,
-	pub borrow_amount: String,
+	__available_to_borrow: Option<Value>,
+	pub available_to_withdraw: Option<Value>, // deprecated for AccountType::UNIFIED, should use [Get Transerable Amount](<https://bybit-exchange.github.io/docs/v5/account/unified-trans-amnt>) for it instead
+	pub bonus: Option<String>,                // specific to `UNIFIED` account type
+	#[serde_as(as = "DisplayFromStr")]
+	pub borrow_amount: f64,
 	pub coin: String,
+	free: Option<String>, // unique field for Classic `SPOT`
 	pub collateral_switch: bool,
-	pub cum_realised_pnl: String,
-	pub equity: String,
-	pub locked: String,
+	#[serde_as(as = "DisplayFromStr")]
+	pub cum_realised_pnl: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	/// in base currency
+	pub equity: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub locked: f64,
 	pub margin_collateral: bool,
-	pub spot_hedging_qty: String,
+	#[serde_as(as = "DisplayFromStr")]
+	pub spot_hedging_qty: f64,
 	#[serde(rename = "totalOrderIM")]
-	pub total_order_im: String,
+	pub total_order_im: Option<Value>, // "" for portfolio-margin mode
 	#[serde(rename = "totalPositionIM")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub total_position_im: String,
 	#[serde(rename = "totalPositionMM")]
+	#[serde_as(as = "DisplayFromStr")]
 	pub total_position_mm: String,
 	#[serde_as(as = "DisplayFromStr")]
 	pub unrealised_pnl: f64,

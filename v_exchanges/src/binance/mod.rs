@@ -1,5 +1,6 @@
 pub mod data; // interfaced with directly, not through `Exchange` trait, thus must be public.
 mod futures;
+use std::collections::BTreeMap;
 mod market;
 mod spot;
 use adapters::binance::BinanceOption;
@@ -8,7 +9,7 @@ use eyre::Result;
 use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
-use crate::core::{AbsMarket, AssetBalance, Exchange, ExchangeInfo, Klines, RequestRange, WrongExchangeError};
+use crate::{AbsMarket, AssetBalance, Balances, Exchange, ExchangeInfo, Klines, RequestRange, WrongExchangeError};
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
 pub struct Binance {
@@ -47,10 +48,11 @@ impl Exchange for Binance {
 		}
 	}
 
-	async fn prices(&self, pairs: Option<Vec<Pair>>, am: AbsMarket) -> Result<Vec<(Pair, f64)>> {
+	async fn prices(&self, pairs: Option<Vec<Pair>>, am: AbsMarket) -> Result<BTreeMap<Pair, f64>> {
 		match am {
 			AbsMarket::Binance(m) => match m {
 				Market::Spot => spot::market::prices(&self.client, pairs).await,
+				Market::Futures => futures::market::prices(&self.client, pairs).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -78,10 +80,13 @@ impl Exchange for Binance {
 		}
 	}
 
-	async fn balances(&self, am: AbsMarket) -> Result<Vec<AssetBalance>> {
+	async fn balances(&self, am: AbsMarket) -> Result<Balances> {
 		match am {
 			AbsMarket::Binance(m) => match m {
-				Market::Futures => futures::account::balances(&self.client).await,
+				Market::Futures => {
+					let prices = self.prices(None, am).await?;
+					futures::account::balances(&self.client, &prices).await
+				}
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),

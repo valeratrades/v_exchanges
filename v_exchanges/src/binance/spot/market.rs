@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::BTreeMap, str::FromStr};
 
 use adapters::binance::{BinanceHttpUrl, BinanceOption};
 use eyre::Result;
@@ -9,7 +9,7 @@ use tracing::instrument;
 use v_utils::trades::Pair;
 
 #[instrument(skip_all, fields(?pairs))]
-pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>) -> Result<Vec<(Pair, f64)>> {
+pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>) -> Result<BTreeMap<Pair, f64>> {
 	let r: PricesResponse = match pairs {
 		//TODO!!!: fix this branch
 		//BUG: doesn't work for some reason
@@ -23,11 +23,12 @@ pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pai
 		None => client.get_no_query("/api/v3/ticker/price", [BinanceOption::HttpUrl(BinanceHttpUrl::Spot)]).await.unwrap(),
 	};
 
-	let mut prices = Vec::with_capacity(r.0.len());
+	//let mut prices = Vec::with_capacity(r.0.len());
+	let mut prices = BTreeMap::new();
 	for p in r.0.into_iter() {
 		match Pair::from_str(&p.symbol) {
 			Ok(pair) => {
-				prices.push((pair, p.price));
+				prices.insert(pair, p.price);
 			}
 			Err(e) => {
 				tracing::warn!("Failed to parse pair from string: {}", e);

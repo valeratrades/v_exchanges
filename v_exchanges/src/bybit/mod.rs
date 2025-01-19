@@ -1,6 +1,8 @@
 mod account;
 mod market;
 
+use std::collections::BTreeMap;
+
 use adapters::bybit::BybitOption;
 use derive_more::{
 	Display, FromStr,
@@ -10,7 +12,10 @@ use eyre::Result;
 use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
-use crate::core::{AbsMarket, AssetBalance, Exchange, ExchangeInfo, Klines, RequestRange, WrongExchangeError};
+use crate::{
+	Balances,
+	core::{AbsMarket, AssetBalance, Exchange, ExchangeInfo, Klines, RequestRange, WrongExchangeError},
+};
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
 pub struct Bybit {
@@ -59,7 +64,7 @@ impl Exchange for Bybit {
 		}
 	}
 
-	async fn prices(&self, pairs: Option<Vec<Pair>>, am: AbsMarket) -> Result<Vec<(Pair, f64)>> {
+	async fn prices(&self, pairs: Option<Vec<Pair>>, am: AbsMarket) -> Result<BTreeMap<Pair, f64>> {
 		match am {
 			AbsMarket::Bybit(_) => todo!(),
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -76,7 +81,7 @@ impl Exchange for Bybit {
 		}
 	}
 
-	async fn balances(&self, am: AbsMarket) -> Result<Vec<AssetBalance>> {
+	async fn balances(&self, am: AbsMarket) -> Result<Balances> {
 		match am {
 			AbsMarket::Bybit(m) => match m {
 				Market::Linear => account::balances(&self.client).await,

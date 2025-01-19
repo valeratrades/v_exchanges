@@ -5,7 +5,7 @@ use derive_more::{Deref, DerefMut};
 use eyre::{Report, Result, bail};
 use serde_json::json;
 use v_utils::{
-	trades::{Asset, Kline, Pair, Timeframe},
+	trades::{Asset, Kline, Pair, Timeframe, Usd},
 	utils::filter_nulls,
 };
 
@@ -26,7 +26,7 @@ pub trait Exchange: std::fmt::Debug + Send {
 	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, m: AbsMarket) -> Result<Klines>;
 
 	/// If no pairs are specified, returns for all;
-	async fn prices(&self, pairs: Option<Vec<Pair>>, m: AbsMarket) -> Result<Vec<(Pair, f64)>>;
+	async fn prices(&self, pairs: Option<Vec<Pair>>, m: AbsMarket) -> Result<BTreeMap<Pair, f64>>;
 	async fn price(&self, pair: Pair, m: AbsMarket) -> Result<f64>;
 
 	// Defined in terms of actors
@@ -35,7 +35,7 @@ pub trait Exchange: std::fmt::Debug + Send {
 	/// balance of a specific asset
 	async fn asset_balance(&self, asset: Asset, m: AbsMarket) -> Result<AssetBalance>;
 	/// vec of balances of specific assets
-	async fn balances(&self, m: AbsMarket) -> Result<Vec<AssetBalance>>;
+	async fn balances(&self, m: AbsMarket) -> Result<Balances>;
 	//? potentially `total_balance`? Would return precompiled USDT-denominated balance of a (bybit::wallet/binance::account)
 	// balances are defined for each margin type: [futures_balance, spot_balance, margin_balance], but note that on some exchanges, (like bybit), some of these may point to the same exact call
 	// to negate confusion could add a `total_balance` endpoint
@@ -309,12 +309,15 @@ impl std::fmt::Display for OutOfRangeError {
 }
 //,}}}
 
+// Balance {{{
 #[derive(Clone, Debug, Default, Copy, derive_more::Deref, derive_more::DerefMut)]
 pub struct AssetBalance {
 	pub asset: Asset,
+	pub underlying: f64,
 	#[deref_mut]
 	#[deref]
-	pub balance: f64,
+	/// Optional, as for most exchanges appending it costs another call to `price{s}` endpoint
+	pub usd: Option<Usd>,
 	// Binance
 	//cross_wallet_balance: f64,
 	//cross_unrealized_pnl: f64,
@@ -333,6 +336,20 @@ pub struct AssetBalance {
 	//position_margin: f64,
 	//unrealized: f64,
 }
+#[derive(Clone, Debug, Default, derive_new::new, derive_more::Deref, derive_more::DerefMut)]
+pub struct Balances {
+	#[deref_mut]
+	#[deref]
+	v: Vec<AssetBalance>,
+	/// breaks zero-cost of the abstraction, but I assume that most calls to this actually want usd, so it's warranted.
+	pub total: Usd,
+}
+impl Balances {
+	pub fn usdt(&self) -> f64 {
+		*self.total
+	}
+}
+//,}}}
 
 #[derive(Clone, Debug, Default)]
 pub struct ExchangeInfo {

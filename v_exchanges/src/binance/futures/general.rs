@@ -97,6 +97,7 @@ pub struct FuturesSymbol {
 	pub contract_type: String,
 	pub delivery_date: i64,
 	pub onboard_date: i64,
+	//TODO: filter based on asset being active, don't return those that aren't.
 	pub status: String,
 	pub base_asset: String,
 	pub quote_asset: String,
@@ -122,7 +123,7 @@ pub struct FuturesSymbol {
 #[serde(tag = "filterType")]
 pub enum Filter {
 	#[serde(rename = "PRICE_FILTER")]
-	PriceFilter(PriceFilter),
+	Price(PriceFilter),
 	#[serde(rename = "LOT_SIZE")]
 	LotSize(LotSizeFilter),
 	#[serde(rename = "MARKET_LOT_SIZE")]

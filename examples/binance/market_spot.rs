@@ -11,7 +11,7 @@ async fn main() {
 	dbg!(&spot_klines);
 
 	let spot_prices = c.prices(None, m).await.unwrap();
-	dbg!(&spot_prices[..5]);
+	dbg!(&spot_prices.iter().collect::<Vec<_>>()[..5]);
 }
 
 #[cfg(test)]

@@ -1,5 +1,7 @@
 mod account;
 
+use std::collections::BTreeMap;
+
 use adapters::mexc::MexcOption;
 use derive_more::{
 	Display, FromStr,
@@ -9,7 +11,10 @@ use eyre::Result;
 use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
-use crate::core::{AbsMarket, AssetBalance, Exchange, ExchangeInfo, Klines, RequestRange, WrongExchangeError};
+use crate::{
+	Balances,
+	core::{AbsMarket, AssetBalance, Exchange, ExchangeInfo, Klines, RequestRange, WrongExchangeError},
+};
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
 pub struct Mexc {
@@ -40,23 +45,19 @@ impl Exchange for Mexc {
 
 	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, am: AbsMarket) -> Result<Klines> {
 		match am {
-			AbsMarket::Mexc(m) => match m {
-				_ => unimplemented!(),
-			},
+			AbsMarket::Mexc(m) => unimplemented!(),
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
 		}
 	}
 
 	async fn price(&self, pair: Pair, am: AbsMarket) -> Result<f64> {
 		match am {
-			AbsMarket::Mexc(m) => match m {
-				_ => unimplemented!(),
-			},
+			AbsMarket::Mexc(m) => unimplemented!(),
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
 		}
 	}
 
-	async fn prices(&self, pairs: Option<Vec<Pair>>, am: AbsMarket) -> Result<Vec<(Pair, f64)>> {
+	async fn prices(&self, pairs: Option<Vec<Pair>>, am: AbsMarket) -> Result<BTreeMap<Pair, f64>> {
 		match am {
 			AbsMarket::Mexc(_) => todo!(),
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -73,7 +74,7 @@ impl Exchange for Mexc {
 		}
 	}
 
-	async fn balances(&self, am: AbsMarket) -> Result<Vec<AssetBalance>> {
+	async fn balances(&self, am: AbsMarket) -> Result<Balances> {
 		match am {
 			AbsMarket::Mexc(m) => match m {
 				Market::Futures => account::balances(&self.client).await,
