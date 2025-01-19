@@ -42,8 +42,6 @@ pub async fn balances(client: &v_exchanges_adapters::Client, prices: &BTreeMap<P
 		.await
 		.unwrap();
 
-	//let usdt_prices: BTreeMap<&Pair, &f64> = prices.iter().filter(|(k,v)| k.is_usdt()).collect();
-
 	fn usd_value(underlying: f64, asset: Asset, prices: &BTreeMap<Pair, f64>) -> Result<Usd> {
 		if underlying == 0. {
 			return Ok(Usd(0.));
@@ -67,7 +65,8 @@ pub async fn balances(client: &v_exchanges_adapters::Client, prices: &BTreeMap<P
 		});
 	}
 
-	let total = balances.iter().fold(Usd(0.), |acc, b| {
+	let non_zero: Vec<AssetBalance> = balances.iter().filter(|b| b.underlying != 0.).cloned().collect();
+	let total = non_zero.iter().fold(Usd(0.), |acc, b| {
 		acc + {
 			match b.usd {
 				Some(b) => b,
@@ -75,7 +74,8 @@ pub async fn balances(client: &v_exchanges_adapters::Client, prices: &BTreeMap<P
 			}
 		}
 	});
-	Ok(Balances::new(balances, total))
+
+	Ok(Balances::new(non_zero, total))
 }
 #[allow(unused)]
 #[serde_as]

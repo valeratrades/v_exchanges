@@ -12,7 +12,7 @@ undocumented_unsafe_blocks = "warn"
 tabs_in_doc_comments = "allow"
 
 [workspace.dependencies]
-v_utils = { version = "^2.0.0", path = "../v_utils/v_utils", features = ["trades", "tracing", "macros"] } #ga: rm path
+v_utils = { version = "^2.0.0", path = "../v_utils/v_utils" } #ga: rm path
 futures-util = "^0.3.31"
 reqwest = { version = "^0.12.12", features = ["blocking", "json"] }
 serde = { version = "^1.0.217", features = ["derive"] }

@@ -24,7 +24,7 @@ async fn main() {
 		let balance_usdt = c.asset_balance("USDT".into(), m).await.unwrap();
 		dbg!(&balance_usdt);
 		let balances = c.balances(m).await.unwrap();
-		dbg!(&balances.total);
+		dbg!(&balances);
 	} else {
 		eprintln!("BINANCE_TIGER_READ_KEY or BINANCE_TIGER_READ_SECRET is missing, skipping private API methods.");
 	}

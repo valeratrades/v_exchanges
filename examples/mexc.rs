@@ -10,8 +10,11 @@ async fn main() {
 	let mut c = m.client();
 	c.auth(env::var("MEXC_READ_KEY").unwrap(), env::var("MEXC_READ_SECRET").unwrap());
 
-	let balance_usdt = c.asset_balance("USDT".into(), m).await.unwrap();
-	dbg!(&balance_usdt);
+	let price = c.price(("BTC", "USDT").into(), m).await.unwrap();
+	dbg!(&price);
+
+	let balances = c.balances(m).await.unwrap();
+	dbg!(&balances);
 }
 
 #[cfg(test)]

@@ -4,7 +4,7 @@ use adapters::Client;
 //HACK: Methods should be implemented on the central interface struct, following <https://github.com/wisespace-io/binance-rs>.
 use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
-use v_utils::{prelude_library::*, trades::Pair};
+use v_utils::{prelude_libside::*, trades::Pair};
 
 // price {{{
 //HACK: should use /fapi/v2/ticker/price instead

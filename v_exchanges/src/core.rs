@@ -32,9 +32,9 @@ pub trait Exchange: std::fmt::Debug + Send {
 	// Defined in terms of actors
 	//TODO!!!: async fn spawn_klines_listener(&self, symbol: Pair, tf: Timeframe) -> mpsc::Receiver<Kline>;
 
-	/// balance of a specific asset
+	/// balance of a specific asset. Does not guarantee provision of USD values.
 	async fn asset_balance(&self, asset: Asset, m: AbsMarket) -> Result<AssetBalance>;
-	/// vec of balances of specific assets
+	/// vec of _non-zero_ balances exclusively. Provides USD values.
 	async fn balances(&self, m: AbsMarket) -> Result<Balances>;
 	//? potentially `total_balance`? Would return precompiled USDT-denominated balance of a (bybit::wallet/binance::account)
 	// balances are defined for each margin type: [futures_balance, spot_balance, margin_balance], but note that on some exchanges, (like bybit), some of these may point to the same exact call
@@ -314,9 +314,9 @@ impl std::fmt::Display for OutOfRangeError {
 pub struct AssetBalance {
 	pub asset: Asset,
 	pub underlying: f64,
+	/// Optional, as for most exchanges appending it costs another call to `price{s}` endpoint
 	#[deref_mut]
 	#[deref]
-	/// Optional, as for most exchanges appending it costs another call to `price{s}` endpoint
 	pub usd: Option<Usd>,
 	// Binance
 	//cross_wallet_balance: f64,
@@ -344,13 +344,9 @@ pub struct Balances {
 	/// breaks zero-cost of the abstraction, but I assume that most calls to this actually want usd, so it's warranted.
 	pub total: Usd,
 }
-impl Balances {
-	pub fn usdt(&self) -> f64 {
-		*self.total
-	}
-}
 //,}}}
 
+// Exchange Info {{{
 #[derive(Clone, Debug, Default)]
 pub struct ExchangeInfo {
 	pub server_time: DateTime<Utc>,
@@ -365,3 +361,4 @@ impl ExchangeInfo {
 pub struct PairInfo {
 	pub price_precision: u8,
 }
+//,}}}

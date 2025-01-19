@@ -1,11 +1,12 @@
-use eyre::Result;
-use serde::Deserialize;
-use v_exchanges_adapters::mexc::{MexcAuth, MexcHttpUrl, MexcOption};
-use v_utils::trades::Asset;
+use adapters::{
+	Client,
+	mexc::{MexcAuth, MexcHttpUrl, MexcOption},
+};
+use v_utils::prelude_libside::*;
 
 use crate::{AssetBalance, Balances};
 
-pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset) -> Result<AssetBalance> {
+pub async fn asset_balance(client: &Client, asset: Asset) -> Result<AssetBalance> {
 	let endpoint = format!("/api/v1/private/account/asset/{}", asset);
 	let r: AssetBalanceResponse = client
 		.get_no_query(&endpoint, [MexcOption::HttpUrl(MexcHttpUrl::Futures), MexcOption::HttpAuth(MexcAuth::Sign)])
@@ -15,19 +16,43 @@ pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset) 
 	Ok(r.data.into())
 }
 
-/// Accepts recvWindow provision
-pub async fn balances(client: &v_exchanges_adapters::Client) -> Result<Balances> {
+pub async fn balances(client: &Client) -> Result<Balances> {
 	//TODO!: \
 	//assert!(client.is_authenticated());
-	todo!();
-	//let r: Vec<AssetBalanceResponse> = client
-	//	.get_no_query("/fapi/v3/balance", [
-	//		BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM),
-	//		BinanceOption::HttpAuth(BinanceAuth::Sign),
-	//	])
-	//	.await
-	//	.unwrap();
-	//Ok(r.into_iter().map(|r| r.into()).collect())
+	let rs: BalancesResponse = client
+		.get_no_query("/api/v1/private/account/assets", [
+			MexcOption::HttpUrl(MexcHttpUrl::Futures),
+			MexcOption::HttpAuth(MexcAuth::Sign),
+		])
+		.await
+		.unwrap();
+
+	let non_zero: Vec<AssetBalance> = rs.data.into_iter().filter(|r| r.equity != 0.).map(|r| r.into()).collect();
+	// dance with tambourine to request for usdt prices of all assets except usdt itself
+	//RELIES: join_all preserving order
+	let price_handles: Vec<Pin<Box<dyn Future<Output = Result<f64>> + Send>>> = non_zero
+		.iter()
+		.map(|b| {
+			if b.asset == "USDT" {
+				Box::pin(async move { Ok(1.) }) as Pin<Box<dyn Future<Output = Result<f64>> + Send>>
+			} else {
+				Box::pin(super::market::price(client, (b.asset, "USDT".into()).into())) as Pin<Box<dyn Future<Output = Result<f64>> + Send>>
+			}
+		})
+		.collect();
+	let prices = join_all(price_handles).await.into_iter().collect::<Result<Vec<f64>>>()?;
+
+	let balances: Vec<AssetBalance> = non_zero
+		.into_iter()
+		.zip(prices.into_iter())
+		.map(|(mut b, p)| {
+			b.usd = Some((p * b.underlying).into());
+			b
+		})
+		.collect();
+
+	let total = balances.iter().fold(Usd(0.), |acc, b| acc + b.usd.expect("Just set for all"));
+	Ok(Balances::new(balances, total))
 }
 
 #[allow(unused)]
@@ -35,14 +60,13 @@ pub async fn balances(client: &v_exchanges_adapters::Client) -> Result<Balances>
 #[serde(rename_all = "camelCase")]
 struct AssetBalanceResponse {
 	pub code: i32,
-	pub data: AssetBalanceInfo,
+	pub data: AssetBalanceData,
 	pub success: bool,
 }
-
 #[allow(unused)]
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct AssetBalanceInfo {
+struct AssetBalanceData {
 	available_balance: f64,
 	available_cash: f64,
 	available_open: f64,
@@ -54,9 +78,8 @@ struct AssetBalanceInfo {
 	position_margin: f64,
 	unrealized: f64,
 }
-
-impl From<AssetBalanceInfo> for AssetBalance {
-	fn from(r: AssetBalanceInfo) -> Self {
+impl From<AssetBalanceData> for AssetBalance {
+	fn from(r: AssetBalanceData) -> Self {
 		Self {
 			#[allow(clippy::unnecessary_fallible_conversions)] //Q: do I ever want them?
 			asset: r.currency.try_into().expect("Assume v_utils is able to handle all mexc pairs"),
@@ -64,4 +87,13 @@ impl From<AssetBalanceInfo> for AssetBalance {
 			usd: None,
 		}
 	}
+}
+
+#[allow(unused)]
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BalancesResponse {
+	pub code: i32,
+	pub data: Vec<AssetBalanceData>,
+	pub success: bool,
 }

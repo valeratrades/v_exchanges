@@ -1,4 +1,5 @@
 mod account;
+mod market;
 
 use std::collections::BTreeMap;
 
@@ -52,14 +53,17 @@ impl Exchange for Mexc {
 
 	async fn price(&self, pair: Pair, am: AbsMarket) -> Result<f64> {
 		match am {
-			AbsMarket::Mexc(m) => unimplemented!(),
+			AbsMarket::Mexc(m) => match m {
+				Market::Futures => market::price(self, pair).await,
+				_ => unimplemented!(),
+			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
 		}
 	}
 
-	async fn prices(&self, pairs: Option<Vec<Pair>>, am: AbsMarket) -> Result<BTreeMap<Pair, f64>> {
+	async fn prices(&self, _pairs: Option<Vec<Pair>>, am: AbsMarket) -> Result<BTreeMap<Pair, f64>> {
 		match am {
-			AbsMarket::Mexc(_) => todo!(),
+			AbsMarket::Mexc(_) => unimplemented!("Mexc does not have a multi-asset endpoints for futures"),
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
 		}
 	}
