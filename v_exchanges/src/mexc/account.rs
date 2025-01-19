@@ -7,7 +7,7 @@ use v_utils::prelude_libside::*;
 use crate::{AssetBalance, Balances};
 
 pub async fn asset_balance(client: &Client, asset: Asset) -> Result<AssetBalance> {
-	assert!(<adapters::Client as adapters::GetOptions<adapters::mexc::MexcOptions>>::is_authenticated(client));
+	assert!(client.is_authenticated::<MexcOption>());
 	let endpoint = format!("/api/v1/private/account/asset/{}", asset);
 	let r: AssetBalanceResponse = client
 		.get_no_query(&endpoint, [MexcOption::HttpUrl(MexcHttpUrl::Futures), MexcOption::HttpAuth(MexcAuth::Sign)])
@@ -18,7 +18,7 @@ pub async fn asset_balance(client: &Client, asset: Asset) -> Result<AssetBalance
 }
 
 pub async fn balances(client: &Client) -> Result<Balances> {
-	assert!(<adapters::Client as adapters::GetOptions<adapters::mexc::MexcOptions>>::is_authenticated(client));
+	assert!(client.is_authenticated::<MexcOption>());
 	let rs: BalancesResponse = client
 		.get_no_query("/api/v1/private/account/assets", [
 			MexcOption::HttpUrl(MexcHttpUrl::Futures),

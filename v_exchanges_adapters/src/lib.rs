@@ -50,6 +50,14 @@ impl Client {
 		self.default_options_mut().update(option);
 	}
 
+	#[inline(always)]
+	pub fn is_authenticated<O>(&self) -> bool
+	where
+		O: HandlerOption,
+		Self: GetOptions<O::Options>, {
+		self.default_options().is_authenticated()
+	}
+
 	#[inline]
 	fn merged_options<O>(&self, options: impl IntoIterator<Item = O>) -> O::Options
 	where
