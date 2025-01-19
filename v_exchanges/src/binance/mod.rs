@@ -109,6 +109,6 @@ impl crate::core::MarketTrait for Market {
 		})
 	}
 	fn abs_market(&self) -> AbsMarket {
-		AbsMarket::Binance(self.clone())
+		AbsMarket::Binance(*self)
 	}
 }

@@ -1,4 +1,4 @@
-use adapters::{Client, GetOptions as _};
+use adapters::Client;
 use eyre::{Result, eyre};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
