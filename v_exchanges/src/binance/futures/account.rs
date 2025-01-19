@@ -14,6 +14,7 @@ use crate::core::{AssetBalance, Balances};
 // balance {{{
 //DUP: difficult to escape duplicating half the [balances] method due to a) not requiring usd value b) binance not having individual asset balance endpoint
 pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset) -> Result<AssetBalance> {
+	assert!(<adapters::Client as adapters::GetOptions<adapters::binance::BinanceOptions>>::is_authenticated(client));
 	let r: Vec<AssetBalanceResponse> = client
 		.get_no_query("/fapi/v3/balance", [
 			BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM),
@@ -34,6 +35,7 @@ pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset) 
 }
 
 pub async fn balances(client: &v_exchanges_adapters::Client, prices: &BTreeMap<Pair, f64>) -> Result<Balances> {
+	assert!(<adapters::Client as adapters::GetOptions<adapters::binance::BinanceOptions>>::is_authenticated(client));
 	let rs: Vec<AssetBalanceResponse> = client
 		.get_no_query("/fapi/v3/balance", [
 			BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM),

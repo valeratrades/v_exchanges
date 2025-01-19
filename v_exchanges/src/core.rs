@@ -9,7 +9,6 @@ use v_utils::{
 	utils::filter_nulls,
 };
 
-//TODO!!!!!!!!!!!!!: klines switch to defining the range via an Enum over either limit either start and end times
 #[async_trait::async_trait]
 pub trait Exchange: std::fmt::Debug + Send {
 	/// will always be `Some` when created from `AbsMarket`. When creating client manually could lead to weird errors from this method being used elsewhere, like displaying a `AbsMarket` object.
@@ -66,6 +65,7 @@ pub trait MarketTrait {
 		client.auth(key, secret);
 		client
 	}
+	fn abs_market(&self) -> AbsMarket;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -227,16 +227,23 @@ impl RequestRange {
 
 	//XXX
 	//TODO!!!!!!!!!: MUST be generic over Market. But with current Market representation is impossible.
-	pub fn serialize(&self) -> serde_json::Value {
-		filter_nulls(match self {
-			RequestRange::StartEnd { start, end } => json!({
-				"startTime": start.timestamp_millis(),
-				"endTime": end.map(|dt| dt.timestamp_millis()),
-			}),
-			RequestRange::Limit(limit) => json!({
-				"limit": limit,
-			}),
-		})
+	pub fn serialize(&self, am: AbsMarket) -> serde_json::Value {
+		match am {
+			AbsMarket::Binance(_) => self.serialize_common(),
+			AbsMarket::Bybit(_) => self.serialize_common(),
+			_ => unimplemented!(),
+		}
+	}
+	fn serialize_common(&self) -> serde_json::Value {
+				filter_nulls(match self {
+					RequestRange::StartEnd { start, end } => json!({
+						"startTime": start.timestamp_millis(),
+						"endTime": end.map(|dt| dt.timestamp_millis()),
+					}),
+					RequestRange::Limit(limit) => json!({
+						"limit": limit,
+					}),
+				})
 	}
 }
 impl Default for RequestRange {

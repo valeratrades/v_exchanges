@@ -10,7 +10,7 @@ use v_utils::{
 };
 
 use super::Binance;
-use crate::{core::RequestRange, utils::join_params};
+use crate::{AbsMarket, core::RequestRange, utils::join_params};
 
 #[derive(Clone, Debug, Display, FromStr)]
 pub enum LsrWho {
@@ -26,7 +26,7 @@ impl From<&str> for LsrWho {
 impl Binance {
 	pub async fn lsr(&self, pair: Pair, tf: Timeframe, range: RequestRange, who: LsrWho) -> Result<Lsrs> {
 		range.ensure_allowed(0..=500, tf)?;
-		let range_json = range.serialize();
+		let range_json = range.serialize(AbsMarket::Binance(crate::binance::Market::Futures));
 
 		let ending = match who {
 			LsrWho::Global => "globalLongShortAccountRatio",

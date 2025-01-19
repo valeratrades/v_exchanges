@@ -168,6 +168,9 @@ impl Client {
 pub trait GetOptions<O: HandlerOptions> {
 	fn default_options(&self) -> &O;
 	fn default_options_mut(&mut self) -> &mut O;
+	fn is_authenticated(&self) -> bool {
+		self.default_options().is_authenticated()
+	}
 }
 
 #[cfg(feature = "binance")]

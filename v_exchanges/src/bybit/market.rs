@@ -11,12 +11,15 @@ use v_utils::{
 	utils::filter_nulls,
 };
 
-use crate::core::{Klines, RequestRange};
+use crate::{
+	AbsMarket,
+	core::{Klines, RequestRange},
+};
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: RequestRange) -> Result<Klines> {
+pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: RequestRange, am: AbsMarket) -> Result<Klines> {
 	range.ensure_allowed(1..=1000, tf)?;
-	let range_json = range.serialize();
+	let range_json = range.serialize(am);
 	let base_params = filter_nulls(json!({
 		"category": "linear", // can be ["linear", "inverse", "spot"] afaiu, could drive some generics with this later, but for now hardcode
 		"symbol": pair.to_string(),

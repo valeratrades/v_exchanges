@@ -1,3 +1,4 @@
+use adapters::{Client, GetOptions as _};
 use eyre::{Result, eyre};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -8,13 +9,17 @@ use v_utils::{macros::ScreamIt, trades::Asset};
 use crate::core::{AssetBalance, Balances};
 
 pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset) -> Result<AssetBalance> {
+	assert!(<adapters::Client as adapters::GetOptions<adapters::bybit::BybitOptions>>::is_authenticated(client));
 	let balances: Balances = balances(client).await?;
 	let balance: &AssetBalance = balances.iter().find(|b| b.asset == asset).ok_or_else(|| eyre!("No balance found for asset: {:?}", asset))?;
 	Ok(*balance)
 }
 
 /// Should be calling https://bybit-exchange.github.io/docs/v5/asset/balance/all-balance, but with how I'm registered on bybit, my key doesn't have permissions for that (they require it to be able to `transfer` for some reason)
-pub async fn balances(client: &v_exchanges_adapters::Client) -> Result<Balances> {
+pub async fn balances(client: &Client) -> Result<Balances> {
+	//TODO! make more succinct \
+	assert!(<adapters::Client as adapters::GetOptions<adapters::bybit::BybitOptions>>::is_authenticated(client));
+
 	let value: serde_json::Value = client
 		.get("/v5/account/wallet-balance", &[("accountType", "UNIFIED")], [BybitOption::HttpAuth(BybitHttpAuth::V3AndAbove)])
 		.await?;

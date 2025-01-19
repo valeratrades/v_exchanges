@@ -10,6 +10,7 @@ use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
 use v_utils::trades::{Kline, Ohlc, Pair, Timeframe};
 
 use crate::{
+	MarketTrait as _,
 	binance::Market,
 	core::{Klines, RequestRange},
 	utils::join_params,
@@ -18,7 +19,7 @@ use crate::{
 // klines {{{
 pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: RequestRange, market: Market) -> Result<Klines> {
 	range.ensure_allowed(1..=1000, tf)?;
-	let range_params = range.serialize();
+	let range_params = range.serialize(market.abs_market());
 	let base_params = json!({
 		"symbol": pair.to_string(),
 		"interval": tf.format_binance()?,

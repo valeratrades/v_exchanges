@@ -47,7 +47,7 @@ impl Exchange for Bybit {
 	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, am: AbsMarket) -> Result<Klines> {
 		match am {
 			AbsMarket::Bybit(m) => match m {
-				Market::Linear => market::klines(&self.client, pair, tf, range).await,
+				Market::Linear => market::klines(&self.client, pair, tf, range, am).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -105,5 +105,9 @@ impl crate::core::MarketTrait for Market {
 			source_market: Some(source_market),
 			..Default::default()
 		})
+	}
+
+	fn abs_market(&self) -> AbsMarket {
+		AbsMarket::Bybit(self.clone())
 	}
 }

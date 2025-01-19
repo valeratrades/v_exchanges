@@ -13,6 +13,7 @@ pub trait HandlerOptions: Default + Clone + Debug {
 	type OptionItem: HandlerOption<Options = Self>;
 
 	fn update(&mut self, option: Self::OptionItem);
+	fn is_authenticated(&self) -> bool;
 }
 
 /// A `trait` that shows the implementing type is able to create [http::RequestHandler]s

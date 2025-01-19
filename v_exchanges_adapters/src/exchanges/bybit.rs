@@ -487,6 +487,10 @@ impl HandlerOptions for BybitOptions {
 			BybitOption::WebSocketConfig(v) => self.websocket_config = v,
 		}
 	}
+
+	fn is_authenticated(&self) -> bool {
+		self.key.is_some() // some endpoints are satisfied with just the key, and it's really difficult to provide only a key without a secret from the clientside, so assume intent if it's missing.
+	}
 }
 
 impl Default for BybitOptions {

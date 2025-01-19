@@ -102,4 +102,7 @@ impl crate::core::MarketTrait for Market {
 			..Default::default()
 		})
 	}
+	fn abs_market(&self) -> AbsMarket {
+		AbsMarket::Mexc(self.clone())
+	}
 }
