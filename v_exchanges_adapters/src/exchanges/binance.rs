@@ -7,6 +7,7 @@ use std::{
 };
 
 use hmac::{Hmac, Mac};
+use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
 use v_exchanges_api_generics::{http::*, websocket::*};
@@ -24,7 +25,7 @@ pub enum BinanceOption {
 	/// API key
 	Key(String),
 	/// Api secret
-	Secret(String),
+	Secret(SecretString),
 	/// Base url for HTTP requests
 	HttpUrl(BinanceHttpUrl),
 	/// Authentication type for HTTP requests
@@ -47,7 +48,7 @@ pub struct BinanceOptions {
 	pub key: Option<String>,
 	/// see [BinanceOption::Secret]
 	#[debug("[REDACTED]")]
-	pub secret: Option<String>,
+	pub secret: Option<SecretString>,
 	/// see [BinanceOption::HttpUrl]
 	pub http_url: BinanceHttpUrl,
 	/// see [BinanceOption::HttpAuth]
@@ -191,7 +192,7 @@ where
 
 				builder = builder.query(&[("timestamp", timestamp)]);
 
-				let secret = self.options.secret.as_deref().ok_or("API secret not set")?;
+				let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or("API secret not set")?;
 				let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap(); // hmac accepts key of any length
 
 				let mut request = builder.build().or(Err("Failed to build request"))?;

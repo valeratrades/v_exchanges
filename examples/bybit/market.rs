@@ -15,7 +15,7 @@ async fn main() {
 	dbg!(&price);
 
 	if let (Ok(key), Ok(secret)) = (env::var("BYBIT_TIGER_READ_KEY"), env::var("BYBIT_TIGER_READ_SECRET")) {
-		c.auth(key, secret);
+		c.auth(key, secret.into());
 		private(&*c, m).await;
 	} else {
 		eprintln!("BYBIT_TIGER_READ_KEY or BYBIT_TIGER_READ_SECRET is missing, skipping private API methods.");

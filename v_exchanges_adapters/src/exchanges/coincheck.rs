@@ -4,6 +4,7 @@
 use std::{marker::PhantomData, time::SystemTime};
 
 use hmac::{Hmac, Mac};
+use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::json;
 use sha2::Sha256;
@@ -26,7 +27,7 @@ pub enum CoincheckOption {
 	/// API key
 	Key(String),
 	/// Api secret
-	Secret(String),
+	Secret(SecretString),
 	/// Base url for HTTP requests
 	HttpUrl(CoincheckHttpUrl),
 	/// Whether [CoincheckRequestHandler] should perform authentication
@@ -51,7 +52,7 @@ pub struct CoincheckOptions {
 	pub key: Option<String>,
 	/// see [CoincheckOption::Secret]
 	#[debug("[REDACTED]")]
-	pub secret: Option<String>,
+	pub secret: Option<SecretString>,
 	/// see [CoincheckOption::HttpUrl]
 	pub http_url: CoincheckHttpUrl,
 	/// see [CoincheckOption::HttpAuth]
@@ -138,7 +139,7 @@ where
 
 			let sign_contents = format!("{}{}{}", nonce, request.url(), body);
 
-			let secret = self.options.secret.as_deref().ok_or("API secret not set")?;
+			let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or("API secret not set")?;
 			let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap(); // hmac accepts key of any length
 
 			hmac.update(sign_contents.as_bytes());

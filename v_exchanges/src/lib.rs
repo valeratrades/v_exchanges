@@ -1,6 +1,6 @@
 #![feature(array_try_map)]
 
-pub(crate) extern crate v_exchanges_adapters as adapters;
+pub extern crate v_exchanges_adapters as adapters;
 
 pub mod core;
 

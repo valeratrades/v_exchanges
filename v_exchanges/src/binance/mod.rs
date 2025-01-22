@@ -6,6 +6,7 @@ mod spot;
 use adapters::binance::BinanceOption;
 use derive_more::{Deref, DerefMut};
 use eyre::Result;
+use secrecy::SecretString;
 use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
@@ -26,7 +27,7 @@ impl Exchange for Binance {
 		self.source_market.unwrap()
 	}
 
-	fn auth(&mut self, key: String, secret: String) {
+	fn auth(&mut self, key: String, secret: SecretString) {
 		self.update_default_option(BinanceOption::Key(key));
 		self.update_default_option(BinanceOption::Secret(secret));
 	}
@@ -108,6 +109,7 @@ impl crate::core::MarketTrait for Market {
 			..Default::default()
 		})
 	}
+
 	fn abs_market(&self) -> AbsMarket {
 		AbsMarket::Binance(*self)
 	}

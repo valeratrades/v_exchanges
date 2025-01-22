@@ -9,6 +9,7 @@ use derive_more::{
 	derive::{Deref, DerefMut},
 };
 use eyre::Result;
+use secrecy::SecretString;
 use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
@@ -32,7 +33,7 @@ impl Exchange for Bybit {
 		self.source_market.unwrap()
 	}
 
-	fn auth(&mut self, key: String, secret: String) {
+	fn auth(&mut self, key: String, secret: SecretString) {
 		self.update_default_option(BybitOption::Key(key));
 		self.update_default_option(BybitOption::Secret(secret));
 	}

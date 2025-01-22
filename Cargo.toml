@@ -27,6 +27,7 @@ hmac = "^0.12.1"
 sha2 = "^0.10.8"
 hex = "^0.4.3"
 derive-new = "^0.7.0"
+secrecy = "^0.10.3"
 
 #[dev-dependencies]
 insta = "1.42.0"

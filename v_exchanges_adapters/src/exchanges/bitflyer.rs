@@ -5,6 +5,7 @@ use std::{marker::PhantomData, time::SystemTime};
 
 use hmac::{Hmac, Mac};
 use rand::{Rng, distributions::Alphanumeric};
+use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::json;
 use sha2::Sha256;
@@ -26,7 +27,7 @@ pub enum BitFlyerOption {
 	/// API key
 	Key(String),
 	/// Api secret
-	Secret(String),
+	Secret(SecretString),
 	/// Base url for HTTP requests
 	HttpUrl(BitFlyerHttpUrl),
 	/// Whether [BitFlyerRequestHandler] should perform authentication
@@ -53,7 +54,7 @@ pub struct BitFlyerOptions {
 	pub key: Option<String>,
 	/// see [BitFlyerOption::Secret]
 	#[debug("[REDACTED]")]
-	pub secret: Option<String>,
+	pub secret: Option<SecretString>,
 	/// see [BitFlyerOption::HttpUrl]
 	pub http_url: BitFlyerHttpUrl,
 	/// see [BitFlyerOption::HttpAuth]
@@ -153,7 +154,7 @@ where
 
 			let sign_contents = format!("{}{}{}{}", timestamp, request.method(), path, body);
 
-			let secret = self.options.secret.as_deref().ok_or("API secret not set")?;
+			let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or("API secret not set")?;
 			let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap(); // hmac accepts key of any length
 
 			hmac.update(sign_contents.as_bytes());
@@ -202,7 +203,7 @@ impl WebSocketHandler for BitFlyerWebSocketHandler {
 		if self.options.websocket_auth {
 			// https://bf-lightning-api.readme.io/docs/realtime-api-auth
 			if let Some(key) = self.options.key.as_deref() {
-				if let Some(secret) = self.options.secret.as_deref() {
+				if let Some(secret) = self.options.secret.as_ref().map(|s| s.expose_secret()) {
 					let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
 					let timestamp = time.as_millis() as u64;
 					let nonce: String = rand::thread_rng().sample_iter(&Alphanumeric).take(16).map(char::from).collect();

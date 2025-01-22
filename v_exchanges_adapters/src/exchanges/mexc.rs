@@ -7,6 +7,7 @@ use std::{
 };
 
 use hmac::{Hmac, Mac};
+use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
 use v_exchanges_api_generics::{http::*, websocket::*};
@@ -26,7 +27,7 @@ pub enum MexcOption {
 	/// API key
 	Key(String),
 	/// Api secret
-	Secret(String),
+	Secret(SecretString),
 	/// Base url for HTTP requests
 	HttpUrl(MexcHttpUrl),
 	/// Authentication type for HTTP requests
@@ -48,7 +49,7 @@ pub struct MexcOptions {
 	pub key: Option<String>,
 	/// see [MexcOption::Secret]
 	#[debug("[REDACTED]")]
-	pub secret: Option<String>,
+	pub secret: Option<SecretString>,
 	/// see [MexcOption::HttpUrl]
 	pub http_url: MexcHttpUrl,
 	/// see [MexcOption::HttpAuth]
@@ -177,7 +178,7 @@ where
 			}
 
 			if self.options.http_auth == MexcAuth::Sign {
-				let secret = self.options.secret.as_deref().ok_or("API secret not set")?;
+				let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or("API key not set")?;
 				let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
 
 				let mut request = builder.build().or(Err("Failed to build request"))?;

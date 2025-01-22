@@ -8,7 +8,7 @@ async fn main() {
 
 	let m: AbsMarket = "Mexc/Futures".into();
 	let mut c = m.client();
-	c.auth(env::var("MEXC_READ_KEY").unwrap(), env::var("MEXC_READ_SECRET").unwrap());
+	c.auth(env::var("MEXC_READ_KEY").unwrap(), env::var("MEXC_READ_SECRET").unwrap().into());
 
 	let price = c.price(("BTC", "USDT").into(), m).await.unwrap();
 	dbg!(&price);

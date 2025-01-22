@@ -4,6 +4,7 @@
 use std::{borrow::Cow, marker::PhantomData, time::SystemTime, vec};
 
 use hmac::{Hmac, Mac};
+use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::json;
 use sha2::Sha256;
@@ -25,7 +26,7 @@ pub enum BybitOption {
 	/// API key
 	Key(String),
 	/// Api secret
-	Secret(String),
+	Secret(SecretString),
 	/// Base url for HTTP requests
 	HttpUrl(BybitHttpUrl),
 	/// Type of authentication used for HTTP requests.
@@ -54,7 +55,7 @@ pub struct BybitOptions {
 	pub key: Option<String>,
 	/// see [BybitOption::Secret]
 	#[debug("[REDACTED]")]
-	pub secret: Option<String>,
+	pub secret: Option<SecretString>,
 	/// see [BybitOption::HttpUrl]
 	pub http_url: BybitHttpUrl,
 	/// see [BybitOption::HttpAuth]
@@ -162,7 +163,7 @@ where
 		}
 
 		let key = self.options.key.as_deref().ok_or("API key not set")?;
-		let secret = self.options.secret.as_deref().ok_or("API secret not set")?;
+		let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or("API secret not set")?;
 
 		let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
 		let timestamp = time.as_millis();
@@ -375,7 +376,7 @@ impl WebSocketHandler for BybitWebSocketHandler {
 	fn handle_start(&mut self) -> Vec<WebSocketMessage> {
 		if self.options.websocket_auth {
 			if let Some(key) = self.options.key.as_deref() {
-				if let Some(secret) = self.options.secret.as_deref() {
+				if let Some(secret) = self.options.secret.as_ref().map(|s| s.expose_secret()) {
 					let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
 					let expires = time.as_millis() as u64 + 1000;
 

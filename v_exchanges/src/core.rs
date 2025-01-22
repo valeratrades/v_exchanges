@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, VecDeque};
 use chrono::{DateTime, TimeDelta, Utc};
 use derive_more::{Deref, DerefMut};
 use eyre::{Report, Result, bail};
+use secrecy::SecretString;
 use serde_json::json;
 use v_utils::{
 	trades::{Asset, Kline, Pair, Timeframe, Usd},
@@ -17,7 +18,7 @@ pub trait Exchange: std::fmt::Debug + Send {
 		self.source_market().exchange_name()
 	}
 
-	fn auth(&mut self, key: String, secret: String);
+	fn auth(&mut self, key: String, secret: SecretString);
 
 	async fn exchange_info(&self, m: AbsMarket) -> Result<ExchangeInfo>;
 
@@ -60,7 +61,7 @@ impl std::fmt::Display for WrongExchangeError {
 
 pub trait MarketTrait {
 	fn client(&self, source_market: AbsMarket) -> Box<dyn Exchange>;
-	fn client_authenticated(&self, key: String, secret: String, source_market: AbsMarket) -> Box<dyn Exchange> {
+	fn client_authenticated(&self, key: String, secret: SecretString, source_market: AbsMarket) -> Box<dyn Exchange> {
 		let mut client = self.client(source_market);
 		client.auth(key, secret);
 		client
@@ -84,7 +85,7 @@ impl AbsMarket {
 	}
 
 	//Q: more I think about it, more this seems redundant / stupid according to Tiger Style
-	pub fn client_authenticated(&self, key: String, secret: String) -> Box<dyn Exchange> {
+	pub fn client_authenticated(&self, key: String, secret: SecretString) -> Box<dyn Exchange> {
 		match self {
 			Self::Binance(m) => m.client_authenticated(key, secret, *self),
 			Self::Bybit(m) => m.client_authenticated(key, secret, *self),
@@ -234,16 +235,17 @@ impl RequestRange {
 			_ => unimplemented!(),
 		}
 	}
+
 	fn serialize_common(&self) -> serde_json::Value {
-				filter_nulls(match self {
-					RequestRange::StartEnd { start, end } => json!({
-						"startTime": start.timestamp_millis(),
-						"endTime": end.map(|dt| dt.timestamp_millis()),
-					}),
-					RequestRange::Limit(limit) => json!({
-						"limit": limit,
-					}),
-				})
+		filter_nulls(match self {
+			RequestRange::StartEnd { start, end } => json!({
+				"startTime": start.timestamp_millis(),
+				"endTime": end.map(|dt| dt.timestamp_millis()),
+			}),
+			RequestRange::Limit(limit) => json!({
+				"limit": limit,
+			}),
+		})
 	}
 }
 impl Default for RequestRange {
