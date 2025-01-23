@@ -38,6 +38,10 @@ impl Exchange for Bybit {
 		self.update_default_option(BybitOption::Secret(secret));
 	}
 
+	fn set_recv_window(&mut self, recv_window: u16) {
+		self.update_default_option(BybitOption::RecvWindow(recv_window));
+	}
+
 	async fn exchange_info(&self, am: AbsMarket) -> Result<ExchangeInfo> {
 		match am {
 			AbsMarket::Bybit(_) => todo!(),

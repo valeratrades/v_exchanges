@@ -12,13 +12,19 @@ use v_utils::{
 
 #[async_trait::async_trait]
 pub trait Exchange: std::fmt::Debug + Send {
+	// dev {{{
 	/// will always be `Some` when created from `AbsMarket`. When creating client manually could lead to weird errors from this method being used elsewhere, like displaying a `AbsMarket` object.
 	fn source_market(&self) -> AbsMarket;
 	fn exchange_name(&self) -> &'static str {
 		self.source_market().exchange_name()
 	}
+	//,}}}
 
+	// Config {{{
 	fn auth(&mut self, key: String, secret: SecretString);
+	/// Set number of **milliseconds** the request is valid for. Recv Window of over a minute does not make sense, thus it's expressed as u16.
+	fn set_recv_window(&mut self, recv_window: u16);
+	//,}}}
 
 	async fn exchange_info(&self, m: AbsMarket) -> Result<ExchangeInfo>;
 

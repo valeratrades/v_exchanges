@@ -1,4 +1,4 @@
-use v_exchanges::{binance::Binance, bitmex::Bitmex};
+use v_exchanges::{adapters::binance::BinanceOption, binance::Binance, bitmex::Bitmex};
 
 /// things in here are not on [Exchange](v_exchanges::core::Exchange) trait, so can't use generics, must specify exact exchange client methods are referenced from.
 #[tokio::main]

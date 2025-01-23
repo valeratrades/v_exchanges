@@ -26,6 +26,8 @@ pub enum BinanceOption {
 	Key(String),
 	/// Api secret
 	Secret(SecretString),
+	/// Number of milliseconds the request is valid for. Only applicable for signed requests.
+	RecvWindow(u16),
 	/// Base url for HTTP requests
 	HttpUrl(BinanceHttpUrl),
 	/// Authentication type for HTTP requests
@@ -49,6 +51,8 @@ pub struct BinanceOptions {
 	/// see [BinanceOption::Secret]
 	#[debug("[REDACTED]")]
 	pub secret: Option<SecretString>,
+	// see [BinanceOption::RecvWindow]
+	pub recv_window: Option<u16>,
 	/// see [BinanceOption::HttpUrl]
 	pub http_url: BinanceHttpUrl,
 	/// see [BinanceOption::HttpAuth]
@@ -62,7 +66,7 @@ pub struct BinanceOptions {
 }
 
 /// A `enum` that represents the base url of the Binance REST API.
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
 #[non_exhaustive]
 pub enum BinanceHttpUrl {
 	/// `https://api.binance.com`
@@ -88,11 +92,12 @@ pub enum BinanceHttpUrl {
 	/// `https://eapi.binance.com`
 	EuropeanOptions,
 	/// The url will not be modified by [BinanceRequestHandler]
+	#[default]
 	None,
 }
 
 /// A `enum` that represents the base url of the Binance WebSocket API
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
 #[non_exhaustive]
 pub enum BinanceWebSocketUrl {
 	/// `wss://stream.binance.com:9443`
@@ -120,13 +125,15 @@ pub enum BinanceWebSocketUrl {
 	/// `wss://nbstream.binance.com`
 	EuropeanOptions,
 	/// The url will not be modified by [BinanceRequestHandler]
+	#[default]
 	None,
 }
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
 pub enum BinanceAuth {
 	Sign,
 	Key,
+	#[default]
 	None,
 }
 
@@ -173,7 +180,6 @@ where
 		config
 	}
 
-	//XXX: could print creds
 	#[tracing::instrument(skip_all, fields(?builder))]
 	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, Self::BuildError> {
 		if let Some(body) = request_body {
@@ -191,6 +197,9 @@ where
 				let timestamp = time.as_millis();
 
 				builder = builder.query(&[("timestamp", timestamp)]);
+				if let Some(recv_window) = self.options.recv_window {
+					builder = builder.query(&[("recvWindow", recv_window)]);
+				}
 
 				let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or("API secret not set")?;
 				let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap(); // hmac accepts key of any length
@@ -323,6 +332,7 @@ impl HandlerOptions for BinanceOptions {
 		match option {
 			BinanceOption::Default => (),
 			BinanceOption::Key(v) => self.key = Some(v),
+			BinanceOption::RecvWindow(v) => self.recv_window = Some(v),
 			BinanceOption::Secret(v) => self.secret = Some(v),
 			BinanceOption::HttpUrl(v) => self.http_url = v,
 			BinanceOption::HttpAuth(v) => self.http_auth = v,
@@ -345,10 +355,11 @@ impl Default for BinanceOptions {
 		Self {
 			key: None,
 			secret: None,
-			http_url: BinanceHttpUrl::None,
-			http_auth: BinanceAuth::None,
+			recv_window: None,
+			http_url: BinanceHttpUrl::default(),
+			http_auth: BinanceAuth::default(),
 			request_config: RequestConfig::default(),
-			websocket_url: BinanceWebSocketUrl::None,
+			websocket_url: BinanceWebSocketUrl::default(),
 			websocket_config,
 		}
 	}

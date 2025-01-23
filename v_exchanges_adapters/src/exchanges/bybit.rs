@@ -32,7 +32,7 @@ pub enum BybitOption {
 	/// Type of authentication used for HTTP requests.
 	HttpAuth(BybitHttpAuth),
 	/// receive window parameter used for requests
-	RecvWindow(i32),
+	RecvWindow(u16),
 	/// [RequestConfig] used when sending requests.
 	/// `url_prefix` will be overridden by [HttpUrl](Self::HttpUrl) unless `HttpUrl` is [BybitHttpUrl::None].
 	RequestConfig(RequestConfig),
@@ -61,7 +61,7 @@ pub struct BybitOptions {
 	/// see [BybitOption::HttpAuth]
 	pub http_auth: BybitHttpAuth,
 	/// see [BybitOption::RecvWindow]
-	pub recv_window: Option<i32>,
+	pub recv_window: Option<u16>,
 	/// see [BybitOption::RequestConfig]
 	pub request_config: RequestConfig,
 	/// see [BybitOption::WebSocketUrl]
@@ -75,9 +75,10 @@ pub struct BybitOptions {
 }
 
 /// A `enum` that represents the base url of the Bybit REST API.
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
 pub enum BybitHttpUrl {
 	/// `https://api.bybit.com`
+	#[default]
 	Bybit,
 	/// `https://api.bytick.com`
 	Bytick,
@@ -88,9 +89,10 @@ pub enum BybitHttpUrl {
 }
 
 /// A `enum` that represents the base url of the Bybit WebSocket API.
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
 pub enum BybitWebSocketUrl {
 	/// `wss://stream.bybit.com`
+	#[default]
 	Bybit,
 	/// `wss://stream.bytick.com`
 	Bytick,
@@ -101,7 +103,7 @@ pub enum BybitWebSocketUrl {
 }
 
 /// Represents the auth type.
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
 pub enum BybitHttpAuth {
 	/// [Spot V1](https://bybit-exchange.github.io/docs-legacy/spot/v1/#t-introduction)
 	SpotV1,
@@ -115,6 +117,7 @@ pub enum BybitHttpAuth {
 	/// [V3](https://bybit-exchange.github.io/docs/v3/intro) and [V5](https://bybit-exchange.github.io/docs/v5/intro)
 	V3AndAbove,
 	/// No authentication (for public APIs)
+	#[default]
 	None,
 }
 
@@ -215,7 +218,7 @@ where
 		timestamp: u128,
 		mut hmac: Hmac<Sha256>,
 		spot: bool,
-		window: Option<i32>,
+		window: Option<u16>,
 	) -> Result<Request, <BybitRequestHandler<'a, R> as RequestHandler<B>>::BuildError>
 	where
 		B: Serialize, {
@@ -315,7 +318,7 @@ where
 		timestamp: u128,
 		mut hmac: Hmac<Sha256>,
 		version_header: bool,
-		window: Option<i32>,
+		window: Option<u16>,
 	) -> Result<Request, <BybitRequestHandler<'a, R> as RequestHandler<B>>::BuildError>
 	where
 		B: Serialize, {
@@ -470,6 +473,26 @@ impl BybitWebSocketUrl {
 	}
 }
 
+impl Default for BybitOptions {
+	fn default() -> Self {
+		let mut websocket_config = WebSocketConfig::new();
+		websocket_config.ignore_duplicate_during_reconnection = true;
+
+		Self {
+			websocket_config,
+			key: None,
+			secret: None,
+			http_url: BybitHttpUrl::default(),
+			http_auth: BybitHttpAuth::default(),
+			recv_window: None,
+			request_config: Default::default(),
+			websocket_url: BybitWebSocketUrl::default(),
+			websocket_auth: false,
+			websocket_topics: Vec::new(),
+		}
+	}
+}
+
 impl HandlerOptions for BybitOptions {
 	type OptionItem = BybitOption;
 
@@ -491,25 +514,6 @@ impl HandlerOptions for BybitOptions {
 
 	fn is_authenticated(&self) -> bool {
 		self.key.is_some() // some endpoints are satisfied with just the key, and it's really difficult to provide only a key without a secret from the clientside, so assume intent if it's missing.
-	}
-}
-
-impl Default for BybitOptions {
-	fn default() -> Self {
-		let mut websocket_config = WebSocketConfig::new();
-		websocket_config.ignore_duplicate_during_reconnection = true;
-		Self {
-			key: None,
-			secret: None,
-			http_url: BybitHttpUrl::Bybit,
-			http_auth: BybitHttpAuth::None,
-			recv_window: None,
-			request_config: RequestConfig::default(),
-			websocket_url: BybitWebSocketUrl::Bybit,
-			websocket_auth: false,
-			websocket_topics: vec![],
-			websocket_config,
-		}
 	}
 }
 
