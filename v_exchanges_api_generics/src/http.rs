@@ -19,6 +19,7 @@ pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_P
 #[derive(Debug, Clone, Default)]
 pub struct Client {
 	client: reqwest::Client,
+	config: RequestConfig,
 }
 
 impl Client {
@@ -39,7 +40,8 @@ impl Client {
 	where
 		Q: Serialize + ?Sized + std::fmt::Debug,
 		H: RequestHandler<B>, {
-		let config = handler.request_config();
+		let mut config = self.config.clone();
+		handler.patch_request_config(&mut config);
 		config.verify();
 
 		let url = config.url_prefix + url;
@@ -56,6 +58,7 @@ impl Client {
 			match self.client.execute(request).await {
 				Ok(mut response) => {
 					let status = response.status();
+					dbg!(&status);
 					let headers = std::mem::take(response.headers_mut());
 					let body: Bytes = response.bytes().await.map_err(RequestError::ReceiveResponse)?;
 					//TODO!!!: we are only retrying when response is not received. Although there is a list of errors we would also like to retry on.
@@ -64,13 +67,15 @@ impl Client {
 					debug!(truncated_body);
 					return handler.handle_response(status, headers, body).map_err(RequestError::ResponseHandleError);
 				}
-				Err(error) =>
+				Err(error) => {
+					debug!(?error);
 					if i < config.max_try {
 						tracing::warn!("Retrying sending request; made so far: {i}");
 						tokio::time::sleep(config.retry_cooldown).await;
 					} else {
 						return Err(RequestError::SendRequest(error));
-					},
+					}
+				}
 			}
 		}
 		unreachable!()
@@ -191,9 +196,8 @@ pub trait RequestHandler<B> {
 	type BuildError;
 
 	/// Returns a [RequestConfig] that will be used to send a HTTP reqeust.
-	fn request_config(&self) -> RequestConfig {
-		RequestConfig::default()
-	}
+	//TODO!!!!: everyone has the exact same implementation of this, unify (would req a trait for default REST url)
+	fn patch_request_config(&self, default: &mut RequestConfig) {}
 
 	/// Build a HTTP request to be sent.
 	///

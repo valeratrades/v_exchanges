@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, VecDeque};
 
+use adapters::Client;
 use chrono::{DateTime, TimeDelta, Utc};
 use derive_more::{Deref, DerefMut};
 use eyre::{Report, Result, bail};
@@ -18,12 +19,19 @@ pub trait Exchange: std::fmt::Debug + Send {
 	fn exchange_name(&self) -> &'static str {
 		self.source_market().exchange_name()
 	}
+	fn __client_mut(&mut self) -> &mut Client;
+	fn __client(&self) -> &Client;
 	//,}}}
 
 	// Config {{{
 	fn auth(&mut self, key: String, secret: SecretString);
 	/// Set number of **milliseconds** the request is valid for. Recv Window of over a minute does not make sense, thus it's expressed as u16.
 	fn set_recv_window(&mut self, recv_window: u16);
+	fn set_timeout(&mut self, timeout: u16) {
+		//self.__client_mut().set_timeout(timeout);
+		todo!();
+	}
+	//DO: same for other fields in [RequestConfig](v_exchanges_api_generics::http::RequestConfig)
 	//,}}}
 
 	async fn exchange_info(&self, m: AbsMarket) -> Result<ExchangeInfo>;

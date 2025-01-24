@@ -68,11 +68,12 @@ pub struct CoincheckOptions {
 }
 
 /// A `enum` that represents the base url of the Coincheck HTTP API.
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
 pub enum CoincheckHttpUrl {
 	/// `https://coincheck.com`
-	Default,
+	Main,
 	/// The url will not be modified by [CoincheckRequestHandler]
+	#[default]
 	None,
 }
 
@@ -114,12 +115,10 @@ where
 	type Successful = R;
 	type Unsuccessful = CoincheckHandlerError;
 
-	fn request_config(&self) -> RequestConfig {
-		let mut config = self.options.request_config.clone();
-		if self.options.http_url != CoincheckHttpUrl::None {
+	fn patch_request_config(&self, config: &mut RequestConfig) {
+		if self.options.http_url != CoincheckHttpUrl::default() {
 			config.url_prefix = self.options.http_url.as_str().to_owned();
 		}
-		config
 	}
 
 	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, Self::BuildError> {
@@ -217,7 +216,7 @@ impl CoincheckHttpUrl {
 	#[inline(always)]
 	fn as_str(&self) -> &'static str {
 		match self {
-			Self::Default => "https://coincheck.com",
+			Self::Main => "https://coincheck.com",
 			Self::None => "",
 		}
 	}
@@ -263,7 +262,7 @@ impl Default for CoincheckOptions {
 		Self {
 			key: None,
 			secret: None,
-			http_url: CoincheckHttpUrl::Default,
+			http_url: CoincheckHttpUrl::Main,
 			http_auth: false,
 			request_config: RequestConfig::default(),
 			websocket_url: CoincheckWebSocketUrl::Default,

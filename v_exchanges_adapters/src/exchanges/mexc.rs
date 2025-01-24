@@ -65,12 +65,13 @@ pub struct MexcOptions {
 }
 
 /// Enum that represents the base url of the MEXC REST API
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
 #[non_exhaustive]
 pub enum MexcHttpUrl {
 	Spot,
 	SpotTest,
 	Futures,
+	#[default]
 	None,
 }
 impl MexcHttpUrl {
@@ -149,12 +150,10 @@ where
 	type Successful = R;
 	type Unsuccessful = MexcHandlerError;
 
-	fn request_config(&self) -> RequestConfig {
-		let mut config = self.options.request_config.clone();
-		if self.options.http_url != MexcHttpUrl::None {
+	fn patch_request_config(&self, config: &mut RequestConfig) {
+		if self.options.http_url != MexcHttpUrl::default() {
 			config.url_prefix = self.options.http_url.as_str().to_owned();
 		}
-		config
 	}
 
 	#[tracing::instrument(skip_all, fields(?builder))]

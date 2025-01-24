@@ -172,12 +172,10 @@ where
 	type Successful = R;
 	type Unsuccessful = BinanceHandlerError;
 
-	fn request_config(&self) -> RequestConfig {
-		let mut config = self.options.request_config.clone();
-		if self.options.http_url != BinanceHttpUrl::None {
+	fn patch_request_config(&self, config: &mut RequestConfig) {
+		if self.options.http_url == BinanceHttpUrl::default() {
 			config.url_prefix = self.options.http_url.as_str().to_owned();
 		}
-		config
 	}
 
 	#[tracing::instrument(skip_all, fields(?builder))]
@@ -227,6 +225,9 @@ where
 			})
 		} else {
 			// https://binance-docs.github.io/apidocs/spot/en/#limits
+			//TODO: error parsing from status
+			//let error_code = BinanceErrorCode::from(status.as_u16());
+			//XXX: binance doesn't even return these
 			if status == 429 || status == 418 {
 				let retry_after = if let Some(value) = headers.get("Retry-After") {
 					if let Ok(string) = value.to_str() {
@@ -397,5 +398,203 @@ impl HandlerOption for BinanceOption {
 impl Default for BinanceOption {
 	fn default() -> Self {
 		Self::Default
+	}
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(from = "i32")]
+pub enum BinanceErrorCode {
+	// 10xx - General Server/Network
+	Unknown,
+	Disconnected,
+	Unauthorized,
+	TooManyRequests,
+	UnexpectedResponse,
+	Timeout,
+	ServerBusy,
+	InvalidMessage,
+	UnknownOrderComposition,
+	TooManyOrders,
+	ServiceShuttingDown,
+	UnsupportedOperation,
+	InvalidTimestamp,
+	InvalidSignature,
+
+	// 11xx - Request issues
+	IllegalChars,
+	TooManyParameters,
+	MandatoryParamEmptyOrMalformed,
+	UnknownParam,
+	UnreadParameters,
+	ParamEmpty,
+	ParamNotRequired,
+	ParamOverflow,
+	BadPrecision,
+	NoDepth,
+	TifNotRequired,
+	InvalidTif,
+	InvalidOrderType,
+	InvalidSide,
+	EmptyNewClOrdId,
+	EmptyOrgClOrdId,
+	BadInterval,
+	BadSymbol,
+	InvalidSymbolStatus,
+	InvalidListenKey,
+	MoreThanXXHours,
+	OptionalParamsBadCombo,
+	InvalidParameter,
+	BadStrategyType,
+	InvalidJson,
+	InvalidTickerType,
+	InvalidCancelRestrictions,
+	DuplicateSymbols,
+	InvalidSbeHeader,
+	UnsupportedSchemaId,
+	SbeDisabled,
+	OcoOrderTypeRejected,
+	OcoIcebergqtyTimeinforce,
+	DeprecatedSchema,
+	BuyOcoLimitMustBeBelow,
+	SellOcoLimitMustBeAbove,
+	BothOcoOrdersCannotBeLimit,
+	InvalidTagNumber,
+	TagNotDefinedInMessage,
+	TagAppearsMoreThanOnce,
+	TagOutOfOrder,
+	GroupFieldsOutOfOrder,
+	InvalidComponent,
+	ResetSeqNumSupport,
+	AlreadyLoggedIn,
+	GarbledMessage,
+	BadSenderCompid,
+	BadSeqNum,
+	ExpectedLogon,
+	TooManyMessages,
+	ParamsBadCombo,
+	NotAllowedInDropCopySessions,
+	DropCopySessionNotAllowed,
+	DropCopySessionRequired,
+	NotAllowedInOrderEntrySessions,
+	NotAllowedInMarketDataSessions,
+	IncorrectNumInGroupCount,
+	DuplicateEntriesInAGroup,
+	InvalidRequestId,
+	TooManySubscriptions,
+	BuyOcoStopLossMustBeAbove,
+	SellOcoStopLossMustBeBelow,
+	BuyOcoTakeProfitMustBeBelow,
+	SellOcoTakeProfitMustBeAbove,
+
+	// 20xx - Business logic errors
+	NewOrderRejected,
+	CancelRejected,
+	NoSuchOrder,
+	BadApiKeyFmt,
+	RejectedMbxKey,
+	NoTradingWindow,
+	OrderArchived,
+	OrderCancelReplacePartiallyFailed,
+	OrderCancelReplaceFailed,
+
+	// Unknown error code
+	Other(i32),
+}
+
+impl From<i32> for BinanceErrorCode {
+	fn from(code: i32) -> Self {
+		match code {
+			-1000 => Self::Unknown,
+			-1001 => Self::Disconnected,
+			-1002 => Self::Unauthorized,
+			-1003 => Self::TooManyRequests,
+			-1006 => Self::UnexpectedResponse,
+			-1007 => Self::Timeout,
+			-1008 => Self::ServerBusy,
+			-1013 => Self::InvalidMessage,
+			-1014 => Self::UnknownOrderComposition,
+			-1015 => Self::TooManyOrders,
+			-1016 => Self::ServiceShuttingDown,
+			-1020 => Self::UnsupportedOperation,
+			-1021 => Self::InvalidTimestamp,
+			-1022 => Self::InvalidSignature,
+
+			-1100 => Self::IllegalChars,
+			-1101 => Self::TooManyParameters,
+			-1102 => Self::MandatoryParamEmptyOrMalformed,
+			-1103 => Self::UnknownParam,
+			-1104 => Self::UnreadParameters,
+			-1105 => Self::ParamEmpty,
+			-1106 => Self::ParamNotRequired,
+			-1108 => Self::ParamOverflow,
+			-1111 => Self::BadPrecision,
+			-1112 => Self::NoDepth,
+			-1114 => Self::TifNotRequired,
+			-1115 => Self::InvalidTif,
+			-1116 => Self::InvalidOrderType,
+			-1117 => Self::InvalidSide,
+			-1118 => Self::EmptyNewClOrdId,
+			-1119 => Self::EmptyOrgClOrdId,
+			-1120 => Self::BadInterval,
+			-1121 => Self::BadSymbol,
+			-1122 => Self::InvalidSymbolStatus,
+			-1125 => Self::InvalidListenKey,
+			-1127 => Self::MoreThanXXHours,
+			-1128 => Self::OptionalParamsBadCombo,
+			-1130 => Self::InvalidParameter,
+			-1134 => Self::BadStrategyType,
+			-1135 => Self::InvalidJson,
+			-1139 => Self::InvalidTickerType,
+			-1145 => Self::InvalidCancelRestrictions,
+			-1151 => Self::DuplicateSymbols,
+			-1152 => Self::InvalidSbeHeader,
+			-1153 => Self::UnsupportedSchemaId,
+			-1155 => Self::SbeDisabled,
+			-1158 => Self::OcoOrderTypeRejected,
+			-1160 => Self::OcoIcebergqtyTimeinforce,
+			-1161 => Self::DeprecatedSchema,
+			-1165 => Self::BuyOcoLimitMustBeBelow,
+			-1166 => Self::SellOcoLimitMustBeAbove,
+			-1168 => Self::BothOcoOrdersCannotBeLimit,
+			-1169 => Self::InvalidTagNumber,
+			-1170 => Self::TagNotDefinedInMessage,
+			-1171 => Self::TagAppearsMoreThanOnce,
+			-1172 => Self::TagOutOfOrder,
+			-1173 => Self::GroupFieldsOutOfOrder,
+			-1174 => Self::InvalidComponent,
+			-1175 => Self::ResetSeqNumSupport,
+			-1176 => Self::AlreadyLoggedIn,
+			-1177 => Self::GarbledMessage,
+			-1178 => Self::BadSenderCompid,
+			-1179 => Self::BadSeqNum,
+			-1180 => Self::ExpectedLogon,
+			-1181 => Self::TooManyMessages,
+			-1182 => Self::ParamsBadCombo,
+			-1183 => Self::NotAllowedInDropCopySessions,
+			-1184 => Self::DropCopySessionNotAllowed,
+			-1185 => Self::DropCopySessionRequired,
+			-1186 => Self::NotAllowedInOrderEntrySessions,
+			-1187 => Self::NotAllowedInMarketDataSessions,
+			-1188 => Self::IncorrectNumInGroupCount,
+			-1189 => Self::DuplicateEntriesInAGroup,
+			-1190 => Self::InvalidRequestId,
+			-1191 => Self::TooManySubscriptions,
+			-1196 => Self::BuyOcoStopLossMustBeAbove,
+			-1197 => Self::SellOcoStopLossMustBeBelow,
+			-1198 => Self::BuyOcoTakeProfitMustBeBelow,
+			-1199 => Self::SellOcoTakeProfitMustBeAbove,
+
+			-2010 => Self::NewOrderRejected,
+			-2011 => Self::CancelRejected,
+			-2013 => Self::NoSuchOrder,
+			-2014 => Self::BadApiKeyFmt,
+			-2015 => Self::RejectedMbxKey,
+			-2016 => Self::NoTradingWindow,
+			-2021 => Self::OrderCancelReplacePartiallyFailed,
+			-2022 => Self::OrderCancelReplaceFailed,
+			-2026 => Self::OrderArchived,
+
+			code => Self::Other(code),
+		}
 	}
 }

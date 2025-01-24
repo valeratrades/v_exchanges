@@ -33,6 +33,14 @@ impl Exchange for Mexc {
 		self.source_market.unwrap()
 	}
 
+	fn __client(&self) -> &Client {
+		&self.client
+	}
+
+	fn __client_mut(&mut self) -> &mut Client {
+		&mut self.client
+	}
+
 	fn auth(&mut self, key: String, secret: SecretString) {
 		self.update_default_option(MexcOption::Key(key));
 		self.update_default_option(MexcOption::Secret(secret));
