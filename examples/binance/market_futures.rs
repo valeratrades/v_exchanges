@@ -8,6 +8,7 @@ async fn main() {
 
 	let m: AbsMarket = "Binance/Futures".into();
 	let mut c = m.client();
+	c.set_retries(3);
 
 	println!("market: {m}");
 	println!("source client: {}", c.source_market());

@@ -27,7 +27,7 @@ macro_rules! request_return_type {
 
 #[derive(Default, Debug, Clone)]
 pub struct Client {
-	client: http::Client,
+	pub client: http::Client,
 	#[cfg(feature = "binance")]
 	binance: binance::BinanceOptions,
 	#[cfg(feature = "bitflyer")]

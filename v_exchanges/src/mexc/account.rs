@@ -2,7 +2,7 @@ use adapters::{
 	Client,
 	mexc::{MexcAuth, MexcHttpUrl, MexcOption},
 };
-use v_utils::prelude_libside::*;
+use v_utils::prelude::*;
 
 use crate::{AssetBalance, Balances};
 

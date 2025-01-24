@@ -26,10 +26,16 @@ pub trait Exchange: std::fmt::Debug + Send {
 	// Config {{{
 	fn auth(&mut self, key: String, secret: SecretString);
 	/// Set number of **milliseconds** the request is valid for. Recv Window of over a minute does not make sense, thus it's expressed as u16.
+	//Q: really don't think this should be used like that, globally, - if unable to find cases, rm in a month (now is 2025/01/24)
 	fn set_recv_window(&mut self, recv_window: u16);
-	fn set_timeout(&mut self, timeout: u16) {
-		//self.__client_mut().set_timeout(timeout);
-		todo!();
+	fn set_timeout(&mut self, timeout: std::time::Duration) {
+		self.__client_mut().client.config.timeout = timeout;
+	}
+	fn set_retry_cooldown(&mut self, cooldown: std::time::Duration) {
+		self.__client_mut().client.config.retry_cooldown = cooldown;
+	}
+	fn set_retries(&mut self, max: u8) {
+		self.__client_mut().client.config.max_tries = max;
 	}
 	//DO: same for other fields in [RequestConfig](v_exchanges_api_generics::http::RequestConfig)
 	//,}}}

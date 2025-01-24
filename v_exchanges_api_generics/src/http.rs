@@ -19,16 +19,11 @@ pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_P
 #[derive(Debug, Clone, Default)]
 pub struct Client {
 	client: reqwest::Client,
-	config: RequestConfig,
+	#[doc(hidden)]
+	pub config: RequestConfig,
 }
 
 impl Client {
-	/// Constructs a default `Client`.
-	#[deprecated(note = "Use [Client::default()] instead")]
-	pub fn new() -> Self {
-		Self::default()
-	}
-
 	/// Makes an HTTP request with the given [RequestHandler] and returns the response.
 	///
 	/// It is recommended to use methods like [get()][Self::get()] because this method takes many type parameters and parameters.
@@ -47,7 +42,7 @@ impl Client {
 		//Q: is it ever desirable, actually?
 		let url = base_url + url;
 
-		for i in 1..=config.max_try {
+		for i in 1..=config.max_tries {
 			//HACK: hate to create a new request every time, but I haven't yet figured out how to provide by reference
 			let mut request_builder = self.client.request(method.clone(), url.clone()).timeout(config.timeout);
 			if let Some(query) = query {
@@ -70,7 +65,7 @@ impl Client {
 				}
 				Err(error) => {
 					debug!(?error);
-					if i < config.max_try {
+					if i < config.max_tries {
 						tracing::warn!("Retrying sending request; made so far: {i}");
 						tokio::time::sleep(config.retry_cooldown).await;
 					} else {
@@ -238,7 +233,7 @@ pub struct RequestConfig {
 	/// [Client] will retry sending a request if it failed to send. `max_try` can be used limit the number of attempts.
 	///
 	/// Do not set this to `0` or [Client::request()] will **panic**. [Default]s to `1` (which means no retry).
-	pub max_try: u8,
+	pub max_tries: u8,
 	/// Duration that should elapse after retrying sending a request.
 	///
 	/// [Default]s to 500ms. See also: `max_try`.
@@ -251,22 +246,15 @@ pub struct RequestConfig {
 }
 
 impl RequestConfig {
-	/// Constructs a new `RequestConfig` with its fields set to [default][RequestConfig::default()].
-	#[inline(always)]
-	pub fn new() -> Self {
-		Self::default()
-	}
-
 	#[inline(always)]
 	fn verify(&self) {
-		assert_ne!(self.max_try, 0, "RequestConfig.max_try must not be equal to 0");
+		assert_ne!(self.max_tries, 0, "RequestConfig.max_tries must not be equal to 0");
 	}
 }
-
 impl Default for RequestConfig {
 	fn default() -> Self {
 		Self {
-			max_try: 1,
+			max_tries: 1,
 			retry_cooldown: Duration::from_millis(500),
 			timeout: Duration::from_secs(3),
 		}

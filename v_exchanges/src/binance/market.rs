@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 
-use chrono::{DateTime, TimeZone as _, Utc};
-//HACK: Methods should be implemented on the central interface struct, following <https://github.com/wisespace-io/binance-rs>.
+use chrono::{DateTime, Utc};
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

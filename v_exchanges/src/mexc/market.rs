@@ -2,7 +2,7 @@ use adapters::{
 	Client,
 	mexc::{MexcHttpUrl, MexcOption},
 };
-use v_utils::prelude_libside::*;
+use v_utils::prelude::*;
 
 //TODO: impl spot
 pub async fn price(client: &Client, pair: Pair) -> Result<f64> {
