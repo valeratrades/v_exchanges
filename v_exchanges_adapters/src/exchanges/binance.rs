@@ -172,10 +172,8 @@ where
 	type Successful = R;
 	type Unsuccessful = BinanceHandlerError;
 
-	fn patch_request_config(&self, config: &mut RequestConfig) {
-		if self.options.http_url == BinanceHttpUrl::default() {
-			config.url_prefix = self.options.http_url.as_str().to_owned();
-		}
+	fn base_url(&self) -> String {
+		self.options.http_url.as_str().to_owned()
 	}
 
 	#[tracing::instrument(skip_all, fields(?builder))]

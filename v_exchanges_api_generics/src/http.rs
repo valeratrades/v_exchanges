@@ -40,11 +40,12 @@ impl Client {
 	where
 		Q: Serialize + ?Sized + std::fmt::Debug,
 		H: RequestHandler<B>, {
-		let mut config = self.config.clone();
-		handler.patch_request_config(&mut config);
+		let config = &self.config;
+		let base_url = handler.base_url();
 		config.verify();
 
-		let url = config.url_prefix + url;
+		//Q: is it ever desirable, actually?
+		let url = base_url + url;
 
 		for i in 1..=config.max_try {
 			//HACK: hate to create a new request every time, but I haven't yet figured out how to provide by reference
@@ -195,9 +196,10 @@ pub trait RequestHandler<B> {
 	/// The type that represents an error occurred in [build_request()][Self::build_request()].
 	type BuildError;
 
-	/// Returns a [RequestConfig] that will be used to send a HTTP reqeust.
-	//TODO!!!!: everyone has the exact same implementation of this, unify (would req a trait for default REST url)
-	fn patch_request_config(&self, default: &mut RequestConfig) {}
+	/// Produce a url prefix (if any).
+	fn base_url(&self) -> String {
+		String::default()
+	}
 
 	/// Build a HTTP request to be sent.
 	///
@@ -246,10 +248,6 @@ pub struct RequestConfig {
 	/// It is possible for the [RequestHandler] to override this in [RequestHandler::build_request()].
 	/// See also: [RequestBuilder::timeout()].
 	pub timeout: Duration,
-	/// The prefix which will be used for requests sent using this configuration. [Default]s to `""`.
-	///
-	/// Example usage: `"https://example.com"`
-	pub url_prefix: String,
 }
 
 impl RequestConfig {
@@ -271,7 +269,6 @@ impl Default for RequestConfig {
 			max_try: 1,
 			retry_cooldown: Duration::from_millis(500),
 			timeout: Duration::from_secs(3),
-			url_prefix: String::new(),
 		}
 	}
 }
