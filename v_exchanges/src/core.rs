@@ -11,6 +11,9 @@ use v_utils::{
 	utils::filter_nulls,
 };
 
+/// Main trait for all standardized exchange interactions
+/// # Other
+/// - each private method provides recv_window
 #[async_trait::async_trait]
 pub trait Exchange: std::fmt::Debug + Send {
 	// dev {{{
@@ -27,6 +30,7 @@ pub trait Exchange: std::fmt::Debug + Send {
 	fn auth(&mut self, key: String, secret: SecretString);
 	/// Set number of **milliseconds** the request is valid for. Recv Window of over a minute does not make sense, thus it's expressed as u16.
 	//Q: really don't think this should be used like that, globally, - if unable to find cases, rm in a month (now is 2025/01/24)
+	#[deprecated(note = "This shouldn't be a global setting, but a per-request one. Use `recv_window` in the request instead.")]
 	fn set_recv_window(&mut self, recv_window: u16);
 	fn set_timeout(&mut self, timeout: std::time::Duration) {
 		self.__client_mut().client.config.timeout = timeout;
@@ -53,9 +57,9 @@ pub trait Exchange: std::fmt::Debug + Send {
 	//TODO!!!: async fn spawn_klines_listener(&self, symbol: Pair, tf: Timeframe) -> mpsc::Receiver<Kline>;
 
 	/// balance of a specific asset. Does not guarantee provision of USD values.
-	async fn asset_balance(&self, asset: Asset, m: AbsMarket) -> Result<AssetBalance>;
+	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, m: AbsMarket) -> Result<AssetBalance>;
 	/// vec of _non-zero_ balances exclusively. Provides USD values.
-	async fn balances(&self, m: AbsMarket) -> Result<Balances>;
+	async fn balances(&self, recv_window: Option<u16>, m: AbsMarket) -> Result<Balances>;
 	//? potentially `total_balance`? Would return precompiled USDT-denominated balance of a (bybit::wallet/binance::account)
 	// balances are defined for each margin type: [futures_balance, spot_balance, margin_balance], but note that on some exchanges, (like bybit), some of these may point to the same exact call
 	// to negate confusion could add a `total_balance` endpoint

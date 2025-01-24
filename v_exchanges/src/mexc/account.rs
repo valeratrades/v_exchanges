@@ -6,26 +6,25 @@ use v_utils::prelude::*;
 
 use crate::{AssetBalance, Balances};
 
-pub async fn asset_balance(client: &Client, asset: Asset) -> Result<AssetBalance> {
+pub async fn asset_balance(client: &Client, asset: Asset, recv_window: Option<u16>) -> Result<AssetBalance> {
 	assert!(client.is_authenticated::<MexcOption>());
+	let mut options = vec![MexcOption::HttpUrl(MexcHttpUrl::Futures), MexcOption::HttpAuth(MexcAuth::Sign)];
+	if let Some(rw) = recv_window {
+		options.push(MexcOption::RecvWindow(rw));
+	}
 	let endpoint = format!("/api/v1/private/account/asset/{}", asset);
-	let r: AssetBalanceResponse = client
-		.get_no_query(&endpoint, [MexcOption::HttpUrl(MexcHttpUrl::Futures), MexcOption::HttpAuth(MexcAuth::Sign)])
-		.await
-		.unwrap();
+	let r: AssetBalanceResponse = client.get_no_query(&endpoint, options).await.unwrap();
 
 	Ok(r.data.into())
 }
 
-pub async fn balances(client: &Client) -> Result<Balances> {
+pub async fn balances(client: &Client, recv_window: Option<u16>) -> Result<Balances> {
 	assert!(client.is_authenticated::<MexcOption>());
-	let rs: BalancesResponse = client
-		.get_no_query("/api/v1/private/account/assets", [
-			MexcOption::HttpUrl(MexcHttpUrl::Futures),
-			MexcOption::HttpAuth(MexcAuth::Sign),
-		])
-		.await
-		.unwrap();
+	let mut options = vec![MexcOption::HttpUrl(MexcHttpUrl::Futures), MexcOption::HttpAuth(MexcAuth::Sign)];
+	if let Some(rw) = recv_window {
+		options.push(MexcOption::RecvWindow(rw));
+	}
+	let rs: BalancesResponse = client.get_no_query("/api/v1/private/account/assets", options).await.unwrap();
 
 	let non_zero: Vec<AssetBalance> = rs.data.into_iter().filter(|r| r.equity != 0.).map(|r| r.into()).collect();
 	// dance with tambourine to request for usdt prices of all assets except usdt itself

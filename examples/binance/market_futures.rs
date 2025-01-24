@@ -23,9 +23,9 @@ async fn main() {
 	if let (Ok(key), Ok(secret)) = (env::var("BINANCE_TIGER_READ_KEY"), env::var("BINANCE_TIGER_READ_SECRET")) {
 		c.auth(key, secret.into());
 		c.set_recv_window(10000);
-		let balance_usdt = c.asset_balance("USDT".into(), m).await.unwrap();
+		let balance_usdt = c.asset_balance("USDT".into(), None, m).await.unwrap();
 		dbg!(&balance_usdt);
-		let balances = c.balances(m).await.unwrap();
+		let balances = c.balances(None, m).await.unwrap();
 		dbg!(&balances);
 	} else {
 		eprintln!("BINANCE_TIGER_READ_KEY or BINANCE_TIGER_READ_SECRET is missing, skipping private API methods.");

@@ -81,20 +81,20 @@ impl Exchange for Mexc {
 		}
 	}
 
-	async fn asset_balance(&self, asset: Asset, am: AbsMarket) -> Result<AssetBalance> {
+	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, am: AbsMarket) -> Result<AssetBalance> {
 		match am {
 			AbsMarket::Mexc(m) => match m {
-				Market::Futures => account::asset_balance(&self.client, asset).await,
+				Market::Futures => account::asset_balance(&self.client, asset, recv_window).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
 		}
 	}
 
-	async fn balances(&self, am: AbsMarket) -> Result<Balances> {
+	async fn balances(&self, recv_window: Option<u16>, am: AbsMarket) -> Result<Balances> {
 		match am {
 			AbsMarket::Mexc(m) => match m {
-				Market::Futures => account::balances(&self.client).await,
+				Market::Futures => account::balances(&self.client, recv_window).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),

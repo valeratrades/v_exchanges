@@ -83,22 +83,22 @@ impl Exchange for Binance {
 		}
 	}
 
-	async fn asset_balance(&self, asset: Asset, am: AbsMarket) -> Result<AssetBalance> {
+	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, am: AbsMarket) -> Result<AssetBalance> {
 		match am {
 			AbsMarket::Binance(m) => match m {
-				Market::Futures => futures::account::asset_balance(self, asset).await,
+				Market::Futures => futures::account::asset_balance(self, asset, recv_window).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
 		}
 	}
 
-	async fn balances(&self, am: AbsMarket) -> Result<Balances> {
+	async fn balances(&self, recv_window: Option<u16>, am: AbsMarket) -> Result<Balances> {
 		match am {
 			AbsMarket::Binance(m) => match m {
 				Market::Futures => {
 					let prices = self.prices(None, am).await?;
-					futures::account::balances(&self.client, &prices).await
+					futures::account::balances(&self.client, recv_window, &prices).await
 				}
 				_ => unimplemented!(),
 			},
