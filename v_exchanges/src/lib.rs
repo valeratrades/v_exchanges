@@ -10,12 +10,20 @@ pub mod prelude {
 }
 pub use prelude::*;
 
-pub mod utils;
+pub(crate) mod utils;
 
+#[cfg(feature = "binance")]
+#[cfg_attr(docsrs, doc(cfg(feature = "binance")))]
 pub mod binance;
 
+#[cfg(feature = "bybit")]
+#[cfg_attr(docsrs, doc(cfg(feature = "bybit")))]
 pub mod bybit;
 
-pub mod bitmex;
-
+#[cfg(feature = "bitmex")]
+#[cfg_attr(docsrs, doc(cfg(feature = "bitmex")))]
 pub mod mexc;
+
+#[cfg(feature = "data")]
+#[cfg_attr(docsrs, doc(cfg(feature = "data")))]
+pub mod bitmex;

@@ -17,6 +17,7 @@ use crate::{
 
 // klines {{{
 pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: RequestRange, market: Market) -> Result<Klines> {
+	//TODO: test if embedding params into the url works more consistently (comp number of pairs axum-site is ablle ot get)
 	range.ensure_allowed(1..=1000, tf)?;
 	let range_params = range.serialize(market.abs_market());
 	let base_params = json!({
@@ -81,7 +82,7 @@ pub struct KlineResponse {
 	pub low: f64,
 	#[serde_as(as = "DisplayFromStr")]
 	pub volume: f64,
-	/// As of today (2025/01/03), means NOTHING, as they will still send what it _SHOULD_ be even if the kline is not yet finished. (fuck you, binance)
+	/// As of today (2025/01/03), means **NOTHING**, as they will still send what it _SHOULD_ be even if the kline is not yet finished. (fuck you, binance)
 	__close_time: i64,
 	#[serde_as(as = "DisplayFromStr")]
 	pub quote_asset_volume: f64,

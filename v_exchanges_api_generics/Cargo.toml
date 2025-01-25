@@ -17,12 +17,16 @@ repository = "https://github.com/valeratrades/v_exchanges/tree/master/v_exchange
 
 [dependencies]
 bytes = "1.9.0"
+derive-new.workspace = true
+derive_more.workspace = true
 parking_lot = "0.12.3"
 tokio-tungstenite = "0.26.1"
 
 futures-util.workspace = true
 reqwest.workspace = true
 serde.workspace = true
+serde_json.workspace = true
+serde_urlencoded.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true

@@ -1,11 +1,13 @@
-use v_exchanges::{binance::Binance, bitmex::Bitmex};
+use v_exchanges::prelude::*;
+use v_utils::prelude::*;
 
+// Random test stuff, for dev purposes only
 #[tokio::main]
 async fn main() {
-	color_eyre::install().unwrap();
-	v_utils::utils::init_subscriber(v_utils::utils::LogDestination::xdg("v_exchanges"));
+	clientside!();
 
-	let bn = Binance::default();
-	let lsr = bn.lsr(("BTC", "USDT").into(), "5m".into(), (24 * 12 + 1).into(), "Global".into()).await.unwrap();
-	dbg!(&lsr[..2]);
+	let market: AbsMarket = "Binance/Futures".into();
+	let exchange = market.client();
+	let klines = exchange.klines(("BTC", "USDT").into(), "1m".into(), 2.into(), market).await.unwrap();
+	dbg!(klines);
 }

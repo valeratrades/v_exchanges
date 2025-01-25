@@ -1,12 +1,12 @@
 use std::collections::{BTreeMap, VecDeque};
 
-use adapters::Client;
+use adapters::{Client, generics};
 use chrono::{DateTime, TimeDelta, Utc};
 use derive_more::{Deref, DerefMut};
-use eyre::{Report, Result, bail};
 use secrecy::SecretString;
 use serde_json::json;
 use v_utils::{
+	prelude::*,
 	trades::{Asset, Kline, Pair, Timeframe, Usd},
 	utils::filter_nulls,
 };
@@ -15,14 +15,16 @@ use v_utils::{
 /// # Other
 /// - each private method provides recv_window
 #[async_trait::async_trait]
-pub trait Exchange: std::fmt::Debug + Send {
+pub trait Exchange: std::fmt::Debug + Send + Sync {
 	// dev {{{
 	/// will always be `Some` when created from `AbsMarket`. When creating client manually could lead to weird errors from this method being used elsewhere, like displaying a `AbsMarket` object.
 	fn source_market(&self) -> AbsMarket;
 	fn exchange_name(&self) -> &'static str {
 		self.source_market().exchange_name()
 	}
+	#[doc(hidden)]
 	fn __client_mut(&mut self) -> &mut Client;
+	#[doc(hidden)]
 	fn __client(&self) -> &Client;
 	//,}}}
 
@@ -38,7 +40,7 @@ pub trait Exchange: std::fmt::Debug + Send {
 	fn set_retry_cooldown(&mut self, cooldown: std::time::Duration) {
 		self.__client_mut().client.config.retry_cooldown = cooldown;
 	}
-	fn set_retries(&mut self, max: u8) {
+	fn set_max_tries(&mut self, max: u8) {
 		self.__client_mut().client.config.max_tries = max;
 	}
 	//DO: same for other fields in [RequestConfig](v_exchanges_api_generics::http::RequestConfig)
@@ -66,6 +68,21 @@ pub trait Exchange: std::fmt::Debug + Send {
 
 	//? could implement many things that are _explicitly_ combinatorial. I can imagine several cases, where knowing that say the specified limit for the klines is wayyy over the max and that you may be opting into a long wait by calling it, could be useful.
 }
+impl std::fmt::Display for dyn Exchange {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.exchange_name())
+	}
+}
+
+// Exchange Error {{{
+#[derive(Error, Debug, derive_more::Display)]
+pub enum ExchangeError {
+	SendHttpRequest(generics::reqwest::Error),
+	ReceiveHttpResponse(generics::reqwest::Error),
+	Client(Report),
+	Other(Report),
+}
+//,}}}
 
 // AbsMarket {{{
 #[derive(derive_more::Debug, derive_new::new, thiserror::Error)]
@@ -95,15 +112,21 @@ pub trait MarketTrait {
 
 #[derive(Debug, Clone, Copy)]
 pub enum AbsMarket {
+	#[cfg(feature = "binance")]
 	Binance(crate::binance::Market),
+	#[cfg(feature = "bybit")]
 	Bybit(crate::bybit::Market),
+	#[cfg(feature = "mexc")]
 	Mexc(crate::mexc::Market),
 }
 impl AbsMarket {
 	pub fn client(&self) -> Box<dyn Exchange> {
 		match self {
+			#[cfg(feature = "binance")]
 			Self::Binance(m) => m.client(*self),
+			#[cfg(feature = "bybit")]
 			Self::Bybit(m) => m.client(*self),
+			#[cfg(feature = "mexc")]
 			Self::Mexc(m) => m.client(*self),
 		}
 	}
@@ -111,16 +134,22 @@ impl AbsMarket {
 	//Q: more I think about it, more this seems redundant / stupid according to Tiger Style
 	pub fn client_authenticated(&self, key: String, secret: SecretString) -> Box<dyn Exchange> {
 		match self {
+			#[cfg(feature = "binance")]
 			Self::Binance(m) => m.client_authenticated(key, secret, *self),
+			#[cfg(feature = "bybit")]
 			Self::Bybit(m) => m.client_authenticated(key, secret, *self),
+			#[cfg(feature = "mexc")]
 			Self::Mexc(m) => m.client_authenticated(key, secret, *self),
 		}
 	}
 
 	pub fn exchange_name(&self) -> &'static str {
 		match self {
+			#[cfg(feature = "binance")]
 			Self::Binance(_) => "Binance",
+			#[cfg(feature = "bybit")]
 			Self::Bybit(_) => "Bybit",
+			#[cfg(feature = "mexc")]
 			Self::Mexc(_) => "Mexc",
 		}
 	}
@@ -128,8 +157,11 @@ impl AbsMarket {
 impl std::fmt::Display for AbsMarket {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
+			#[cfg(feature = "binance")]
 			Self::Binance(m) => write!(f, "{}/{}", self.exchange_name(), m),
+			#[cfg(feature = "bybit")]
 			Self::Bybit(m) => write!(f, "{}/{}", self.exchange_name(), m),
+			#[cfg(feature = "mexc")]
 			Self::Mexc(m) => write!(f, "{}/{}", self.exchange_name(), m),
 		}
 	}
@@ -146,8 +178,10 @@ impl std::str::FromStr for AbsMarket {
 		let exchange = parts[0];
 		let sub_market = parts[1];
 		match exchange {
+			#[cfg(feature = "binance")]
 			"Binance" => Ok(Self::Binance(sub_market.parse()?)),
 
+			#[cfg(feature = "bybit")]
 			"Bybit" => Ok(Self::Bybit({
 				match sub_market.parse() {
 					Ok(m) => m,
@@ -157,6 +191,7 @@ impl std::str::FromStr for AbsMarket {
 					},
 				}
 			})),
+			#[cfg(feature = "mexc")]
 			"Mexc" => Ok(Self::Mexc(sub_market.parse()?)),
 			_ => bail!("Invalid market string: {}", s),
 		}
@@ -254,7 +289,9 @@ impl RequestRange {
 	//TODO!!!!!!!!!: MUST be generic over Market. But with current Market representation is impossible.
 	pub fn serialize(&self, am: AbsMarket) -> serde_json::Value {
 		match am {
+			#[cfg(feature = "binance")]
 			AbsMarket::Binance(_) => self.serialize_common(),
+			#[cfg(feature = "bybit")]
 			AbsMarket::Bybit(_) => self.serialize_common(),
 			_ => unimplemented!(),
 		}

@@ -1,9 +1,8 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
-
+pub extern crate v_exchanges_api_generics as generics;
 pub use exchanges::*;
 use serde::Serialize;
 use traits::*;
-pub use v_exchanges_api_generics;
 use v_exchanges_api_generics::{
 	http::{self, *},
 	websocket::*,
@@ -13,14 +12,11 @@ mod exchanges;
 pub mod traits;
 
 // very long type, make it a macro
-macro_rules! request_return_type {
+macro_rules! request_ret {
     ($lt:lifetime, $Response:ty, $Options:ty,  $Body:ty) => {
         Result<
             <<$Options as HttpOption<$lt, $Response, $Body>>::RequestHandler as RequestHandler<$Body>>::Successful,
-            RequestError<
-                <<$Options as HttpOption<$lt, $Response, $Body>>::RequestHandler as RequestHandler<$Body>>::BuildError,
-                <<$Options as HttpOption<$lt, $Response, $Body>>::RequestHandler as RequestHandler<$Body>>::Unsuccessful,
-            >,
+            RequestError,
         >
     };
 }
@@ -72,7 +68,7 @@ impl Client {
 
 	/// see [http::Client::request()]
 	#[inline(always)]
-	pub async fn request<'a, R, O, Q, B>(&self, method: Method, url: &str, query: Option<&Q>, body: Option<B>, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, B)
+	pub async fn request<'a, R, O, Q, B>(&self, method: Method, url: &str, query: Option<&Q>, body: Option<B>, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, B)
 	where
 		O: HttpOption<'a, R, B>,
 		O::RequestHandler: RequestHandler<B>,
@@ -83,7 +79,7 @@ impl Client {
 
 	/// see [http::Client::get()]
 	#[inline(always)]
-	pub async fn get<'a, R, O, Q>(&self, url: &str, query: &Q, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
+	pub async fn get<'a, R, O, Q>(&self, url: &str, query: &Q, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, ())
 	where
 		O: HttpOption<'a, R, ()>,
 		O::RequestHandler: RequestHandler<()>,
@@ -94,7 +90,7 @@ impl Client {
 
 	/// see [http::Client::get_no_query()]
 	#[inline(always)]
-	pub async fn get_no_query<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
+	pub async fn get_no_query<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, ())
 	where
 		O: HttpOption<'a, R, ()>,
 		O::RequestHandler: RequestHandler<()>,
@@ -104,7 +100,7 @@ impl Client {
 
 	/// see [http::Client::post()]
 	#[inline(always)]
-	pub async fn post<'a, R, O, B>(&self, url: &str, body: B, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, B)
+	pub async fn post<'a, R, O, B>(&self, url: &str, body: B, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, B)
 	where
 		O: HttpOption<'a, R, B>,
 		O::RequestHandler: RequestHandler<B>,
@@ -114,7 +110,7 @@ impl Client {
 
 	/// see [http::Client::post_no_body()]
 	#[inline(always)]
-	pub async fn post_no_body<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
+	pub async fn post_no_body<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, ())
 	where
 		O: HttpOption<'a, R, ()>,
 		O::RequestHandler: RequestHandler<()>,
@@ -124,7 +120,7 @@ impl Client {
 
 	/// see [http::Client::put()]
 	#[inline(always)]
-	pub async fn put<'a, R, O, B>(&self, url: &str, body: B, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, B)
+	pub async fn put<'a, R, O, B>(&self, url: &str, body: B, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, B)
 	where
 		O: HttpOption<'a, R, B>,
 		O::RequestHandler: RequestHandler<B>,
@@ -134,7 +130,7 @@ impl Client {
 
 	/// see [http::Client::put_no_body()]
 	#[inline(always)]
-	pub async fn put_no_body<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
+	pub async fn put_no_body<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, ())
 	where
 		O: HttpOption<'a, R, ()>,
 		O::RequestHandler: RequestHandler<()>,
@@ -144,7 +140,7 @@ impl Client {
 
 	/// see [http::Client::delete()]
 	#[inline(always)]
-	pub async fn delete<'a, R, O, Q>(&self, url: &str, query: &Q, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
+	pub async fn delete<'a, R, O, Q>(&self, url: &str, query: &Q, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, ())
 	where
 		O: HttpOption<'a, R, ()>,
 		O::RequestHandler: RequestHandler<()>,
@@ -155,7 +151,7 @@ impl Client {
 
 	/// see [http::Client::delete_no_query()]
 	#[inline(always)]
-	pub async fn delete_no_query<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_return_type!('a, R, O, ())
+	pub async fn delete_no_query<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, ())
 	where
 		O: HttpOption<'a, R, ()>,
 		O::RequestHandler: RequestHandler<()>,

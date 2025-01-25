@@ -5,9 +5,7 @@ pub use reqwest::{
 	Method, Request, RequestBuilder, StatusCode,
 	header::{self, HeaderMap},
 };
-use serde::Serialize;
-use thiserror::Error;
-use tracing::{Span, debug, field::Empty, instrument};
+use v_utils::prelude::*;
 
 /// The User Agent string
 pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_PKG_VERSION"));
@@ -31,16 +29,15 @@ impl Client {
 	/// The request is passed to `handler` before being sent, and the response is passed to `handler` before being returned.
 	/// Note, that as stated in the docs for [RequestBuilder::query()], parameter `query` only accepts a **sequence of** key-value pairs.
 	#[instrument(skip_all, fields(?url, ?query, request_builder = Empty))] //TODO: get all generics to impl std::fmt::Debug
-	pub async fn request<Q, B, H>(&self, method: Method, url: &str, query: Option<&Q>, body: Option<B>, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
+	pub async fn request<Q, B, H>(&self, method: Method, url: &str, query: Option<&Q>, body: Option<B>, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		Q: Serialize + ?Sized + std::fmt::Debug,
 		H: RequestHandler<B>, {
 		let config = &self.config;
 		let base_url = handler.base_url();
 		config.verify();
-
-		//Q: is it ever desirable, actually?
 		let url = base_url + url;
+		debug!(?config);
 
 		for i in 1..=config.max_tries {
 			//HACK: hate to create a new request every time, but I haven't yet figured out how to provide by reference
@@ -50,28 +47,27 @@ impl Client {
 			}
 			Span::current().record("request_builder", format!("{:?}", request_builder));
 
-			let request = handler.build_request(request_builder, &body, i).map_err(RequestError::BuildRequestError)?;
+			let request = handler.build_request(request_builder, &body, i).map_err(RequestError::BuildRequest)?;
 			match self.client.execute(request).await {
 				Ok(mut response) => {
 					let status = response.status();
-					dbg!(&status);
 					let headers = std::mem::take(response.headers_mut());
 					let body: Bytes = response.bytes().await.map_err(RequestError::ReceiveResponse)?;
 					//TODO!!!: we are only retrying when response is not received. Although there is a list of errors we would also like to retry on.
 					let body_str: &str = std::str::from_utf8(&body).unwrap_or_default().trim();
 					let truncated_body = v_utils::utils::truncate_msg(body_str);
 					debug!(truncated_body);
-					return handler.handle_response(status, headers, body).map_err(RequestError::ResponseHandleError);
+					return handler.handle_response(status, headers, body).map_err(RequestError::HandleResponse);
 				}
-				Err(error) => {
-					debug!(?error);
-					if i < config.max_tries {
-						tracing::warn!("Retrying sending request; made so far: {i}");
+				Err(e) =>
+					if i < config.max_tries && e.is_timeout() {
+						info!("Retrying sending request; made so far: {i}");
 						tokio::time::sleep(config.retry_cooldown).await;
 					} else {
-						return Err(RequestError::SendRequest(error));
-					}
-				}
+						warn!(?e);
+						debug!("{:?}\nAnd then trying the .is_timeout(): {}", e.status(), e.is_timeout());
+						return Err(RequestError::SendRequest(e));
+					},
 			}
 		}
 		unreachable!()
@@ -84,21 +80,16 @@ impl Client {
 	///
 	/// For more information, see [request()][Self::request()].
 	#[inline(always)]
-	pub async fn get<Q, H>(&self, url: &str, query: &Q, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
+	pub async fn get<Q, H>(&self, url: &str, query: &Q, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		Q: Serialize + ?Sized + Debug,
 		H: RequestHandler<()>, {
 		self.request::<Q, (), H>(Method::GET, url, Some(query), None, handler).await
 	}
 
-	/// Makes an GET request with the given [RequestHandler], without queries.
-	///
-	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
-	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
-	///
-	/// For more information, see [request()][Self::request()].
+	/// Derivation of [get()][Self::get()].
 	#[inline(always)]
-	pub async fn get_no_query<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
+	pub async fn get_no_query<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<()>, {
 		self.request::<&[(&str, &str)], (), H>(Method::GET, url, None, None, handler).await
@@ -110,20 +101,15 @@ impl Client {
 	///
 	/// For more information, see [request()][Self::request()].
 	#[inline(always)]
-	pub async fn post<B, H>(&self, url: &str, body: B, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
+	pub async fn post<B, H>(&self, url: &str, body: B, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<B>, {
 		self.request::<(), B, H>(Method::POST, url, None, Some(body), handler).await
 	}
 
-	/// Makes an POST request with the given [RequestHandler], without a body.
-	///
-	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
-	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
-	///
-	/// For more information, see [request()][Self::request()].
+	/// Derivation of [post()][Self::post()].
 	#[inline(always)]
-	pub async fn post_no_body<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
+	pub async fn post_no_body<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<()>, {
 		self.request::<(), (), H>(Method::POST, url, None, None, handler).await
@@ -135,20 +121,15 @@ impl Client {
 	///
 	/// For more information, see [request()][Self::request()].
 	#[inline(always)]
-	pub async fn put<B, H>(&self, url: &str, body: B, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
+	pub async fn put<B, H>(&self, url: &str, body: B, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<B>, {
 		self.request::<(), B, H>(Method::PUT, url, None, Some(body), handler).await
 	}
 
-	/// Makes an PUT request with the given [RequestHandler], without a body.
-	///
-	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
-	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
-	///
-	/// For more information, see [request()][Self::request()].
+	/// Derivation of [put()][Self::put()].
 	#[inline(always)]
-	pub async fn put_no_body<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
+	pub async fn put_no_body<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<()>, {
 		self.request::<(), (), H>(Method::PUT, url, None, None, handler).await
@@ -161,21 +142,16 @@ impl Client {
 	///
 	/// For more information, see [request()][Self::request()].
 	#[inline(always)]
-	pub async fn delete<Q, H>(&self, url: &str, query: &Q, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
+	pub async fn delete<Q, H>(&self, url: &str, query: &Q, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		Q: Serialize + ?Sized + Debug,
 		H: RequestHandler<()>, {
 		self.request::<Q, (), H>(Method::DELETE, url, Some(query), None, handler).await
 	}
 
-	/// Makes an DELETE request with the given [RequestHandler], without queries.
-	///
-	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
-	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
-	///
-	/// For more information, see [request()][Self::request()].
+	/// Derivation of [delete()][Self::delete()].
 	#[inline(always)]
-	pub async fn delete_no_query<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError<H::BuildError, H::Unsuccessful>>
+	pub async fn delete_no_query<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<()>, {
 		self.request::<&[(&str, &str)], (), H>(Method::DELETE, url, None, None, handler).await
@@ -186,10 +162,6 @@ impl Client {
 pub trait RequestHandler<B> {
 	/// The type which is returned to the caller of [Client::request()] when the response was successful.
 	type Successful;
-	/// The type which is returned to the caller of [Client::request()] when the response was unsuccessful.
-	type Unsuccessful;
-	/// The type that represents an error occurred in [build_request()][Self::build_request()].
-	type BuildError;
 
 	/// Produce a url prefix (if any).
 	fn base_url(&self) -> String {
@@ -200,7 +172,7 @@ pub trait RequestHandler<B> {
 	///
 	/// Implementors have to decide how to include the `request_body` into the `builder`. Implementors can
 	/// also perform other operations (such as authorization) on the request.
-	fn build_request(&self, builder: RequestBuilder, request_body: &Option<B>, attempt_count: u8) -> Result<Request, Self::BuildError>;
+	fn build_request(&self, builder: RequestBuilder, request_body: &Option<B>, attempt_count: u8) -> Result<Request, BuildError>;
 
 	/// Handle a HTTP response before it is returned to the caller of [Client::request()].
 	///
@@ -221,7 +193,7 @@ pub trait RequestHandler<B> {
 	/// }
 	/// # }
 	/// ```
-	fn handle_response(&self, status: StatusCode, headers: HeaderMap, response_body: Bytes) -> Result<Self::Successful, Self::Unsuccessful>;
+	fn handle_response(&self, status: StatusCode, headers: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError>;
 }
 
 /// Configuration when sending a request using [Client].
@@ -261,21 +233,61 @@ impl Default for RequestConfig {
 	}
 }
 
+/// Error type encompassing all the failure modes of [RequestHandler::handle_response()].
+#[derive(Error, Debug, derive_more::Display, derive_more::From)]
+pub enum HandleError {
+	/// Refer to [ApiError]
+	Api(ApiError),
+	/// Couldn't parse the response. Most often will wrap a [serde_json::Error].
+	Parse(serde_json::Error),
+	#[allow(missing_docs)]
+	Other(Report),
+}
+/// Errors that exchanges purposefully transmit.
+#[derive(Error, Debug, derive_more::Display, derive_more::From)]
+pub enum ApiError {
+	/// Ip has been timed out or banned
+	IpTimeout {
+		/// Time of unban
+		until: DateTime<Utc>,
+	},
+	/// Errors that are a) specific to a particular exchange or b) should be handled by this crate, but are here for dev convenience
+	Other(Report),
+}
+
 /// An `enum` that represents errors that could be returned by [Client::request()]
-///
-/// Type parameter `R` is [RequestHandler::Unsuccessful].
-#[derive(Error, std::fmt::Debug)]
-pub enum RequestError<E, R> {
+#[derive(Error, Debug)]
+pub enum RequestError {
 	/// An error which occurred while sending a HTTP request.
-	#[error("failed to send request")]
+	#[error("failed to send HTTP request: {0}")]
 	SendRequest(#[source] reqwest::Error),
 	/// An error which occurred while receiving a HTTP response.
-	#[error("failed to receive response")]
+	#[error("failed to receive HTTP response: {0}")]
 	ReceiveResponse(#[source] reqwest::Error),
 	/// Error occurred in [RequestHandler::build_request()].
-	#[error("the handler failed to build a request")]
-	BuildRequestError(E),
-	/// An error which was returned by [RequestHandler].
-	#[error("the response handler returned an error")]
-	ResponseHandleError(R),
+	#[error("the handler failed to build a request: {0}")]
+	BuildRequest(BuildError),
+	/// An error which was returned by [RequestHandler::handle_response()].
+	#[error("the handler returned an error: {0}")]
+	HandleResponse(HandleError),
+	#[allow(missing_docs)]
+	#[error("{0}")]
+	Other(Report),
+}
+
+/// Errors that can occur during exchange's implementation of the build-request process.
+#[derive(Error, Debug, derive_more::From, derive_more::Display)]
+pub enum BuildError {
+	/// signed request attempted, while lacking one of the necessary auth fields
+	Auth(MissingAuth),
+	/// could not serialize body as application/x-www-form-urlencoded
+	UrlSerialization(serde_urlencoded::ser::Error),
+	#[allow(missing_docs)]
+	Other(Report),
+}
+
+#[derive(Error, Debug, derive_more::Display, derive_more::From)]
+pub enum MissingAuth {
+	ApiKey,
+	SecretKey,
 }

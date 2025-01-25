@@ -8,7 +8,7 @@ async fn main() {
 
 	let m: AbsMarket = "Binance/Futures".into();
 	let mut c = m.client();
-	c.set_retries(3);
+	c.set_max_tries(3);
 
 	println!("market: {m}");
 	println!("source client: {}", c.source_market());
@@ -22,10 +22,9 @@ async fn main() {
 
 	if let (Ok(key), Ok(secret)) = (env::var("BINANCE_TIGER_READ_KEY"), env::var("BINANCE_TIGER_READ_SECRET")) {
 		c.auth(key, secret.into());
-		c.set_recv_window(10000);
-		let balance_usdt = c.asset_balance("USDT".into(), None, m).await.unwrap();
+		let balance_usdt = c.asset_balance("USDT".into(), Some(10_000), m).await.unwrap();
 		dbg!(&balance_usdt);
-		let balances = c.balances(None, m).await.unwrap();
+		let balances = c.balances(Some(10_000), m).await.unwrap();
 		dbg!(&balances);
 	} else {
 		eprintln!("BINANCE_TIGER_READ_KEY or BINANCE_TIGER_READ_SECRET is missing, skipping private API methods.");

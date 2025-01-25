@@ -18,3 +18,4 @@
 pub mod http;
 /// Module for interacting with WebSocket APIs.
 pub mod websocket;
+pub extern crate reqwest;
