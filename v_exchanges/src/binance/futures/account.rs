@@ -9,11 +9,14 @@ use v_utils::{
 	trades::{Asset, Pair, Side, Usd},
 };
 
-use crate::core::{AssetBalance, Balances};
+use crate::{
+	ExchangeResult,
+	core::{AssetBalance, Balances},
+};
 
 // balance {{{
 //DUP: difficult to escape duplicating half the [balances] method due to a) not requiring usd value b) binance not having individual asset balance endpoint
-pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, recv_window: Option<u16>) -> Result<AssetBalance> {
+pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, recv_window: Option<u16>) -> ExchangeResult<AssetBalance> {
 	assert!(client.is_authenticated::<BinanceOption>());
 	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM), BinanceOption::HttpAuth(BinanceAuth::Sign)];
 	if let Some(rw) = recv_window {
@@ -32,7 +35,7 @@ pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, 
 	Ok(balance)
 }
 
-pub async fn balances(client: &v_exchanges_adapters::Client, recv_window: Option<u16>, prices: &BTreeMap<Pair, f64>) -> Result<Balances> {
+pub async fn balances(client: &v_exchanges_adapters::Client, recv_window: Option<u16>, prices: &BTreeMap<Pair, f64>) -> ExchangeResult<Balances> {
 	assert!(client.is_authenticated::<BinanceOption>());
 	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM), BinanceOption::HttpAuth(BinanceAuth::Sign)];
 	if let Some(rw) = recv_window {

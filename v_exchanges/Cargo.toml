@@ -53,9 +53,11 @@ insta.workspace = true
 #
 
 [features]
-default = ["binance"] #dbg
+default = ["binance"] #["major"]
 
-full = ["binance", "bitflyer", "bybit", "coincheck", "mexc", "data"]
+full = ["major", "bitflyer", "coincheck"]
+major = ["binance", "bybit", "mexc", "data"]
+
 binance = ["v_exchanges_adapters/binance"]
 bybit = ["v_exchanges_adapters/bybit"]
 bitflyer = ["v_exchanges_adapters/bitflyer"]

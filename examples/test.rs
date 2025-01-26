@@ -8,6 +8,6 @@ async fn main() {
 
 	let market: AbsMarket = "Binance/Futures".into();
 	let exchange = market.client();
-	let klines = exchange.klines(("BTC", "USDT").into(), "1m".into(), 2.into(), market).await.unwrap();
+	let klines = exchange.klines(("BTC", "USDT").into(), "1m".into(), 2000.into(), market).await.unwrap();
 	dbg!(klines);
 }

@@ -394,7 +394,7 @@ impl Default for BinanceOption {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-struct BinanceError {
+pub struct BinanceError {
 	pub code: BinanceErrorCode,
 	pub msg: String,
 }

@@ -4,9 +4,11 @@ use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
 use v_utils::prelude::*;
 
+use crate::ExchangeResult;
+
 // price {{{
 //HACK: should use /fapi/v2/ticker/price instead
-pub async fn price(client: &Client, pair: Pair) -> Result<f64> {
+pub async fn price(client: &Client, pair: Pair) -> ExchangeResult<f64> {
 	let params = json!({
 		"symbol": pair.to_string(),
 	});
@@ -16,7 +18,7 @@ pub async fn price(client: &Client, pair: Pair) -> Result<f64> {
 	Ok(price)
 }
 
-pub async fn prices(client: &Client, pairs: Option<Vec<Pair>>) -> Result<BTreeMap<Pair, f64>> {
+pub async fn prices(client: &Client, pairs: Option<Vec<Pair>>) -> ExchangeResult<BTreeMap<Pair, f64>> {
 	let rs: Vec<PriceObject> = match pairs {
 		Some(pairs) => {
 			let params = json!({

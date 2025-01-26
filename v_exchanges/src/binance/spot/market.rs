@@ -1,15 +1,16 @@
 use std::{collections::BTreeMap, str::FromStr};
 
 use adapters::binance::{BinanceHttpUrl, BinanceOption};
-use eyre::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_with::{DisplayFromStr, serde_as};
 use tracing::instrument;
 use v_utils::trades::Pair;
 
+use crate::ExchangeResult;
+
 #[instrument(skip_all, fields(?pairs))]
-pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>) -> Result<BTreeMap<Pair, f64>> {
+pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>) -> ExchangeResult<BTreeMap<Pair, f64>> {
 	let r: PricesResponse = match pairs {
 		//TODO!!!: fix this branch
 		//BUG: doesn't work for some reason
@@ -39,7 +40,7 @@ pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pai
 	Ok(prices)
 }
 
-pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> Result<f64> {
+pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> ExchangeResult<f64> {
 	let params = json!({
 		"symbol": pair.to_string(),
 	});

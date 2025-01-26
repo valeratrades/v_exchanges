@@ -6,10 +6,13 @@ use serde_json::Value;
 use serde_with::{DisplayFromStr, serde_as};
 use v_utils::trades::Pair;
 
-use crate::core::{ExchangeInfo, PairInfo};
+use crate::{
+	ExchangeError,
+	core::{ExchangeInfo, PairInfo},
+};
 //TODO: general endpoints, like ping and exchange info
 
-pub async fn exchange_info(client: &v_exchanges_adapters::Client) -> Result<ExchangeInfo> {
+pub async fn exchange_info(client: &v_exchanges_adapters::Client) -> Result<ExchangeInfo, ExchangeError> {
 	let r: BinanceExchangeFutures = client.get_no_query("/fapi/v1/exchangeInfo", [BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)]).await?;
 	Ok(r.into())
 }

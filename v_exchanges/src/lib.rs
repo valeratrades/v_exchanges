@@ -1,5 +1,5 @@
 #![feature(array_try_map)]
-
+#![feature(formatting_options)]
 pub extern crate v_exchanges_adapters as adapters;
 
 pub mod core;

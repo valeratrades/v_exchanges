@@ -9,14 +9,14 @@ use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
 use v_utils::trades::{Kline, Ohlc, Pair, Timeframe};
 
 use crate::{
-	MarketTrait as _,
+	ExchangeError, MarketTrait as _,
 	binance::Market,
 	core::{Klines, RequestRange},
 	utils::join_params,
 };
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: RequestRange, market: Market) -> Result<Klines> {
+pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: RequestRange, market: Market) -> Result<Klines, ExchangeError> {
 	//TODO: test if embedding params into the url works more consistently (comp number of pairs axum-site is ablle ot get)
 	range.ensure_allowed(1..=1000, tf)?;
 	let range_params = range.serialize(market.abs_market());

@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, VecDeque};
 
-use adapters::{Client, generics};
+use adapters::{generics::{self, http::RequestError}, Client};
 use chrono::{DateTime, TimeDelta, Utc};
 use derive_more::{Deref, DerefMut};
 use secrecy::SecretString;
@@ -8,6 +8,7 @@ use serde_json::json;
 use v_utils::{
 	prelude::*,
 	trades::{Asset, Kline, Pair, Timeframe, Usd},
+
 	utils::filter_nulls,
 };
 
@@ -46,22 +47,22 @@ pub trait Exchange: std::fmt::Debug + Send + Sync {
 	//DO: same for other fields in [RequestConfig](v_exchanges_api_generics::http::RequestConfig)
 	//,}}}
 
-	async fn exchange_info(&self, m: AbsMarket) -> Result<ExchangeInfo>;
+	async fn exchange_info(&self, m: AbsMarket) -> ExchangeResult<ExchangeInfo>;
 
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
-	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, m: AbsMarket) -> Result<Klines>;
+	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, m: AbsMarket) -> ExchangeResult<Klines>;
 
 	/// If no pairs are specified, returns for all;
-	async fn prices(&self, pairs: Option<Vec<Pair>>, m: AbsMarket) -> Result<BTreeMap<Pair, f64>>;
-	async fn price(&self, pair: Pair, m: AbsMarket) -> Result<f64>;
+	async fn prices(&self, pairs: Option<Vec<Pair>>, m: AbsMarket) -> ExchangeResult<BTreeMap<Pair, f64>>;
+	async fn price(&self, pair: Pair, m: AbsMarket) -> ExchangeResult<f64>;
 
 	// Defined in terms of actors
 	//TODO!!!: async fn spawn_klines_listener(&self, symbol: Pair, tf: Timeframe) -> mpsc::Receiver<Kline>;
 
 	/// balance of a specific asset. Does not guarantee provision of USD values.
-	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, m: AbsMarket) -> Result<AssetBalance>;
+	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, m: AbsMarket) -> ExchangeResult<AssetBalance>;
 	/// vec of _non-zero_ balances exclusively. Provides USD values.
-	async fn balances(&self, recv_window: Option<u16>, m: AbsMarket) -> Result<Balances>;
+	async fn balances(&self, recv_window: Option<u16>, m: AbsMarket) -> ExchangeResult<Balances>;
 	//? potentially `total_balance`? Would return precompiled USDT-denominated balance of a (bybit::wallet/binance::account)
 	// balances are defined for each margin type: [futures_balance, spot_balance, margin_balance], but note that on some exchanges, (like bybit), some of these may point to the same exact call
 	// to negate confusion could add a `total_balance` endpoint
@@ -75,12 +76,20 @@ impl std::fmt::Display for dyn Exchange {
 }
 
 // Exchange Error {{{
-#[derive(Error, Debug, derive_more::Display)]
+pub type ExchangeResult<T> = Result<T, ExchangeError>;
+#[derive(Error, Debug, derive_more::Display, derive_more::From)]
 pub enum ExchangeError {
-	SendHttpRequest(generics::reqwest::Error),
-	ReceiveHttpResponse(generics::reqwest::Error),
-	Client(Report),
+	Request(RequestError),
+	Exchange(WrongExchangeError),
+	Timeframe(UnsupportedTimeframeError),
+	Range(RequestRangeError),
 	Other(Report),
+}
+#[derive(Error, Debug, derive_new::new)]
+#[error("Chosen exchange does not support the requested timeframe. Provided: {provided}, allowed: {allowed:?}")]
+pub struct UnsupportedTimeframeError {
+	provided: Timeframe,
+	allowed: Vec<Timeframe>,
 }
 //,}}}
 
@@ -265,12 +274,12 @@ pub enum RequestRange {
 	Limit(u32),
 }
 impl RequestRange {
-	pub fn ensure_allowed(&self, allowed: std::ops::RangeInclusive<u32>, tf: Timeframe) -> Result<()> {
+	pub fn ensure_allowed(&self, allowed: std::ops::RangeInclusive<u32>, tf: Timeframe) -> Result<(), RequestRangeError> {
 		match self {
 			RequestRange::StartEnd { start, end } =>
 				if let Some(end) = end {
 					if start > end {
-						bail!("Start time is greater than end time");
+						return Err(eyre!("Start time is greater than end time").into());
 					}
 					let effective_limit = ((*end - start).num_milliseconds() / tf.duration().num_milliseconds()) as u32;
 					if effective_limit > *allowed.end() {
@@ -363,6 +372,11 @@ impl From<(i64, i64)> for RequestRange {
 	}
 }
 
+#[derive(Error, Debug, derive_more::Display, derive_more::From)]
+pub enum RequestRangeError {
+	OutOfRange(OutOfRangeError),
+	Others(Report),
+}
 #[derive(derive_more::Debug, derive_new::new, thiserror::Error)]
 pub struct OutOfRangeError {
 	allowed: std::ops::RangeInclusive<u32>,
