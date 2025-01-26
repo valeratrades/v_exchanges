@@ -53,18 +53,6 @@ cargo run -p v_exchanges --example binance_market
 Binance main docs: <https://developers.binance.com/docs>
 Binance spot docs: <https://github.com/binance/binance-spot-api-docs?tab=readme-ov-file>
 
-## Conventions
-Purely usage guidance, writing for myself to standardise interfacing with the library across my projects wherever possible.
-List acronyms / other conventions that are preferred when interfacing with the library.
-
-### Exchange names
-Binance: `bn`
-Bybit: `bb`
-Bitflyer: `bf`
-Coincheck: `ch`
-
-
-
 <br>
 
 <sup>
