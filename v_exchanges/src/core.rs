@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, VecDeque};
 
-use adapters::{generics::{self, http::RequestError}, Client};
+use adapters::{generics::{http::RequestError}, Client};
 use chrono::{DateTime, TimeDelta, Utc};
 use derive_more::{Deref, DerefMut};
 use secrecy::SecretString;

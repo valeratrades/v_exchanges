@@ -227,7 +227,7 @@ where
 
 			let api_error: MexcError = match serde_json::from_slice(&response_body) {
 				Ok(parsed) => parsed,
-				Err(e) => return Err(HandleError::Parse(e).into()),
+				Err(e) => return Err(HandleError::Parse(e)),
 			};
 			Err(ApiError::from(api_error).into())
 		}

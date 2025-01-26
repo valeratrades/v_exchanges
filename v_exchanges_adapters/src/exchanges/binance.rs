@@ -6,7 +6,7 @@ use std::{
 	time::{self, SystemTime},
 };
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use generics::http::{ApiError, BuildError, HandleError};
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
@@ -244,7 +244,7 @@ where
 
 			let e: BinanceError = match serde_json::from_slice::<BinanceError>(&response_body) {
 				Ok(binance_error) => binance_error,
-				Err(parse_error) => return Err(HandleError::Parse(parse_error).into()),
+				Err(parse_error) => return Err(HandleError::Parse(parse_error)),
 			};
 			Err(ApiError::from(e).into())
 		}

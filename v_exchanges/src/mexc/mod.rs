@@ -8,7 +8,6 @@ use derive_more::{
 	Display, FromStr,
 	derive::{Deref, DerefMut},
 };
-use eyre::Result;
 use secrecy::SecretString;
 use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
