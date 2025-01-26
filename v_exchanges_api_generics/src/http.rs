@@ -244,14 +244,16 @@ pub enum HandleError {
 	Other(Report),
 }
 /// Errors that exchanges purposefully transmit.
-#[derive(Error, Debug, derive_more::Display, derive_more::From)]
+#[derive(Error, Debug, derive_more::From)]
 pub enum ApiError {
 	/// Ip has been timed out or banned
+	#[error("IP has been timed out or banned until {until:?}")]
 	IpTimeout {
 		/// Time of unban
-		until: DateTime<Utc>,
+		until: Option<DateTime<Utc>>,
 	},
 	/// Errors that are a) specific to a particular exchange or b) should be handled by this crate, but are here for dev convenience
+	#[error("{0}")]
 	Other(Report),
 }
 
@@ -278,16 +280,20 @@ pub enum RequestError {
 /// Errors that can occur during exchange's implementation of the build-request process.
 #[derive(Error, Debug, derive_more::From, derive_more::Display)]
 pub enum BuildError {
-	/// signed request attempted, while lacking one of the necessary auth fields
-	Auth(MissingAuth),
-	/// could not serialize body as application/x-www-form-urlencoded
+	/// Signed request attempted, while lacking one of the necessary auth fields
+	Auth(AuthError),
+	/// Could not serialize body as application/x-www-form-urlencoded
 	UrlSerialization(serde_urlencoded::ser::Error),
+	/// Could not serialize body as application/json
+	JsonSerialization(serde_json::Error),
 	#[allow(missing_docs)]
 	Other(Report),
 }
 
+#[allow(missing_docs)]
 #[derive(Error, Debug, derive_more::Display, derive_more::From)]
-pub enum MissingAuth {
-	ApiKey,
-	SecretKey,
+pub enum AuthError {
+	MissingApiKey,
+	MissingSecret,
+	InvalidCharacterInApiKey(String),
 }

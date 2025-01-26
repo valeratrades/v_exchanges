@@ -12,12 +12,9 @@ use v_exchanges_api_generics::{
 	http::{header::HeaderValue, *},
 	websocket::*,
 };
+use v_utils::prelude::*;
 
 use crate::traits::*;
-
-/// The type returned by [Client::request()].
-pub type BybitRequestResult<T> = Result<T, BybitRequestError>;
-pub type BybitRequestError = RequestError<&'static str, BybitHandlerError>;
 
 /// Options that can be set when creating handlers
 pub enum BybitOption {
@@ -128,6 +125,18 @@ pub enum BybitHandlerError {
 	ParseError,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+struct BybitError {
+	code: i16,
+	msg: String,
+}
+impl From<BybitError> for ApiError {
+	fn from(e: BybitError) -> Self {
+		//HACK
+		ApiError::Other(eyre!("Bybit error {}: {}", e.code, e.msg))
+	}
+}
+
 /// A `struct` that implements [RequestHandler]
 pub struct BybitRequestHandler<'a, R: DeserializeOwned> {
 	options: BybitOptions,
@@ -144,25 +153,23 @@ where
 	B: Serialize,
 	R: DeserializeOwned,
 {
-	type BuildError = &'static str;
 	type Successful = R;
-	type Unsuccessful = BybitHandlerError;
 
 	fn base_url(&self) -> String {
 		self.options.http_url.as_str().to_owned()
 	}
 
-	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, Self::BuildError> {
+	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, BuildError> {
 		if self.options.http_auth == BybitHttpAuth::None {
 			if let Some(body) = request_body {
-				let json = serde_json::to_string(body).or(Err("could not serialize body as application/json"))?;
+				let json = serde_json::to_string(body)?;
 				builder = builder.header(header::CONTENT_TYPE, "application/json").body(json);
 			}
-			return builder.build().or(Err("failed to build request"));
+			return Ok(builder.build().expect("My understanding is client can't trigger this. So fail fast for dev"));
 		}
 
-		let key = self.options.key.as_deref().ok_or("API key not set")?;
-		let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or("API secret not set")?;
+		let key = self.options.key.as_deref().ok_or(AuthError::MissingApiKey)?;
+		let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(AuthError::MissingSecret)?;
 
 		let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
 		let timestamp = time.as_millis();
@@ -178,44 +185,36 @@ where
 		}
 	}
 
-	fn handle_response(&self, status: StatusCode, _: HeaderMap, response_body: Bytes) -> Result<Self::Successful, Self::Unsuccessful> {
+	fn handle_response(&self, status: StatusCode, _: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError> {
 		if status.is_success() {
 			serde_json::from_slice(&response_body).map_err(|error| {
 				tracing::debug!("Failed to parse response due to an error: {}", error);
-				BybitHandlerError::ParseError
+				HandleError::Parse(error)
 			})
 		} else {
 			// https://bybit-exchange.github.io/docs/spot/v3/#t-ratelimits
-			let error = match serde_json::from_slice(&response_body) {
+			let api_error: BybitError = match serde_json::from_slice(&response_body) {
 				Ok(parsed) =>
 					if status == 403 {
-						BybitHandlerError::IpBan(parsed)
+						return Err(ApiError::IpTimeout { until: None }.into());
 					} else {
-						BybitHandlerError::ApiError(parsed)
+						parsed
 					},
-				Err(error) => {
-					tracing::debug!("Failed to parse error response due to an error: {}", error);
-					BybitHandlerError::ParseError
+				Err(e) => {
+					tracing::debug!("Failed to parse error response due to an error: {e}");
+					return Err(HandleError::Parse(e));
 				}
 			};
-			Err(error)
+			Err(ApiError::from(api_error).into())
 		}
 	}
 }
 
-impl<'a, R> BybitRequestHandler<'a, R>
+impl<R> BybitRequestHandler<'_, R>
 where
 	R: DeserializeOwned,
 {
-	fn v1_auth<B>(
-		builder: RequestBuilder,
-		request_body: &Option<B>,
-		key: &str,
-		timestamp: u128,
-		mut hmac: Hmac<Sha256>,
-		spot: bool,
-		window: Option<u16>,
-	) -> Result<Request, <BybitRequestHandler<'a, R> as RequestHandler<B>>::BuildError>
+	fn v1_auth<B>(builder: RequestBuilder, request_body: &Option<B>, key: &str, timestamp: u128, mut hmac: Hmac<Sha256>, spot: bool, window: Option<u16>) -> Result<Request, BuildError>
 	where
 		B: Serialize, {
 		fn sort_and_add<'a>(mut pairs: Vec<(Cow<str>, Cow<'a, str>)>, key: &'a str, timestamp: u128) -> String {
@@ -236,7 +235,7 @@ where
 			urlencoded
 		}
 
-		let mut request = builder.build().or(Err("failed to build request"))?;
+		let mut request = builder.build().expect("My understanding is client can't trigger this. So fail fast for dev");
 		if matches!(*request.method(), Method::GET | Method::DELETE) {
 			let mut queries: Vec<_> = request.url().query_pairs().collect();
 			if let Some(window) = window {
@@ -256,21 +255,17 @@ where
 
 			if let Some(body) = request_body {
 				if spot {
-					let body_string = serde_urlencoded::to_string(body).or(Err("could not serialize body as application/x-www-form-urlencoded"))?;
+					let body_string = serde_urlencoded::to_string(body)?;
 					*request.body_mut() = Some(body_string.into());
 					request.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("application/x-www-form-urlencoded"));
 				} else {
-					let body_string = serde_json::to_string(body).or(Err("could not serialize body as application/json"))?;
+					let body_string = serde_json::to_string(body)?;
 					*request.body_mut() = Some(body_string.into());
 					request.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("application/json"));
 				}
 			}
 		} else {
-			let mut body = if let Some(body) = request_body {
-				serde_urlencoded::to_string(body).or(Err("could not serialize body as application/x-www-form-urlencoded"))?
-			} else {
-				String::new()
-			};
+			let mut body = if let Some(body) = request_body { serde_urlencoded::to_string(body)? } else { String::new() };
 			if let Some(window) = window {
 				if !body.is_empty() {
 					body.push('&');
@@ -315,18 +310,18 @@ where
 		mut hmac: Hmac<Sha256>,
 		version_header: bool,
 		window: Option<u16>,
-	) -> Result<Request, <BybitRequestHandler<'a, R> as RequestHandler<B>>::BuildError>
+	) -> Result<Request, BuildError>
 	where
 		B: Serialize, {
 		let body = if let Some(body) = request_body {
-			let json = serde_json::to_value(body).or(Err("could not serialize body as application/json"))?;
+			let json = serde_json::to_value(body)?;
 			builder = builder.header(header::CONTENT_TYPE, "application/json").body(json.to_string());
 			Some(json)
 		} else {
 			None
 		};
 
-		let mut request = builder.build().or(Err("failed to build request"))?;
+		let mut request = builder.build().expect("My understanding is client can't trigger this. So fail fast for dev");
 
 		let mut sign_contents = format!("{timestamp}{key}");
 		if let Some(window) = window {
@@ -354,7 +349,7 @@ where
 			headers.insert("X-BAPI-SIGN-TYPE", HeaderValue::from(2));
 		}
 		headers.insert("X-BAPI-SIGN", HeaderValue::from_str(&signature).unwrap()); // hex digits are valid
-		headers.insert("X-BAPI-API-KEY", HeaderValue::from_str(key).or(Err("invalid character in API key"))?);
+		headers.insert("X-BAPI-API-KEY", HeaderValue::from_str(key).or(Err(AuthError::InvalidCharacterInApiKey(key.to_owned())))?);
 		headers.insert("X-BAPI-TIMESTAMP", HeaderValue::from(timestamp as u64));
 		if let Some(window) = window {
 			headers.insert("X-BAPI-RECV-WINDOW", HeaderValue::from(window));

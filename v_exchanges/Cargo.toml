@@ -53,7 +53,7 @@ insta.workspace = true
 #
 
 [features]
-default = ["binance"] #["major"]
+default = ["binance", "bybit"] #["major"]
 
 full = ["major", "bitflyer", "coincheck"]
 major = ["binance", "bybit", "mexc", "data"]

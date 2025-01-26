@@ -176,7 +176,7 @@ where
 
 		if self.options.http_auth != BinanceAuth::None {
 			// https://binance-docs.github.io/apidocs/spot/en/#signed-trade-user_data-and-margin-endpoint-security
-			let key = self.options.key.as_deref().ok_or(MissingAuth::ApiKey)?;
+			let key = self.options.key.as_deref().ok_or(AuthError::MissingApiKey)?;
 			builder = builder.header("X-MBX-APIKEY", key);
 
 			if self.options.http_auth == BinanceAuth::Sign {
@@ -188,7 +188,7 @@ where
 					builder = builder.query(&[("recvWindow", recv_window)]);
 				}
 
-				let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(MissingAuth::SecretKey)?;
+				let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(AuthError::MissingSecret)?;
 				let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap(); // hmac accepts key of any length
 
 				let mut request = builder.build().expect("From what I understand, can't trigger this from client-side");
@@ -234,7 +234,7 @@ where
 				};
 				let e = match retry_after_sec {
 					Some(s) => {
-						let until: DateTime<Utc> = Utc::now() + Duration::seconds(s as i64);
+						let until = Some(Utc::now() + Duration::seconds(s as i64));
 						ApiError::IpTimeout { until }.into()
 					}
 					None => eyre!("Could't interpret Retry-After header").into(),
