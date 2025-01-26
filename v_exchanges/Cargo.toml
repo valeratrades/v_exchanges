@@ -24,12 +24,12 @@ rustdoc-args = ["--cfg", "docsrs"]
 ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
 
 [dependencies]
-async-trait = "0.1.85"
+async-trait = "^0.1.85"
 chrono.workspace = true
 derive-new.workspace = true
 derive_more.workspace = true
 enum_dispatch = "0.3.13"
-env_logger = "0.11.5"
+env_logger = "0.11.5" #DEPRECATE
 eyre = "0.6.12"
 serde.workspace = true
 serde_json.workspace = true
