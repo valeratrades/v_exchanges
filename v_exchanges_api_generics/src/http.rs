@@ -198,7 +198,7 @@ pub trait RequestHandler<B> {
 
 /// Configuration when sending a request using [Client].
 ///
-/// Should be returned by [RequestHandler::request_config()].
+/// Modified in-place later if necessary.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct RequestConfig {
