@@ -13,7 +13,7 @@ async fn main() {
 	let price = c.price(("BTC", "USDT").into(), m).await.unwrap();
 	dbg!(&price);
 
-	let balances = c.balances(m).await.unwrap();
+	let balances = c.balances(None, m).await.unwrap();
 	dbg!(&balances);
 }
 

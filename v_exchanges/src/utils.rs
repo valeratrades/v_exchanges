@@ -1,4 +1,4 @@
-use v_utils::prelude_libside::*;
+use v_utils::prelude::*;
 
 /// # Panics
 /// Fine, because given prospected usages, theoretically only developer will see it.

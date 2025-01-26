@@ -68,11 +68,12 @@ pub struct CoincheckOptions {
 }
 
 /// A `enum` that represents the base url of the Coincheck HTTP API.
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
 pub enum CoincheckHttpUrl {
 	/// `https://coincheck.com`
-	Default,
+	Main,
 	/// The url will not be modified by [CoincheckRequestHandler]
+	#[default]
 	None,
 }
 
@@ -114,12 +115,8 @@ where
 	type Successful = R;
 	type Unsuccessful = CoincheckHandlerError;
 
-	fn request_config(&self) -> RequestConfig {
-		let mut config = self.options.request_config.clone();
-		if self.options.http_url != CoincheckHttpUrl::None {
-			config.url_prefix = self.options.http_url.as_str().to_owned();
-		}
-		config
+	fn base_url(&self) -> String {
+		self.options.http_url.as_str().to_owned()
 	}
 
 	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, Self::BuildError> {
@@ -133,11 +130,11 @@ where
 		if self.options.http_auth {
 			// https://coincheck.com/ja/documents/exchange/api#auth
 			let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
-			let nonce = time.as_millis() as u64;
+			let timestamp = time.as_millis() as u64;
 
 			let body = request.body().and_then(|body| body.as_bytes()).map(String::from_utf8_lossy).unwrap_or_default();
 
-			let sign_contents = format!("{}{}{}", nonce, request.url(), body);
+			let sign_contents = format!("{}{}{}", timestamp, request.url(), body);
 
 			let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or("API secret not set")?;
 			let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap(); // hmac accepts key of any length
@@ -148,7 +145,7 @@ where
 			let key = HeaderValue::from_str(self.options.key.as_deref().ok_or("API key not set")?).or(Err("invalid character in API key"))?;
 			let headers = request.headers_mut();
 			headers.insert("ACCESS-KEY", key);
-			headers.insert("ACCESS-NONCE", HeaderValue::from(nonce));
+			headers.insert("ACCESS-NONCE", HeaderValue::from(timestamp));
 			headers.insert("ACCESS-SIGNATURE", HeaderValue::from_str(&signature).unwrap()); // hex digits are valid
 		}
 
@@ -217,7 +214,7 @@ impl CoincheckHttpUrl {
 	#[inline(always)]
 	fn as_str(&self) -> &'static str {
 		match self {
-			Self::Default => "https://coincheck.com",
+			Self::Main => "https://coincheck.com",
 			Self::None => "",
 		}
 	}
@@ -263,7 +260,7 @@ impl Default for CoincheckOptions {
 		Self {
 			key: None,
 			secret: None,
-			http_url: CoincheckHttpUrl::Default,
+			http_url: CoincheckHttpUrl::Main,
 			http_auth: false,
 			request_config: RequestConfig::default(),
 			websocket_url: CoincheckWebSocketUrl::Default,

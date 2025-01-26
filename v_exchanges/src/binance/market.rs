@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 
-use chrono::{DateTime, TimeZone as _, Utc};
-//HACK: Methods should be implemented on the central interface struct, following <https://github.com/wisespace-io/binance-rs>.
+use chrono::{DateTime, Utc};
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -10,14 +9,15 @@ use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
 use v_utils::trades::{Kline, Ohlc, Pair, Timeframe};
 
 use crate::{
-	MarketTrait as _,
+	ExchangeError, MarketTrait as _,
 	binance::Market,
 	core::{Klines, RequestRange},
 	utils::join_params,
 };
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: RequestRange, market: Market) -> Result<Klines> {
+pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: RequestRange, market: Market) -> Result<Klines, ExchangeError> {
+	//TODO: test if embedding params into the url works more consistently (comp number of pairs axum-site is ablle ot get)
 	range.ensure_allowed(1..=1000, tf)?;
 	let range_params = range.serialize(market.abs_market());
 	let base_params = json!({
@@ -82,7 +82,7 @@ pub struct KlineResponse {
 	pub low: f64,
 	#[serde_as(as = "DisplayFromStr")]
 	pub volume: f64,
-	/// As of today (2025/01/03), means NOTHING, as they will still send what it _SHOULD_ be even if the kline is not yet finished. (fuck you, binance)
+	/// As of today (2025/01/03), means **NOTHING**, as they will still send what it _SHOULD_ be even if the kline is not yet finished. (fuck you, binance)
 	__close_time: i64,
 	#[serde_as(as = "DisplayFromStr")]
 	pub quote_asset_volume: f64,

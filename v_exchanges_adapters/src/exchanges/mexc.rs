@@ -3,22 +3,20 @@
 use std::{
 	marker::PhantomData,
 	str::FromStr,
-	time::{Duration, SystemTime},
+	time::{self, SystemTime},
 };
 
+use chrono::{Duration, Utc};
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
 use v_exchanges_api_generics::{http::*, websocket::*};
+use v_utils::prelude::*;
 
 use crate::traits::*;
 
 static MAX_RECV_WINDOW: u16 = 60000; // as of (2025/01/18)
-
-/// The type returned by Client::request().
-pub type MexcRequestResult<T> = Result<T, MexcRequestError>;
-pub type MexcRequestError = RequestError<&'static str, MexcHandlerError>;
 
 /// Options that can be set when creating handlers
 pub enum MexcOption {
@@ -65,12 +63,13 @@ pub struct MexcOptions {
 }
 
 /// Enum that represents the base url of the MEXC REST API
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
 #[non_exhaustive]
 pub enum MexcHttpUrl {
 	Spot,
 	SpotTest,
 	Futures,
+	#[default]
 	None,
 }
 impl MexcHttpUrl {
@@ -115,17 +114,15 @@ pub enum MexcAuth {
 	None,
 }
 
-#[derive(Debug)]
-pub enum MexcHandlerError {
-	ApiError(MexcError),
-	RateLimitError { retry_after: Option<u32> },
-	ParseError,
-}
-
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct MexcError {
 	pub code: i32,
 	pub msg: String,
+}
+impl From<MexcError> for ApiError {
+	fn from(e: MexcError) -> Self {
+		ApiError::Other(eyre!("MEXC API error: {}: {}", e.code, e.msg))
+	}
 }
 
 /// A struct that implements RequestHandler
@@ -145,28 +142,22 @@ where
 	B: Serialize,
 	R: DeserializeOwned,
 {
-	type BuildError = &'static str;
 	type Successful = R;
-	type Unsuccessful = MexcHandlerError;
 
-	fn request_config(&self) -> RequestConfig {
-		let mut config = self.options.request_config.clone();
-		if self.options.http_url != MexcHttpUrl::None {
-			config.url_prefix = self.options.http_url.as_str().to_owned();
-		}
-		config
+	fn base_url(&self) -> String {
+		self.options.http_url.as_str().to_owned()
 	}
 
 	#[tracing::instrument(skip_all, fields(?builder))]
-	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, Self::BuildError> {
+	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, BuildError> {
 		if let Some(body) = request_body {
-			let encoded = serde_urlencoded::to_string(body).or(Err("could not serialize body as application/x-www-form-urlencoded"))?;
+			let encoded = serde_urlencoded::to_string(body)?;
 			builder = builder.header(header::CONTENT_TYPE, "application/x-www-form-urlencoded").body(encoded);
 			//builder = builder.header(header::CONTENT_TYPE, "application/json");
 		}
 
 		if self.options.http_auth != MexcAuth::None {
-			let key = self.options.key.as_deref().ok_or("API key not set")?;
+			let key = self.options.key.as_deref().ok_or(AuthError::MissingApiKey)?;
 			builder = builder.header("ApiKey", key);
 
 			let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
@@ -178,16 +169,12 @@ where
 			}
 
 			if self.options.http_auth == MexcAuth::Sign {
-				let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or("API key not set")?;
+				let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(AuthError::MissingSecret)?;
 				let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
 
-				let mut request = builder.build().or(Err("Failed to build request"))?;
+				let mut request = builder.build().expect("My understanding is that this doesn't fail on client, so fail fast for dev");
 				let param_string = if request.method() == Method::GET || request.method() == Method::DELETE {
-					if let Some(body) = request_body {
-						serde_urlencoded::to_string(body).or(Err("could not serialize parameters"))?
-					} else {
-						String::new()
-					}
+					if let Some(body) = request_body { serde_urlencoded::to_string(body)? } else { String::new() }
 				} else {
 					// For POST, use body as JSON string
 					String::from_utf8(request.body().and_then(|body| body.as_bytes()).unwrap_or_default().to_vec()).unwrap_or_default()
@@ -201,18 +188,19 @@ where
 				return Ok(request);
 			}
 		}
-		builder.build().or(Err("failed to build request"))
+		Ok(builder.build().expect("Don't expect this to be reached by client. Same reasoning - fail fast for dev"))
 	}
 
-	fn handle_response(&self, status: StatusCode, headers: HeaderMap, response_body: Bytes) -> Result<Self::Successful, Self::Unsuccessful> {
+	fn handle_response(&self, status: StatusCode, headers: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError> {
 		if status.is_success() {
-			serde_json::from_slice(&response_body).map_err(|error| {
-				tracing::debug!("Failed to parse response due to an error: {}", error);
-				MexcHandlerError::ParseError
+			serde_json::from_slice(&response_body).map_err(|e| {
+				tracing::debug!("Failed to parse response due to an error: {e}",);
+				HandleError::Parse(e)
 			})
 		} else {
+			//Q: does MEXC even have this, or am I just blindly copying from Binance?
 			if status == 429 {
-				let retry_after = if let Some(value) = headers.get("Retry-After") {
+				let retry_after_sec = if let Some(value) = headers.get("Retry-After") {
 					if let Ok(string) = value.to_str() {
 						if let Ok(retry_after) = u32::from_str(string) {
 							Some(retry_after)
@@ -227,17 +215,21 @@ where
 				} else {
 					None
 				};
-				return Err(MexcHandlerError::RateLimitError { retry_after });
+				let e = match retry_after_sec {
+					Some(s) => {
+						let until = Some(Utc::now() + Duration::seconds(s as i64));
+						ApiError::IpTimeout { until }.into()
+					}
+					None => eyre!("Could't interpret Retry-After header").into(),
+				};
+				return Err(e);
 			}
 
-			let error = match serde_json::from_slice(&response_body) {
-				Ok(parsed_error) => MexcHandlerError::ApiError(parsed_error),
-				Err(error) => {
-					tracing::debug!("Failed to parse error response due to an error: {}", error);
-					MexcHandlerError::ParseError
-				}
+			let api_error: MexcError = match serde_json::from_slice(&response_body) {
+				Ok(parsed) => parsed,
+				Err(e) => return Err(HandleError::Parse(e).into()),
 			};
-			Err(error)
+			Err(ApiError::from(api_error).into())
 		}
 	}
 }
@@ -297,7 +289,7 @@ impl HandlerOptions for MexcOptions {
 impl Default for MexcOptions {
 	fn default() -> Self {
 		let mut websocket_config = WebSocketConfig::new();
-		websocket_config.refresh_after = Duration::from_secs(60 * 60 * 12);
+		websocket_config.refresh_after = time::Duration::from_secs(60 * 60 * 12);
 		websocket_config.ignore_duplicate_during_reconnection = true;
 		Self {
 			key: None,

@@ -9,19 +9,20 @@ use v_utils::{
 	trades::{Asset, Pair, Side, Usd},
 };
 
-use crate::core::{AssetBalance, Balances};
+use crate::{
+	ExchangeResult,
+	core::{AssetBalance, Balances},
+};
 
 // balance {{{
 //DUP: difficult to escape duplicating half the [balances] method due to a) not requiring usd value b) binance not having individual asset balance endpoint
-pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset) -> Result<AssetBalance> {
+pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, recv_window: Option<u16>) -> ExchangeResult<AssetBalance> {
 	assert!(client.is_authenticated::<BinanceOption>());
-	let r: Vec<AssetBalanceResponse> = client
-		.get_no_query("/fapi/v3/balance", [
-			BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM),
-			BinanceOption::HttpAuth(BinanceAuth::Sign),
-		])
-		.await
-		.unwrap();
+	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM), BinanceOption::HttpAuth(BinanceAuth::Sign)];
+	if let Some(rw) = recv_window {
+		options.push(BinanceOption::RecvWindow(rw));
+	}
+	let r: Vec<AssetBalanceResponse> = client.get_no_query("/fapi/v3/balance", options).await.unwrap();
 	let vec_balance: Vec<AssetBalance> = r
 		.into_iter()
 		.map(|r| AssetBalance {
@@ -34,15 +35,13 @@ pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset) 
 	Ok(balance)
 }
 
-pub async fn balances(client: &v_exchanges_adapters::Client, prices: &BTreeMap<Pair, f64>) -> Result<Balances> {
+pub async fn balances(client: &v_exchanges_adapters::Client, recv_window: Option<u16>, prices: &BTreeMap<Pair, f64>) -> ExchangeResult<Balances> {
 	assert!(client.is_authenticated::<BinanceOption>());
-	let rs: Vec<AssetBalanceResponse> = client
-		.get_no_query("/fapi/v3/balance", [
-			BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM),
-			BinanceOption::HttpAuth(BinanceAuth::Sign),
-		])
-		.await
-		.unwrap();
+	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM), BinanceOption::HttpAuth(BinanceAuth::Sign)];
+	if let Some(rw) = recv_window {
+		options.push(BinanceOption::RecvWindow(rw));
+	}
+	let rs: Vec<AssetBalanceResponse> = client.get_no_query("/fapi/v3/balance", options).await.unwrap();
 
 	fn usd_value(underlying: f64, asset: Asset, prices: &BTreeMap<Pair, f64>) -> Result<Usd> {
 		if underlying == 0. {

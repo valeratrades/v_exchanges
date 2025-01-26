@@ -27,10 +27,10 @@ async fn private(c: &dyn Exchange, m: AbsMarket) {
 	//	.await
 	//	.unwrap();
 
-	let balances = c.balances(m).await.unwrap();
+	let balances = c.balances(None, m).await.unwrap();
 	dbg!(&balances);
 
-	let balance_usdc = c.asset_balance("USDC".into(), c.source_market()).await.unwrap();
+	let balance_usdc = c.asset_balance("USDC".into(), Some(5000), c.source_market()).await.unwrap();
 	dbg!(&balance_usdc);
 }
 

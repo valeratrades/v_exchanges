@@ -25,7 +25,7 @@ ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
 
 [dependencies]
 async-trait = "0.1.85"
-chrono = { version = "0.4.39", features = ["serde"] }
+chrono.workspace = true
 derive-new.workspace = true
 derive_more.workspace = true
 enum_dispatch = "0.3.13"
@@ -40,7 +40,7 @@ tokio.workspace = true
 tracing.workspace = true
 v_utils = { workspace = true }
 
-v_exchanges_adapters = { version = "^0.4.0", path = "../v_exchanges_adapters/", features = ["full"] }
+v_exchanges_adapters = { version = "^0.4.0", path = "../v_exchanges_adapters/", optional = true }
 
 reqwest = { version = "^0.12.12", optional = true }
 
@@ -53,14 +53,22 @@ insta.workspace = true
 #
 
 [features]
-default = ["full"]
+default = ["major"]
 
-full = ["binance", "bitflyer", "bybit", "coincheck", "data"]
+full = ["major", "bitflyer", "coincheck"]
+major = ["binance", "bybit", "mexc", "data"]
+
 binance = ["v_exchanges_adapters/binance"]
 bybit = ["v_exchanges_adapters/bybit"]
 bitflyer = ["v_exchanges_adapters/bitflyer"]
 coincheck = ["v_exchanges_adapters/coincheck"]
+mexc = ["v_exchanges_adapters/mexc"]
 data = ["dep:reqwest"]
+
+# Random test stuff, for dev purposes only
+[[example]]
+name = "test"
+path = "../examples/test.rs"
 
 [[example]]
 name = "binance_market_futures"

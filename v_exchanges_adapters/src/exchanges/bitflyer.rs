@@ -72,11 +72,12 @@ pub struct BitFlyerOptions {
 }
 
 /// A `enum` that represents the base url of the BitFlyer HTTP API.
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
 pub enum BitFlyerHttpUrl {
 	/// `https://api.bitflyer.com`
-	Default,
+	Main,
 	/// The url will not be modified by [BitFlyerRequestHandler]
+	#[default]
 	None,
 }
 
@@ -124,12 +125,8 @@ where
 	type Successful = R;
 	type Unsuccessful = BitFlyerHandlerError;
 
-	fn request_config(&self) -> RequestConfig {
-		let mut config = self.options.request_config.clone();
-		if self.options.http_url != BitFlyerHttpUrl::None {
-			config.url_prefix = self.options.http_url.as_str().to_owned();
-		}
-		config
+	fn base_url(&self) -> String {
+		self.options.http_url.as_str().to_owned()
 	}
 
 	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, Self::BuildError> {
@@ -298,7 +295,7 @@ impl BitFlyerHttpUrl {
 	#[inline(always)]
 	fn as_str(&self) -> &'static str {
 		match self {
-			Self::Default => "https://api.bitflyer.com",
+			Self::Main => "https://api.bitflyer.com",
 			Self::None => "",
 		}
 	}
@@ -345,7 +342,7 @@ impl Default for BitFlyerOptions {
 		Self {
 			key: None,
 			secret: None,
-			http_url: BitFlyerHttpUrl::Default,
+			http_url: BitFlyerHttpUrl::Main,
 			http_auth: false,
 			request_config: RequestConfig::default(),
 			websocket_url: BitFlyerWebSocketUrl::Default,

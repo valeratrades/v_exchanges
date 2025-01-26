@@ -3,20 +3,19 @@
 use std::{
 	marker::PhantomData,
 	str::FromStr,
-	time::{Duration, SystemTime},
+	time::{self, SystemTime},
 };
 
+use chrono::{DateTime, Duration, Utc};
+use generics::http::{ApiError, BuildError, HandleError};
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
 use v_exchanges_api_generics::{http::*, websocket::*};
+use v_utils::prelude::*;
 
 use crate::traits::*;
-
-/// The type returned by [Client::request()].
-pub type BinanceRequestResult<T> = Result<T, BinanceRequestError>;
-pub type BinanceRequestError = RequestError<&'static str, BinanceHandlerError>;
 
 /// Options that can be set when creating handlers
 pub enum BinanceOption {
@@ -144,12 +143,6 @@ pub enum BinanceHandlerError {
 	ParseError,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct BinanceError {
-	pub code: i32,
-	pub msg: String,
-}
-
 /// A `struct` that implements [RequestHandler]
 pub struct BinanceRequestHandler<'a, R: DeserializeOwned> {
 	options: BinanceOptions,
@@ -168,28 +161,22 @@ where
 	B: Serialize,
 	R: DeserializeOwned,
 {
-	type BuildError = &'static str;
 	type Successful = R;
-	type Unsuccessful = BinanceHandlerError;
 
-	fn request_config(&self) -> RequestConfig {
-		let mut config = self.options.request_config.clone();
-		if self.options.http_url != BinanceHttpUrl::None {
-			config.url_prefix = self.options.http_url.as_str().to_owned();
-		}
-		config
+	fn base_url(&self) -> String {
+		self.options.http_url.as_str().to_owned()
 	}
 
 	#[tracing::instrument(skip_all, fields(?builder))]
-	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, Self::BuildError> {
+	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, BuildError> {
 		if let Some(body) = request_body {
-			let encoded = serde_urlencoded::to_string(body).or(Err("could not serialize body as application/x-www-form-urlencoded"))?;
+			let encoded = serde_urlencoded::to_string(body)?;
 			builder = builder.header(header::CONTENT_TYPE, "application/x-www-form-urlencoded").body(encoded);
 		}
 
 		if self.options.http_auth != BinanceAuth::None {
 			// https://binance-docs.github.io/apidocs/spot/en/#signed-trade-user_data-and-margin-endpoint-security
-			let key = self.options.key.as_deref().ok_or("API key not set")?;
+			let key = self.options.key.as_deref().ok_or(AuthError::MissingApiKey)?;
 			builder = builder.header("X-MBX-APIKEY", key);
 
 			if self.options.http_auth == BinanceAuth::Sign {
@@ -201,11 +188,11 @@ where
 					builder = builder.query(&[("recvWindow", recv_window)]);
 				}
 
-				let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or("API secret not set")?;
+				let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(AuthError::MissingSecret)?;
 				let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap(); // hmac accepts key of any length
 
-				let mut request = builder.build().or(Err("Failed to build request"))?;
-				let query = request.url().query().unwrap(); // we added the timestamp query
+				let mut request = builder.build().expect("From what I understand, can't trigger this from client-side");
+				let query = request.url().query().unwrap();
 				let body = request.body().and_then(|body| body.as_bytes()).unwrap_or_default();
 
 				hmac.update(&[query.as_bytes(), body].concat());
@@ -216,19 +203,21 @@ where
 				return Ok(request);
 			}
 		}
-		builder.build().or(Err("failed to build request"))
+		builder.build().or(Err(eyre!("failed to build request").into()))
 	}
 
-	fn handle_response(&self, status: StatusCode, headers: HeaderMap, response_body: Bytes) -> Result<Self::Successful, Self::Unsuccessful> {
+	fn handle_response(&self, status: StatusCode, headers: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError> {
 		if status.is_success() {
 			serde_json::from_slice(&response_body).map_err(|error| {
 				tracing::debug!("Failed to parse response due to an error: {}", error);
-				BinanceHandlerError::ParseError
+				HandleError::Parse(error)
 			})
 		} else {
 			// https://binance-docs.github.io/apidocs/spot/en/#limits
+
+			//TODO; act on error-codes
 			if status == 429 || status == 418 {
-				let retry_after = if let Some(value) = headers.get("Retry-After") {
+				let retry_after_sec = if let Some(value) = headers.get("Retry-After") {
 					if let Ok(string) = value.to_str() {
 						if let Ok(retry_after) = u32::from_str(string) {
 							Some(retry_after)
@@ -243,17 +232,21 @@ where
 				} else {
 					None
 				};
-				return Err(BinanceHandlerError::RateLimitError { retry_after });
+				let e = match retry_after_sec {
+					Some(s) => {
+						let until = Some(Utc::now() + Duration::seconds(s as i64));
+						ApiError::IpTimeout { until }.into()
+					}
+					None => eyre!("Could't interpret Retry-After header").into(),
+				};
+				return Err(e);
 			}
 
-			let error = match serde_json::from_slice(&response_body) {
-				Ok(parsed_error) => BinanceHandlerError::ApiError(parsed_error),
-				Err(error) => {
-					tracing::debug!("Failed to parse error response due to an error: {}", error);
-					BinanceHandlerError::ParseError
-				}
+			let e: BinanceError = match serde_json::from_slice::<BinanceError>(&response_body) {
+				Ok(binance_error) => binance_error,
+				Err(parse_error) => return Err(HandleError::Parse(parse_error).into()),
 			};
-			Err(error)
+			Err(ApiError::from(e).into())
 		}
 	}
 }
@@ -350,7 +343,7 @@ impl HandlerOptions for BinanceOptions {
 impl Default for BinanceOptions {
 	fn default() -> Self {
 		let mut websocket_config = WebSocketConfig::new();
-		websocket_config.refresh_after = Duration::from_secs(60 * 60 * 12);
+		websocket_config.refresh_after = time::Duration::from_secs(60 * 60 * 12);
 		websocket_config.ignore_duplicate_during_reconnection = true;
 		Self {
 			key: None,
@@ -397,5 +390,218 @@ impl HandlerOption for BinanceOption {
 impl Default for BinanceOption {
 	fn default() -> Self {
 		Self::Default
+	}
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct BinanceError {
+	pub code: BinanceErrorCode,
+	pub msg: String,
+}
+impl From<BinanceError> for ApiError {
+	fn from(e: BinanceError) -> Self {
+		//HACK
+		eyre!("Binance API error: {}", e.msg).into()
+	}
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
+#[serde(from = "i32")]
+pub enum BinanceErrorCode {
+	// 10xx - General Server/Network
+	Unknown(i32),
+	Disconnected(i32),
+	Unauthorized(i32),
+	TooManyRequests(i32),
+	UnexpectedResponse(i32),
+	Timeout(i32),
+	ServerBusy(i32),
+	InvalidMessage(i32),
+	UnknownOrderComposition(i32),
+	TooManyOrders(i32),
+	ServiceShuttingDown(i32),
+	UnsupportedOperation(i32),
+	InvalidTimestamp(i32),
+	InvalidSignature(i32),
+
+	// 11xx - Request issues
+	IllegalChars(i32),
+	TooManyParameters(i32),
+	MandatoryParamEmptyOrMalformed(i32),
+	UnknownParam(i32),
+	UnreadParameters(i32),
+	ParamEmpty(i32),
+	ParamNotRequired(i32),
+	ParamOverflow(i32),
+	BadPrecision(i32),
+	NoDepth(i32),
+	TifNotRequired(i32),
+	InvalidTif(i32),
+	InvalidOrderType(i32),
+	InvalidSide(i32),
+	EmptyNewClOrdId(i32),
+	EmptyOrgClOrdId(i32),
+	BadInterval(i32),
+	BadSymbol(i32),
+	InvalidSymbolStatus(i32),
+	InvalidListenKey(i32),
+	MoreThanXXHours(i32),
+	OptionalParamsBadCombo(i32),
+	InvalidParameter(i32),
+	BadStrategyType(i32),
+	InvalidJson(i32),
+	InvalidTickerType(i32),
+	InvalidCancelRestrictions(i32),
+	DuplicateSymbols(i32),
+	InvalidSbeHeader(i32),
+	UnsupportedSchemaId(i32),
+	SbeDisabled(i32),
+	OcoOrderTypeRejected(i32),
+	OcoIcebergqtyTimeinforce(i32),
+	DeprecatedSchema(i32),
+	BuyOcoLimitMustBeBelow(i32),
+	SellOcoLimitMustBeAbove(i32),
+	BothOcoOrdersCannotBeLimit(i32),
+	InvalidTagNumber(i32),
+	TagNotDefinedInMessage(i32),
+	TagAppearsMoreThanOnce(i32),
+	TagOutOfOrder(i32),
+	GroupFieldsOutOfOrder(i32),
+	InvalidComponent(i32),
+	ResetSeqNumSupport(i32),
+	AlreadyLoggedIn(i32),
+	GarbledMessage(i32),
+	BadSenderCompid(i32),
+	BadSeqNum(i32),
+	ExpectedLogon(i32),
+	TooManyMessages(i32),
+	ParamsBadCombo(i32),
+	NotAllowedInDropCopySessions(i32),
+	DropCopySessionNotAllowed(i32),
+	DropCopySessionRequired(i32),
+	NotAllowedInOrderEntrySessions(i32),
+	NotAllowedInMarketDataSessions(i32),
+	IncorrectNumInGroupCount(i32),
+	DuplicateEntriesInAGroup(i32),
+	InvalidRequestId(i32),
+	TooManySubscriptions(i32),
+	BuyOcoStopLossMustBeAbove(i32),
+	SellOcoStopLossMustBeBelow(i32),
+	BuyOcoTakeProfitMustBeBelow(i32),
+	SellOcoTakeProfitMustBeAbove(i32),
+
+	// 20xx - Business logic errors
+	NewOrderRejected(i32),
+	CancelRejected(i32),
+	NoSuchOrder(i32),
+	BadApiKeyFmt(i32),
+	RejectedMbxKey(i32),
+	NoTradingWindow(i32),
+	OrderArchived(i32),
+	OrderCancelReplacePartiallyFailed(i32),
+	OrderCancelReplaceFailed(i32),
+
+	// Unknown error code
+	Other(i32),
+}
+
+impl From<i32> for BinanceErrorCode {
+	fn from(code: i32) -> Self {
+		match code {
+			-1000 => Self::Unknown(code),
+			-1001 => Self::Disconnected(code),
+			-1002 => Self::Unauthorized(code),
+			-1003 => Self::TooManyRequests(code),
+			-1006 => Self::UnexpectedResponse(code),
+			-1007 => Self::Timeout(code),
+			-1008 => Self::ServerBusy(code),
+			-1013 => Self::InvalidMessage(code),
+			-1014 => Self::UnknownOrderComposition(code),
+			-1015 => Self::TooManyOrders(code),
+			-1016 => Self::ServiceShuttingDown(code),
+			-1020 => Self::UnsupportedOperation(code),
+			-1021 => Self::InvalidTimestamp(code),
+			-1022 => Self::InvalidSignature(code),
+
+			-1100 => Self::IllegalChars(code),
+			-1101 => Self::TooManyParameters(code),
+			-1102 => Self::MandatoryParamEmptyOrMalformed(code),
+			-1103 => Self::UnknownParam(code),
+			-1104 => Self::UnreadParameters(code),
+			-1105 => Self::ParamEmpty(code),
+			-1106 => Self::ParamNotRequired(code),
+			-1108 => Self::ParamOverflow(code),
+			-1111 => Self::BadPrecision(code),
+			-1112 => Self::NoDepth(code),
+			-1114 => Self::TifNotRequired(code),
+			-1115 => Self::InvalidTif(code),
+			-1116 => Self::InvalidOrderType(code),
+			-1117 => Self::InvalidSide(code),
+			-1118 => Self::EmptyNewClOrdId(code),
+			-1119 => Self::EmptyOrgClOrdId(code),
+			-1120 => Self::BadInterval(code),
+			-1121 => Self::BadSymbol(code),
+			-1122 => Self::InvalidSymbolStatus(code),
+			-1125 => Self::InvalidListenKey(code),
+			-1127 => Self::MoreThanXXHours(code),
+			-1128 => Self::OptionalParamsBadCombo(code),
+			-1130 => Self::InvalidParameter(code),
+			-1134 => Self::BadStrategyType(code),
+			-1135 => Self::InvalidJson(code),
+			-1139 => Self::InvalidTickerType(code),
+			-1145 => Self::InvalidCancelRestrictions(code),
+			-1151 => Self::DuplicateSymbols(code),
+			-1152 => Self::InvalidSbeHeader(code),
+			-1153 => Self::UnsupportedSchemaId(code),
+			-1155 => Self::SbeDisabled(code),
+			-1158 => Self::OcoOrderTypeRejected(code),
+			-1160 => Self::OcoIcebergqtyTimeinforce(code),
+			-1161 => Self::DeprecatedSchema(code),
+			-1165 => Self::BuyOcoLimitMustBeBelow(code),
+			-1166 => Self::SellOcoLimitMustBeAbove(code),
+			-1168 => Self::BothOcoOrdersCannotBeLimit(code),
+			-1169 => Self::InvalidTagNumber(code),
+			-1170 => Self::TagNotDefinedInMessage(code),
+			-1171 => Self::TagAppearsMoreThanOnce(code),
+			-1172 => Self::TagOutOfOrder(code),
+			-1173 => Self::GroupFieldsOutOfOrder(code),
+			-1174 => Self::InvalidComponent(code),
+			-1175 => Self::ResetSeqNumSupport(code),
+			-1176 => Self::AlreadyLoggedIn(code),
+			-1177 => Self::GarbledMessage(code),
+			-1178 => Self::BadSenderCompid(code),
+			-1179 => Self::BadSeqNum(code),
+			-1180 => Self::ExpectedLogon(code),
+			-1181 => Self::TooManyMessages(code),
+			-1182 => Self::ParamsBadCombo(code),
+			-1183 => Self::NotAllowedInDropCopySessions(code),
+			-1184 => Self::DropCopySessionNotAllowed(code),
+			-1185 => Self::DropCopySessionRequired(code),
+			-1186 => Self::NotAllowedInOrderEntrySessions(code),
+			-1187 => Self::NotAllowedInMarketDataSessions(code),
+			-1188 => Self::IncorrectNumInGroupCount(code),
+			-1189 => Self::DuplicateEntriesInAGroup(code),
+			-1190 => Self::InvalidRequestId(code),
+			-1191 => Self::TooManySubscriptions(code),
+			-1196 => Self::BuyOcoStopLossMustBeAbove(code),
+			-1197 => Self::SellOcoStopLossMustBeBelow(code),
+			-1198 => Self::BuyOcoTakeProfitMustBeBelow(code),
+			-1199 => Self::SellOcoTakeProfitMustBeAbove(code),
+
+			-2010 => Self::NewOrderRejected(code),
+			-2011 => Self::CancelRejected(code),
+			-2013 => Self::NoSuchOrder(code),
+			-2014 => Self::BadApiKeyFmt(code),
+			-2015 => Self::RejectedMbxKey(code),
+			-2016 => Self::NoTradingWindow(code),
+			-2021 => Self::OrderCancelReplacePartiallyFailed(code),
+			-2022 => Self::OrderCancelReplaceFailed(code),
+			-2026 => Self::OrderArchived(code),
+
+			code => {
+				warn!("Encountered unknown Binance error code: {code}");
+				Self::Other(code)
+			}
+		}
 	}
 }

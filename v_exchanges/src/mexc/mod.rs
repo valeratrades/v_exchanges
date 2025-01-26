@@ -14,7 +14,7 @@ use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::{
-	Balances,
+	Balances, ExchangeResult,
 	core::{AbsMarket, AssetBalance, Exchange, ExchangeInfo, Klines, RequestRange, WrongExchangeError},
 };
 
@@ -33,6 +33,14 @@ impl Exchange for Mexc {
 		self.source_market.unwrap()
 	}
 
+	fn __client(&self) -> &Client {
+		&self.client
+	}
+
+	fn __client_mut(&mut self) -> &mut Client {
+		&mut self.client
+	}
+
 	fn auth(&mut self, key: String, secret: SecretString) {
 		self.update_default_option(MexcOption::Key(key));
 		self.update_default_option(MexcOption::Secret(secret));
@@ -42,21 +50,21 @@ impl Exchange for Mexc {
 		self.update_default_option(MexcOption::RecvWindow(recv_window));
 	}
 
-	async fn exchange_info(&self, am: AbsMarket) -> Result<ExchangeInfo> {
+	async fn exchange_info(&self, am: AbsMarket) -> ExchangeResult<ExchangeInfo> {
 		match am {
 			AbsMarket::Mexc(_) => todo!(),
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
 		}
 	}
 
-	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, am: AbsMarket) -> Result<Klines> {
+	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, am: AbsMarket) -> ExchangeResult<Klines> {
 		match am {
 			AbsMarket::Mexc(m) => unimplemented!(),
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
 		}
 	}
 
-	async fn price(&self, pair: Pair, am: AbsMarket) -> Result<f64> {
+	async fn price(&self, pair: Pair, am: AbsMarket) -> ExchangeResult<f64> {
 		match am {
 			AbsMarket::Mexc(m) => match m {
 				Market::Futures => market::price(self, pair).await,
@@ -66,27 +74,27 @@ impl Exchange for Mexc {
 		}
 	}
 
-	async fn prices(&self, _pairs: Option<Vec<Pair>>, am: AbsMarket) -> Result<BTreeMap<Pair, f64>> {
+	async fn prices(&self, _pairs: Option<Vec<Pair>>, am: AbsMarket) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		match am {
 			AbsMarket::Mexc(_) => unimplemented!("Mexc does not have a multi-asset endpoints for futures"),
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
 		}
 	}
 
-	async fn asset_balance(&self, asset: Asset, am: AbsMarket) -> Result<AssetBalance> {
+	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, am: AbsMarket) -> ExchangeResult<AssetBalance> {
 		match am {
 			AbsMarket::Mexc(m) => match m {
-				Market::Futures => account::asset_balance(&self.client, asset).await,
+				Market::Futures => account::asset_balance(&self.client, asset, recv_window).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
 		}
 	}
 
-	async fn balances(&self, am: AbsMarket) -> Result<Balances> {
+	async fn balances(&self, recv_window: Option<u16>, am: AbsMarket) -> ExchangeResult<Balances> {
 		match am {
 			AbsMarket::Mexc(m) => match m {
-				Market::Futures => account::balances(&self.client).await,
+				Market::Futures => account::balances(&self.client, recv_window).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),

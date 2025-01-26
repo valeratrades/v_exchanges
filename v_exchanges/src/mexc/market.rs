@@ -2,10 +2,12 @@ use adapters::{
 	Client,
 	mexc::{MexcHttpUrl, MexcOption},
 };
-use v_utils::prelude_libside::*;
+use v_utils::prelude::*;
+
+use crate::ExchangeResult;
 
 //TODO: impl spot
-pub async fn price(client: &Client, pair: Pair) -> Result<f64> {
+pub async fn price(client: &Client, pair: Pair) -> ExchangeResult<f64> {
 	let endpoint = format!("/api/v1/contract/index_price/{}", pair.fmt_mexc());
 	let r: PriceResponse = client.get_no_query(&endpoint, [MexcOption::HttpUrl(MexcHttpUrl::Futures)]).await.unwrap();
 	Ok(r.data.into())

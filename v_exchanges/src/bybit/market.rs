@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 
 use chrono::DateTime;
-use eyre::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
@@ -12,12 +11,12 @@ use v_utils::{
 };
 
 use crate::{
-	AbsMarket,
+	AbsMarket, ExchangeResult,
 	core::{Klines, RequestRange},
 };
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: RequestRange, am: AbsMarket) -> Result<Klines> {
+pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: RequestRange, am: AbsMarket) -> ExchangeResult<Klines> {
 	range.ensure_allowed(1..=1000, tf)?;
 	let range_json = range.serialize(am);
 	let base_params = filter_nulls(json!({
@@ -85,7 +84,7 @@ pub struct KlineData(
 //,}}}
 
 // price {{{
-pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> Result<f64> {
+pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> ExchangeResult<f64> {
 	let params = filter_nulls(json!({
 		"category": "linear",
 		"symbol": pair.to_string(),
