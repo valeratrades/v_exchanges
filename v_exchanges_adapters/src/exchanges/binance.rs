@@ -242,11 +242,11 @@ where
 				return Err(e);
 			}
 
-			let e = match serde_json::from_slice::<BinanceError>(&response_body) {
-				Ok(binance_error) => ApiError::from(binance_error).into(),
-				Err(parse_error) => parse_error.into(),
+			let e: BinanceError = match serde_json::from_slice::<BinanceError>(&response_body) {
+				Ok(binance_error) => binance_error,
+				Err(parse_error) => return Err(HandleError::Parse(parse_error).into()),
 			};
-			Err(e)
+			Err(ApiError::from(e).into())
 		}
 	}
 }

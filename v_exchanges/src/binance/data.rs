@@ -1,7 +1,6 @@
 use adapters::binance::{BinanceHttpUrl, BinanceOption};
 use chrono::{DateTime, Utc};
 use derive_more::{Display, FromStr};
-use eyre::Result;
 use serde::Deserialize;
 use serde_json::json;
 use v_utils::{
@@ -10,7 +9,7 @@ use v_utils::{
 };
 
 use super::Binance;
-use crate::{AbsMarket, core::RequestRange, utils::join_params};
+use crate::{AbsMarket, ExchangeResult, core::RequestRange, utils::join_params};
 
 #[derive(Clone, Debug, Display, FromStr)]
 pub enum LsrWho {
@@ -24,7 +23,7 @@ impl From<&str> for LsrWho {
 }
 
 impl Binance {
-	pub async fn lsr(&self, pair: Pair, tf: Timeframe, range: RequestRange, who: LsrWho) -> Result<Lsrs> {
+	pub async fn lsr(&self, pair: Pair, tf: Timeframe, range: RequestRange, who: LsrWho) -> ExchangeResult<Lsrs> {
 		range.ensure_allowed(0..=500, tf)?;
 		let range_json = range.serialize(AbsMarket::Binance(crate::binance::Market::Futures));
 

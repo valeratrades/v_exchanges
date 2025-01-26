@@ -20,8 +20,8 @@ pub mod binance;
 #[cfg_attr(docsrs, doc(cfg(feature = "bybit")))]
 pub mod bybit;
 
-#[cfg(feature = "bitmex")]
-#[cfg_attr(docsrs, doc(cfg(feature = "bitmex")))]
+#[cfg(feature = "mexc")]
+#[cfg_attr(docsrs, doc(cfg(feature = "mexc")))]
 pub mod mexc;
 
 #[cfg(feature = "data")]

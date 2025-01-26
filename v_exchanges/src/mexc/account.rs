@@ -4,9 +4,9 @@ use adapters::{
 };
 use v_utils::prelude::*;
 
-use crate::{AssetBalance, Balances};
+use crate::{AssetBalance, Balances, ExchangeResult};
 
-pub async fn asset_balance(client: &Client, asset: Asset, recv_window: Option<u16>) -> Result<AssetBalance> {
+pub async fn asset_balance(client: &Client, asset: Asset, recv_window: Option<u16>) -> ExchangeResult<AssetBalance> {
 	assert!(client.is_authenticated::<MexcOption>());
 	let mut options = vec![MexcOption::HttpUrl(MexcHttpUrl::Futures), MexcOption::HttpAuth(MexcAuth::Sign)];
 	if let Some(rw) = recv_window {
@@ -18,7 +18,7 @@ pub async fn asset_balance(client: &Client, asset: Asset, recv_window: Option<u1
 	Ok(r.data.into())
 }
 
-pub async fn balances(client: &Client, recv_window: Option<u16>) -> Result<Balances> {
+pub async fn balances(client: &Client, recv_window: Option<u16>) -> ExchangeResult<Balances> {
 	assert!(client.is_authenticated::<MexcOption>());
 	let mut options = vec![MexcOption::HttpUrl(MexcHttpUrl::Futures), MexcOption::HttpAuth(MexcAuth::Sign)];
 	if let Some(rw) = recv_window {
@@ -29,17 +29,17 @@ pub async fn balances(client: &Client, recv_window: Option<u16>) -> Result<Balan
 	let non_zero: Vec<AssetBalance> = rs.data.into_iter().filter(|r| r.equity != 0.).map(|r| r.into()).collect();
 	// dance with tambourine to request for usdt prices of all assets except usdt itself
 	//RELIES: join_all preserving order
-	let price_handles: Vec<Pin<Box<dyn Future<Output = Result<f64>> + Send>>> = non_zero
+	let price_handles: Vec<_> = non_zero
 		.iter()
 		.map(|b| {
 			if b.asset == "USDT" {
-				Box::pin(async move { Ok(1.) }) as Pin<Box<dyn Future<Output = Result<f64>> + Send>>
+				Box::pin(async move { Ok(1.) }) as Pin<Box<dyn Future<Output = ExchangeResult<f64>> + Send>>
 			} else {
-				Box::pin(super::market::price(client, (b.asset, "USDT".into()).into())) as Pin<Box<dyn Future<Output = Result<f64>> + Send>>
+				Box::pin(super::market::price(client, (b.asset, "USDT".into()).into())) as Pin<Box<dyn Future<Output = ExchangeResult<f64>> + Send>>
 			}
 		})
 		.collect();
-	let prices = join_all(price_handles).await.into_iter().collect::<Result<Vec<f64>>>()?;
+	let prices = join_all(price_handles).await.into_iter().collect::<ExchangeResult<Vec<f64>>>()?;
 
 	let balances: Vec<AssetBalance> = non_zero
 		.into_iter()
