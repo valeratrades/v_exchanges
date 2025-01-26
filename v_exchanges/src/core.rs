@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, VecDeque};
 
-use adapters::{generics::{http::RequestError}, Client};
+use adapters::{Client, generics::http::RequestError};
 use chrono::{DateTime, TimeDelta, Utc};
 use derive_more::{Deref, DerefMut};
 use secrecy::SecretString;
@@ -8,7 +8,6 @@ use serde_json::json;
 use v_utils::{
 	prelude::*,
 	trades::{Asset, Kline, Pair, Timeframe, Usd},
-
 	utils::filter_nulls,
 };
 
@@ -233,7 +232,7 @@ pub struct Oi {
 
 //Q: maybe add a `vectorize` method? Should add, question is really if it should be returning a) df b) all fields, including optional and oi c) t, o, h, l, c, v
 // probably should figure out rust-typed dataframes for this first
-#[derive(Clone, Debug, Default, Deref, DerefMut)]
+#[derive(Clone, Debug, Default, Deref, DerefMut, derive_new::new)]
 pub struct Klines {
 	#[deref_mut]
 	#[deref]
@@ -274,7 +273,7 @@ pub enum RequestRange {
 	Limit(u32),
 }
 impl RequestRange {
-	pub fn ensure_allowed(&self, allowed: std::ops::RangeInclusive<u32>, tf: Timeframe) -> Result<(), RequestRangeError> {
+	pub fn ensure_allowed(&self, allowed: std::ops::RangeInclusive<u32>, tf: &Timeframe) -> Result<(), RequestRangeError> {
 		match self {
 			RequestRange::StartEnd { start, end } =>
 				if let Some(end) = end {

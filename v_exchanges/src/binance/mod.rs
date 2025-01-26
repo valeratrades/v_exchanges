@@ -56,7 +56,7 @@ impl Exchange for Binance {
 
 	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, am: AbsMarket) -> ExchangeResult<Klines> {
 		match am {
-			AbsMarket::Binance(m) => market::klines(&self.client, pair, tf, range, m).await,
+			AbsMarket::Binance(m) => market::klines(&self.client, pair, tf.try_into()?, range, m).await,
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
 		}
 	}
@@ -127,32 +127,27 @@ impl crate::core::MarketTrait for Market {
 	}
 }
 
-static ALLOWED_TFS_BINANCE: [&str; 13] = ["1", "3", "5", "15", "30", "60", "120", "240", "360", "720", "D", "W", "M"];
-#[derive(Debug, Clone, Default, Copy, derive_more::Deref, derive_more::DerefMut)]
+static TFS_BINANCE: [&str; 19] = [
+	"1s", "5s", "15s", "30s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M",
+];
+#[derive(Debug, Clone, Default, Copy, derive_more::Deref, derive_more::DerefMut, derive_more::AsRef)]
 pub struct BinanceTimeframe(Timeframe);
-impl BinanceTimeframe {
+impl std::fmt::Display for BinanceTimeframe {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		todo!()
+		let s = self
+			.0
+			.try_as_predefined(&TFS_BINANCE)
+			.expect("We can't create a BinanceTimeframe object if that doesn't succeed in the first place");
+		write!(f, "{s}")
 	}
 }
-
 impl TryFrom<Timeframe> for BinanceTimeframe {
 	type Error = UnsupportedTimeframeError;
 
 	fn try_from(t: Timeframe) -> Result<Self, Self::Error> {
-		let mut buf = String::new();
-		let mut formatter = core::fmt::Formatter::new(&mut buf, core::fmt::FormattingOptions::new());
-
-		let maybe_ok = BinanceTimeframe(t);
-		// hacky, but saves dev-time
-		match core::fmt::Display::fmt(&maybe_ok, &mut formatter) {
-			Ok(_) => Ok(Self(t)),
-			Err(_) => Err(UnsupportedTimeframeError::new(t, ALLOWED_TFS_BINANCE.iter().map(Timeframe::from).collect())),
+		match t.try_as_predefined(&TFS_BINANCE) {
+			Some(_) => Ok(Self(t)),
+			None => Err(UnsupportedTimeframeError::new(t, TFS_BINANCE.iter().map(Timeframe::from).collect())),
 		}
-	}
-}
-impl std::fmt::Display for BinanceTimeframe {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		todo!()
 	}
 }

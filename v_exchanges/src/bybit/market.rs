@@ -10,19 +10,20 @@ use v_utils::{
 	utils::filter_nulls,
 };
 
+use super::BybitTimeframe;
 use crate::{
 	AbsMarket, ExchangeResult,
 	core::{Klines, RequestRange},
 };
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: RequestRange, am: AbsMarket) -> ExchangeResult<Klines> {
-	range.ensure_allowed(1..=1000, tf)?;
+pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: BybitTimeframe, range: RequestRange, am: AbsMarket) -> ExchangeResult<Klines> {
+	range.ensure_allowed(1..=1000, &tf)?;
 	let range_json = range.serialize(am);
 	let base_params = filter_nulls(json!({
 		"category": "linear", // can be ["linear", "inverse", "spot"] afaiu, could drive some generics with this later, but for now hardcode
 		"symbol": pair.to_string(),
-		"interval": tf.format_bybit()?,
+		"interval": tf.to_string(),
 	}));
 
 	let mut base_map = base_params.as_object().unwrap().clone();
@@ -49,7 +50,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timef
 			});
 		}
 	}
-	Ok(Klines { v: klines, tf, oi: Vec::new() })
+	Ok(Klines::new(klines, *tf, Vec::new()))
 }
 
 #[derive(Debug, Serialize, Deserialize)]

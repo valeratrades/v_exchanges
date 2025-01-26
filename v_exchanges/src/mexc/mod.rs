@@ -13,7 +13,7 @@ use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::{
-	Balances, ExchangeResult,
+	Balances, ExchangeResult, UnsupportedTimeframeError,
 	core::{AbsMarket, AssetBalance, Exchange, ExchangeInfo, Klines, RequestRange, WrongExchangeError},
 };
 
@@ -117,5 +117,28 @@ impl crate::core::MarketTrait for Market {
 
 	fn abs_market(&self) -> AbsMarket {
 		AbsMarket::Mexc(*self)
+	}
+}
+
+static TFS_MEXC: [&str; 9] = ["1m", "5m", "15m", "30m", "60m", "4h", "1d", "1W", "1M"];
+#[derive(Debug, Clone, Default, Copy, derive_more::Deref, derive_more::DerefMut)]
+pub struct MexcTimeframe(Timeframe);
+impl std::fmt::Display for MexcTimeframe {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let s = self
+			.0
+			.try_as_predefined(&TFS_MEXC)
+			.expect("We can't create a MexcTimeframe object if that doesn't succeed in the first place");
+		write!(f, "{s}")
+	}
+}
+impl TryFrom<Timeframe> for MexcTimeframe {
+	type Error = UnsupportedTimeframeError;
+
+	fn try_from(t: Timeframe) -> Result<Self, Self::Error> {
+		match t.try_as_predefined(&TFS_MEXC) {
+			Some(_) => Ok(Self(t)),
+			None => Err(UnsupportedTimeframeError::new(t, TFS_MEXC.iter().map(Timeframe::from).collect())),
+		}
 	}
 }

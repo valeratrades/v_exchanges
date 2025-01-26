@@ -24,7 +24,7 @@ impl From<&str> for LsrWho {
 
 impl Binance {
 	pub async fn lsr(&self, pair: Pair, tf: Timeframe, range: RequestRange, who: LsrWho) -> ExchangeResult<Lsrs> {
-		range.ensure_allowed(0..=500, tf)?;
+		range.ensure_allowed(0..=500, &tf)?;
 		let range_json = range.serialize(AbsMarket::Binance(crate::binance::Market::Futures));
 
 		let ending = match who {
@@ -33,7 +33,7 @@ impl Binance {
 		};
 		let base_json = json!({
 			"symbol": pair.to_string(),
-			"period": tf.format_binance()?,
+			"period": tf,
 		});
 		let params = join_params(base_json, range_json);
 		let r: serde_json::Value = self

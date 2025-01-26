@@ -13,7 +13,7 @@ use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::{
-	Balances, ExchangeResult,
+	Balances, ExchangeResult, UnsupportedTimeframeError,
 	core::{AbsMarket, AssetBalance, Exchange, ExchangeInfo, Klines, RequestRange, WrongExchangeError},
 };
 
@@ -59,7 +59,7 @@ impl Exchange for Bybit {
 	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, am: AbsMarket) -> ExchangeResult<Klines> {
 		match am {
 			AbsMarket::Bybit(m) => match m {
-				Market::Linear => market::klines(&self.client, pair, tf, range, am).await,
+				Market::Linear => market::klines(&self.client, pair, tf.try_into()?, range, am).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -121,5 +121,28 @@ impl crate::core::MarketTrait for Market {
 
 	fn abs_market(&self) -> AbsMarket {
 		AbsMarket::Bybit(*self)
+	}
+}
+
+static TFS_BYBIT: [&str; 13] = ["1", "3", "5", "15", "30", "60", "120", "240", "360", "720", "D", "W", "M"];
+#[derive(Debug, Clone, Default, Copy, derive_more::Deref, derive_more::DerefMut)]
+pub struct BybitTimeframe(Timeframe);
+impl std::fmt::Display for BybitTimeframe {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let s = self
+			.0
+			.try_as_predefined(&TFS_BYBIT)
+			.expect("We can't create a BybitTimeframe object if that doesn't succeed in the first place");
+		write!(f, "{s}")
+	}
+}
+impl TryFrom<Timeframe> for BybitTimeframe {
+	type Error = UnsupportedTimeframeError;
+
+	fn try_from(t: Timeframe) -> Result<Self, Self::Error> {
+		match t.try_as_predefined(&TFS_BYBIT) {
+			Some(_) => Ok(Self(t)),
+			None => Err(UnsupportedTimeframeError::new(t, TFS_BYBIT.iter().map(Timeframe::from).collect())),
+		}
 	}
 }

@@ -6,8 +6,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
-use v_utils::trades::{Kline, Ohlc, Pair, Timeframe};
+use v_utils::trades::{Kline, Ohlc, Pair};
 
+use super::BinanceTimeframe;
 use crate::{
 	ExchangeError, MarketTrait as _,
 	binance::Market,
@@ -16,13 +17,13 @@ use crate::{
 };
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timeframe, range: RequestRange, market: Market) -> Result<Klines, ExchangeError> {
+pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: BinanceTimeframe, range: RequestRange, market: Market) -> Result<Klines, ExchangeError> {
 	//TODO: test if embedding params into the url works more consistently (comp number of pairs axum-site is ablle ot get)
-	range.ensure_allowed(1..=1000, tf)?;
+	range.ensure_allowed(1..=1000, tf.as_ref())?;
 	let range_params = range.serialize(market.abs_market());
 	let base_params = json!({
 		"symbol": pair.to_string(),
-		"interval": tf.format_binance()?,
+		"interval": tf.to_string(),
 	});
 	let params = join_params(base_params, range_params);
 
@@ -61,7 +62,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Timef
 			},
 		}
 	}
-	Ok(Klines { v: klines, tf, oi: Vec::new() })
+	Ok(Klines::new(klines, *tf, Vec::new()))
 }
 
 /** # Ex: ```json
