@@ -6,10 +6,13 @@ resolver = "3"
 
 [workspace.lints.clippy]
 float_cmp = "allow" # is bad for `==` direct comparisons, but `<` and `>` should be allowed
-#get_first = "allow" # const fn, so actually more performant
 len_zero = "allow" # `.empty()` is O(1) but on &str only
 undocumented_unsafe_blocks = "warn"
 tabs_in_doc_comments = "allow"
+
+# Questionable
+get_first = "allow" # const fn, so actually more performant
+get_last_with_len = "allow"
 
 [workspace.dependencies]
 v_utils = { version = "^2.0.0", path = "../v_utils/v_utils" } #ga: rm path

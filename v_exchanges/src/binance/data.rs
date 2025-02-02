@@ -5,6 +5,7 @@ use serde::Deserialize;
 use serde_json::json;
 use v_utils::{
 	Percent,
+	prelude::*,
 	trades::{Pair, Timeframe},
 };
 
@@ -61,13 +62,6 @@ pub struct Lsr {
 	pub time: DateTime<Utc>,
 	pub long: Percent,
 }
-#[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
-pub struct Lsrs {
-	#[deref_mut]
-	#[deref]
-	pub values: Vec<Lsr>,
-	pub pair: Pair,
-}
 //Q: couldn't decide if `short()` and `long(0` should return `f64` or `Percent`. Postponing the decision.
 impl Lsr {
 	pub fn ratio(&self) -> f64 {
@@ -84,11 +78,83 @@ impl Lsr {
 		*self.long
 	}
 }
+impl From<f64> for Lsr {
+	fn from(f: f64) -> Self {
+		Self {
+			time: DateTime::default(),
+			long: Percent::from(f),
+		}
+	}
+}
 impl From<LsrResponse> for Lsr {
 	fn from(r: LsrResponse) -> Self {
 		Self {
 			time: DateTime::from_timestamp_millis(r.timestamp).unwrap(),
 			long: Percent::from_str(&r.long_account).unwrap(),
 		}
+	}
+}
+
+#[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
+pub struct Lsrs {
+	#[deref_mut]
+	#[deref]
+	values: Vec<Lsr>,
+	pub pair: Pair,
+}
+impl Lsrs {
+	pub const CHANGE_STR_LEN: usize = 26;
+	const MAX_LEN_BASE: usize = 9;
+
+	pub fn values(&self) -> &[Lsr] {
+		&self.values
+	}
+
+	pub fn last(&self) -> Result<&Lsr> {
+		self.values.last().ok_or_else(|| eyre!("Lsrs is empty"))
+	}
+
+	fn format_pair(&self) -> String {
+		let s = match self.pair.quote().as_ref() {
+			"USDT" => self.pair.to_string(), // if the quote is NOT usdt, we don't align it (theoretically should help with spotting such)
+			_ => format!("{:<width$}", self.pair.base().to_string(), width = Self::MAX_LEN_BASE),
+		};
+		format!("{:<width$}", s, width = Self::MAX_LEN_BASE)
+	}
+
+	pub fn display_short(&self) -> Result<String> {
+		Ok(format!("{}: {:.2}", self.format_pair(), self.last()?.long()))
+	}
+
+	pub fn display_change(&self) -> Result<String> {
+		let diff = NowThen::new(*self.last()?.long, *self.first().expect("can't be empty, otherwise `last()` would have had panicked").long);
+		let diff_f = format!("{diff}");
+		let s = format!("{}: {:<12}", self.format_pair(), diff_f); // `to_string`s are required because rust is dumb as of today (2024/01/16)
+		assert_eq!(s.len(), Self::CHANGE_STR_LEN);
+		Ok(s)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::sync::OnceLock;
+	static INIT: OnceLock<()> = OnceLock::new();
+	use super::*;
+
+	fn init() -> Lsrs {
+		if INIT.get().is_none() {
+			let _ = INIT.set(());
+			color_eyre::install().unwrap();
+		}
+		Lsrs {
+			values: vec![0.4, 0.5, 0.6, 0.55].into_iter().map(Lsr::from).collect(),
+			pair: Pair::from(("BTC", "USDT")),
+		}
+	}
+
+	#[test]
+	fn display_short() {
+		let lsrs = init();
+		insta::assert_snapshot!(lsrs.display_short().unwrap(), @"BTCUSDT  : 0.55");
 	}
 }
