@@ -42,7 +42,7 @@ pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pai
 
 pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> ExchangeResult<f64> {
 	let params = json!({
-		"symbol": pair.to_string(),
+		"symbol": pair.fmt_binance(),
 	});
 
 	let r: AssetPriceResponse = client.get("/api/v3/ticker/price", &params, [BinanceOption::HttpUrl(BinanceHttpUrl::Spot)]).await.unwrap();

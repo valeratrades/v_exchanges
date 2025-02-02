@@ -22,7 +22,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Binan
 	range.ensure_allowed(1..=1000, tf.as_ref())?;
 	let range_params = range.serialize(market.abs_market());
 	let base_params = json!({
-		"symbol": pair.to_string(),
+		"symbol": pair.fmt_binance(),
 		"interval": tf.to_string(),
 	});
 	let params = join_params(base_params, range_params);

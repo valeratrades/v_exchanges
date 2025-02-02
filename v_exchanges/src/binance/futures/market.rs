@@ -10,7 +10,7 @@ use crate::ExchangeResult;
 //HACK: should use /fapi/v2/ticker/price instead
 pub async fn price(client: &Client, pair: Pair) -> ExchangeResult<f64> {
 	let params = json!({
-		"symbol": pair.to_string(),
+		"symbol": pair.fmt_binance(),
 	});
 
 	let r: MarkPriceResponse = client.get("/fapi/v1/premiumIndex", &params, [BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)]).await?;

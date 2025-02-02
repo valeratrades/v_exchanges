@@ -22,7 +22,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Bybit
 	let range_json = range.serialize(am);
 	let base_params = filter_nulls(json!({
 		"category": "linear", // can be ["linear", "inverse", "spot"] afaiu, could drive some generics with this later, but for now hardcode
-		"symbol": pair.to_string(),
+		"symbol": pair.fmt_bybit(),
 		"interval": tf.to_string(),
 	}));
 
@@ -88,7 +88,7 @@ pub struct KlineData(
 pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> ExchangeResult<f64> {
 	let params = filter_nulls(json!({
 		"category": "linear",
-		"symbol": pair.to_string(),
+		"symbol": pair.fmt_bybit(),
 	}));
 	let response: MarketTickerResponse = client.get("/v5/market/tickers", &params, [BybitOption::Default]).await?;
 	Ok(response.result.list[0].last_price)

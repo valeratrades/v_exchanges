@@ -11,6 +11,7 @@ async fn main() {
 
 	let bn = Binance::default();
 	let lsrs = bn.lsr(("BTC", "USDT").into(), "5m".into(), (24 * 12 + 1).into(), "Global".into()).await.unwrap();
+	dbg!(&lsrs);
 	dbg!(&lsrs[..2]);
 }
 

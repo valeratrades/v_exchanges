@@ -33,7 +33,7 @@ impl Binance {
 			LsrWho::Top => "topLongShortPositionRatio",
 		};
 		let base_json = json!({
-			"symbol": pair.to_string(),
+			"symbol": pair.fmt_binance(),
 			"period": tf,
 		});
 		let params = join_params(base_json, range_json);
@@ -57,9 +57,11 @@ pub struct LsrResponse {
 	pub short_account: String,
 	pub timestamp: i64,
 }
-#[derive(Clone, Debug, Default, Copy)]
+#[derive(Clone, Debug, Default, Copy, derive_more::Deref, derive_more::DerefMut, Deserialize, Serialize)]
 pub struct Lsr {
 	pub time: DateTime<Utc>,
+	#[deref_mut]
+	#[deref]
 	pub long: Percent,
 }
 //Q: couldn't decide if `short()` and `long(0` should return `f64` or `Percent`. Postponing the decision.
@@ -95,7 +97,7 @@ impl From<LsrResponse> for Lsr {
 	}
 }
 
-#[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
+#[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut, Deserialize, Serialize)]
 pub struct Lsrs {
 	#[deref_mut]
 	#[deref]
