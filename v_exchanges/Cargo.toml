@@ -2,7 +2,7 @@ cargo-features = ["codegen-backend"]
 
 [package]
 name = "v_exchanges"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 
 authors = ["negi-grass", "valeratrades"]
