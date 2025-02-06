@@ -362,7 +362,6 @@ impl Default for BinanceOptions {
 			http_auth: Default::default(),
 			websocket_url: Default::default(),
 			websocket_config,
-			//..Default::default()
 			test: false,
 		}
 	}

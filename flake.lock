@@ -1,5 +1,22 @@
 {
   "nodes": {
+    "files": {
+      "locked": {
+        "dir": "files",
+        "lastModified": 1738866697,
+        "narHash": "sha256-rxMRlOJYMprpuYLKtKzUdPwcAV0r5bUCZUPpWkfAztU=",
+        "owner": "valeratrades",
+        "repo": ".github",
+        "rev": "35c69d6d938097452035db136953d9d35a3d19a6",
+        "type": "github"
+      },
+      "original": {
+        "dir": "files",
+        "owner": "valeratrades",
+        "repo": ".github",
+        "type": "github"
+      }
+    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -142,6 +159,7 @@
     },
     "root": {
       "inputs": {
+        "files": "files",
         "flake-utils": "flake-utils",
         "hooks": "hooks",
         "nixpkgs": "nixpkgs",

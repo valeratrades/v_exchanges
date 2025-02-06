@@ -35,7 +35,7 @@ impl Client {
 		H: RequestHandler<B>, {
 		let config = &self.config;
 		config.verify();
-		let base_url = handler.base_url(config.test);
+		let base_url = handler.base_url(config.use_testnet);
 		let url = base_url + url;
 		debug!(?config);
 
@@ -47,8 +47,8 @@ impl Client {
 			}
 			Span::current().record("request_builder", format!("{:?}", request_builder));
 
-			if config.test
-				&& let Some(cache_duration) = config.cache_test_calls
+			if config.use_testnet
+				&& let Some(cache_duration) = config.cache_testnet_calls
 			{
 				let path = test_calls_path(url.as_str(), &query);
 				if let Ok(file) = std::fs::read_to_string(&path)
@@ -78,7 +78,7 @@ impl Client {
 						debug!(truncated_body);
 					}
 
-					match config.test {
+					match config.use_testnet {
 						true => {
 							// if we're here, the cache file didn't exist or is outdated
 							let handled = handler.handle_response(status, headers.clone(), body.clone())?;
@@ -251,9 +251,9 @@ pub struct RequestConfig {
 	pub timeout: Duration,
 
 	/// Make all requests in test mode
-	pub test: bool,
+	pub use_testnet: bool,
 	/// if `test` is true, then we will try to read the file with the cached result of any request to the same URL, aged less than specified [Duration]
-	pub cache_test_calls: Option<Duration>,
+	pub cache_testnet_calls: Option<Duration>,
 }
 
 impl RequestConfig {
@@ -268,8 +268,8 @@ impl Default for RequestConfig {
 			max_tries: 1,
 			retry_cooldown: Duration::from_millis(500),
 			timeout: Duration::from_secs(3),
-			test: Default::default(),
-			cache_test_calls: Some(Duration::from_days(30)),
+			use_testnet: Default::default(),
+			cache_testnet_calls: Some(Duration::from_days(30)),
 		}
 	}
 }

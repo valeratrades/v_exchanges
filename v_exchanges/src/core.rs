@@ -43,6 +43,12 @@ pub trait Exchange: std::fmt::Debug + Send + Sync {
 	fn set_max_tries(&mut self, max: u8) {
 		self.__client_mut().client.config.max_tries = max;
 	}
+	fn set_use_testnes(&mut self, b: bool) {
+		self.__client_mut().client.config.use_testnet = b;
+	}
+	fn set_cache_testnet_calls(&mut self, duration: Option<std::time::Duration>) {
+		self.__client_mut().client.config.cache_testnet_calls = duration;
+	}
 	//DO: same for other fields in [RequestConfig](v_exchanges_api_generics::http::RequestConfig)
 	//,}}}
 

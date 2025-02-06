@@ -6,9 +6,10 @@
     pre-commit-hooks.url = "github:cachix/git-hooks.nix";
     workflow-parts.url = "github:valeratrades/.github?dir=.github/workflows/nix-parts";
     hooks.url = "github:valeratrades/.github?dir=hooks";
+		files.url = "github:valeratrades/.github?dir=files";
   };
 
-  outputs = { nixpkgs, rust-overlay, flake-utils, pre-commit-hooks, workflow-parts, hooks, ... }:
+  outputs = { nixpkgs, rust-overlay, flake-utils, pre-commit-hooks, workflow-parts, hooks, files, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         overlays = builtins.trace "flake.nix sourced" [ (import rust-overlay) ];
@@ -52,7 +53,6 @@
               version = manifest.version;
 
               buildInputs = with pkgs; [
-                openssl
                 openssl.dev
               ];
               nativeBuildInputs = with pkgs; [ pkg-config ];
@@ -68,6 +68,9 @@
           shellHook = checks.pre-commit-check.shellHook + ''
             rm -f ./.github/workflows/errors.yml; cp ${workflowContents.errors} ./.github/workflows/errors.yml
             rm -f ./.github/workflows/warnings.yml; cp ${workflowContents.warnings} ./.github/workflows/warnings.yml
+
+						#TODO!!!: make a readme framework, append a line to the licenses block
+            cp -f ${files.licenses.blue_oak} ./LICENSE
 
             cargo -Zscript -q ${hooks.appendCustom} ./.git/hooks/pre-commit
             cp -f ${(import hooks.treefmt {inherit pkgs;})} ./.treefmt.toml
