@@ -17,144 +17,6 @@ use v_utils::prelude::*;
 
 use crate::traits::*;
 
-/// Options that can be set when creating handlers
-pub enum BinanceOption {
-	/// [Default] variant, does nothing
-	Default,
-	/// API key
-	Key(String),
-	/// Api secret
-	Secret(SecretString),
-	/// Number of milliseconds the request is valid for. Only applicable for signed requests.
-	RecvWindow(u16),
-	/// Base url for HTTP requests
-	HttpUrl(BinanceHttpUrl),
-	/// Authentication type for HTTP requests
-	HttpAuth(BinanceAuth),
-	/// [RequestConfig] used when sending requests.
-	/// `url_prefix` will be overridden by [HttpUrl](Self::HttpUrl) unless `HttpUrl` is [BinanceHttpUrl::None].
-	RequestConfig(RequestConfig),
-	/// Base url for WebSocket connections
-	WebSocketUrl(BinanceWebSocketUrl),
-	/// [WebSocketConfig] used for creating [WebSocketConnection]s
-	/// `url_prefix` will be overridden by [WebSocketUrl](Self::WebSocketUrl) unless `WebSocketUrl` is [BinanceWebSocketUrl::None].
-	/// By default, `refresh_after` is set to 12 hours and `ignore_duplicate_during_reconnection` is set to `true`.
-	WebSocketConfig(WebSocketConfig),
-}
-
-/// A `struct` that represents a set of [BinanceOption] s.
-#[derive(Clone, derive_more::Debug)]
-pub struct BinanceOptions {
-	/// see [BinanceOption::Key]
-	pub key: Option<String>,
-	/// see [BinanceOption::Secret]
-	#[debug("[REDACTED]")]
-	pub secret: Option<SecretString>,
-	// see [BinanceOption::RecvWindow]
-	pub recv_window: Option<u16>,
-	/// see [BinanceOption::HttpUrl]
-	pub http_url: BinanceHttpUrl,
-	/// see [BinanceOption::HttpAuth]
-	pub http_auth: BinanceAuth,
-	/// see [BinanceOption::RequestConfig]
-	pub request_config: RequestConfig,
-	/// see [BinanceOption::WebSocketUrl]
-	pub websocket_url: BinanceWebSocketUrl,
-	/// see [BinanceOption::WebSocketConfig]
-	pub websocket_config: WebSocketConfig,
-}
-
-/// A `enum` that represents the base url of the Binance REST API.
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
-#[non_exhaustive]
-pub enum BinanceHttpUrl {
-	/// `https://api.binance.com`
-	Spot,
-	/// `https://api1.binance.com`
-	Spot1,
-	/// `https://api2.binance.com`
-	Spot2,
-	/// `https://api3.binance.com`
-	Spot3,
-	/// `https://api4.binance.com`
-	Spot4,
-	/// `https://testnet.binance.vision`
-	SpotTest,
-	/// `https://data.binance.com`
-	SpotData,
-	/// `https://fapi.binance.com`
-	FuturesUsdM,
-	/// `https://dapi.binance.com`
-	FuturesCoinM,
-	/// `https://testnet.binancefuture.com`
-	FuturesTest,
-	/// `https://eapi.binance.com`
-	EuropeanOptions,
-	/// The url will not be modified by [BinanceRequestHandler]
-	#[default]
-	None,
-}
-
-/// A `enum` that represents the base url of the Binance WebSocket API
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
-#[non_exhaustive]
-pub enum BinanceWebSocketUrl {
-	/// `wss://stream.binance.com:9443`
-	Spot9443,
-	/// `wss://stream.binance.com:443`
-	Spot443,
-	/// `wss://testnet.binance.vision`
-	SpotTest,
-	/// `wss://data-stream.binance.com`
-	SpotData,
-	/// `wss://ws-api.binance.com:443`
-	WebSocket443,
-	/// `wss://ws-api.binance.com:9443`
-	WebSocket9443,
-	/// `wss://fstream.binance.com`
-	FuturesUsdM,
-	/// `wss://fstream-auth.binance.com`
-	FuturesUsdMAuth,
-	/// `wss://dstream.binance.com`
-	FuturesCoinM,
-	/// `wss://stream.binancefuture.com`
-	FuturesUsdMTest,
-	/// `wss://dstream.binancefuture.com`
-	FuturesCoinMTest,
-	/// `wss://nbstream.binance.com`
-	EuropeanOptions,
-	/// The url will not be modified by [BinanceRequestHandler]
-	#[default]
-	None,
-}
-
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
-pub enum BinanceAuth {
-	Sign,
-	Key,
-	#[default]
-	None,
-}
-
-#[derive(Debug)]
-pub enum BinanceHandlerError {
-	ApiError(BinanceError),
-	RateLimitError { retry_after: Option<u32> },
-	ParseError,
-}
-
-/// A `struct` that implements [RequestHandler]
-pub struct BinanceRequestHandler<'a, R: DeserializeOwned> {
-	options: BinanceOptions,
-	_phantom: PhantomData<&'a R>,
-}
-
-/// A `struct` that implements [WebSocketHandler]
-pub struct BinanceWebSocketHandler {
-	message_handler: Box<dyn FnMut(serde_json::Value) + Send>,
-	options: BinanceOptions,
-}
-
 // https://binance-docs.github.io/apidocs/spot/en/#general-api-information
 impl<B, R> RequestHandler<B> for BinanceRequestHandler<'_, R>
 where
@@ -163,8 +25,11 @@ where
 {
 	type Successful = R;
 
-	fn base_url(&self) -> String {
-		self.options.http_url.as_str().to_owned()
+	fn base_url(&self, is_test: bool) -> String {
+		match is_test {
+			true => self.options.http_url.as_str_test().unwrap().to_owned(),
+			false => self.options.http_url.as_str().to_owned(),
+		}
 	}
 
 	#[tracing::instrument(skip_all, fields(?builder))]
@@ -203,7 +68,8 @@ where
 				return Ok(request);
 			}
 		}
-		builder.build().or(Err(eyre!("failed to build request").into()))
+		//Ok(builder.build()?)
+		Ok(builder.build().expect("don't expect this to be reached by client, so fail fast for dev"))
 	}
 
 	fn handle_response(&self, status: StatusCode, headers: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError> {
@@ -275,6 +141,55 @@ impl WebSocketHandler for BinanceWebSocketHandler {
 	}
 }
 
+/// Options that can be set when creating handlers
+pub enum BinanceOption {
+	/// [Default] variant, does nothing
+	Default,
+	/// API key
+	Key(String),
+	/// Api secret
+	Secret(SecretString),
+	/// Number of milliseconds the request is valid for. Only applicable for signed requests.
+	RecvWindow(u16),
+	/// Base url for HTTP requests
+	HttpUrl(BinanceHttpUrl),
+	/// Authentication type for HTTP requests
+	HttpAuth(BinanceAuth),
+
+	/// Base url for WebSocket connections
+	WebSocketUrl(BinanceWebSocketUrl),
+	/// [WebSocketConfig] used for creating [WebSocketConnection]s
+	/// `url_prefix` will be overridden by [WebSocketUrl](Self::WebSocketUrl) unless `WebSocketUrl` is [BinanceWebSocketUrl::None].
+	/// By default, `refresh_after` is set to 12 hours and `ignore_duplicate_during_reconnection` is set to `true`.
+	WebSocketConfig(WebSocketConfig),
+}
+
+/// A `enum` that represents the base url of the Binance REST API.
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+#[non_exhaustive]
+pub enum BinanceHttpUrl {
+	/// `https://api.binance.com`
+	Spot,
+	/// `https://api1.binance.com`
+	Spot1,
+	/// `https://api2.binance.com`
+	Spot2,
+	/// `https://api3.binance.com`
+	Spot3,
+	/// `https://api4.binance.com`
+	Spot4,
+	/// `https://data.binance.com`
+	SpotData,
+	/// `https://fapi.binance.com`
+	FuturesUsdM,
+	/// `https://dapi.binance.com`
+	FuturesCoinM,
+	/// `https://eapi.binance.com`
+	EuropeanOptions,
+	/// The url will not be modified by [BinanceRequestHandler]
+	#[default]
+	None,
+}
 impl BinanceHttpUrl {
 	/// The URL that this variant represents.
 	#[inline(always)]
@@ -285,15 +200,90 @@ impl BinanceHttpUrl {
 			Self::Spot2 => "https://api2.binance.com",
 			Self::Spot3 => "https://api3.binance.com",
 			Self::Spot4 => "https://api4.binance.com",
-			Self::SpotTest => "https://testnet.binance.vision",
 			Self::SpotData => "https://data.binance.com",
 			Self::FuturesUsdM => "https://fapi.binance.com",
 			Self::FuturesCoinM => "https://dapi.binance.com",
-			Self::FuturesTest => "https://testnet.binancefuture.com",
 			Self::EuropeanOptions => "https://eapi.binance.com",
 			Self::None => "",
 		}
 	}
+
+	//TODO: impl more cleanly
+	#[inline(always)]
+	fn as_str_test(&self) -> Option<&'static str> {
+		match self {
+			Self::Spot => Some("https://testnet.binance.vision"),
+			Self::Spot1 => Some("https://testnet.binance.vision"),
+			Self::Spot2 => Some("https://testnet.binance.vision"),
+			Self::Spot3 => Some("https://testnet.binance.vision"),
+			Self::Spot4 => Some("https://testnet.binance.vision"),
+			Self::SpotData => Some("https://testnet.binance.vision"),
+			Self::FuturesUsdM => Some("https://testnet.binancefuture.com"),
+			Self::FuturesCoinM => Some("https://testnet.binancefuture.com"),
+			Self::EuropeanOptions => None,
+			Self::None => Some(""),
+		}
+	}
+}
+
+/// A `enum` that represents the base url of the Binance WebSocket API
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+#[non_exhaustive]
+pub enum BinanceWebSocketUrl {
+	/// `wss://stream.binance.com:9443`
+	Spot9443,
+	/// `wss://stream.binance.com:443`
+	Spot443,
+	/// `wss://testnet.binance.vision`
+	SpotTest,
+	/// `wss://data-stream.binance.com`
+	SpotData,
+	/// `wss://ws-api.binance.com:443`
+	WebSocket443,
+	/// `wss://ws-api.binance.com:9443`
+	WebSocket9443,
+	/// `wss://fstream.binance.com`
+	FuturesUsdM,
+	/// `wss://fstream-auth.binance.com`
+	FuturesUsdMAuth,
+	/// `wss://dstream.binance.com`
+	FuturesCoinM,
+	/// `wss://stream.binancefuture.com`
+	FuturesUsdMTest,
+	/// `wss://dstream.binancefuture.com`
+	FuturesCoinMTest,
+	/// `wss://nbstream.binance.com`
+	EuropeanOptions,
+	/// The url will not be modified by [BinanceRequestHandler]
+	#[default]
+	None,
+}
+
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+pub enum BinanceAuth {
+	Sign,
+	Key,
+	#[default]
+	None,
+}
+
+#[derive(Debug)]
+pub enum BinanceHandlerError {
+	ApiError(BinanceError),
+	RateLimitError { retry_after: Option<u32> },
+	ParseError,
+}
+
+/// A `struct` that implements [RequestHandler]
+pub struct BinanceRequestHandler<'a, R: DeserializeOwned> {
+	options: BinanceOptions,
+	_phantom: PhantomData<&'a R>,
+}
+
+/// A `struct` that implements [WebSocketHandler]
+pub struct BinanceWebSocketHandler {
+	message_handler: Box<dyn FnMut(serde_json::Value) + Send>,
+	options: BinanceOptions,
 }
 
 impl BinanceWebSocketUrl {
@@ -318,20 +308,40 @@ impl BinanceWebSocketUrl {
 	}
 }
 
+/// A `struct` that represents a set of [BinanceOption] s.
+#[derive(Clone, derive_more::Debug)]
+pub struct BinanceOptions {
+	/// see [BinanceOption::Key]
+	pub key: Option<String>,
+	/// see [BinanceOption::Secret]
+	#[debug("[REDACTED]")]
+	pub secret: Option<SecretString>,
+	// see [BinanceOption::RecvWindow]
+	pub recv_window: Option<u16>,
+	/// see [BinanceOption::HttpUrl]
+	pub http_url: BinanceHttpUrl,
+	/// see [BinanceOption::HttpAuth]
+	pub http_auth: BinanceAuth,
+	/// see [BinanceOption::WebSocketUrl]
+	pub websocket_url: BinanceWebSocketUrl,
+	/// see [BinanceOption::WebSocketConfig]
+	pub websocket_config: WebSocketConfig,
+	/// see [BinanceOption::Test]
+	pub test: bool,
+}
 impl HandlerOptions for BinanceOptions {
 	type OptionItem = BinanceOption;
 
 	fn update(&mut self, option: Self::OptionItem) {
 		match option {
-			BinanceOption::Default => (),
-			BinanceOption::Key(v) => self.key = Some(v),
-			BinanceOption::RecvWindow(v) => self.recv_window = Some(v),
-			BinanceOption::Secret(v) => self.secret = Some(v),
-			BinanceOption::HttpUrl(v) => self.http_url = v,
-			BinanceOption::HttpAuth(v) => self.http_auth = v,
-			BinanceOption::RequestConfig(v) => self.request_config = v,
-			BinanceOption::WebSocketUrl(v) => self.websocket_url = v,
-			BinanceOption::WebSocketConfig(v) => self.websocket_config = v,
+			Self::OptionItem::Default => (),
+			Self::OptionItem::Key(v) => self.key = Some(v),
+			Self::OptionItem::RecvWindow(v) => self.recv_window = Some(v),
+			Self::OptionItem::Secret(v) => self.secret = Some(v),
+			Self::OptionItem::HttpUrl(v) => self.http_url = v,
+			Self::OptionItem::HttpAuth(v) => self.http_auth = v,
+			Self::OptionItem::WebSocketUrl(v) => self.websocket_url = v,
+			Self::OptionItem::WebSocketConfig(v) => self.websocket_config = v,
 		}
 	}
 
@@ -339,7 +349,6 @@ impl HandlerOptions for BinanceOptions {
 		self.key.is_some() // some end points are satisfied with just the key, and it's really difficult to provide only a key without a secret from the clientside, so assume intent if it's missing.
 	}
 }
-
 impl Default for BinanceOptions {
 	fn default() -> Self {
 		let mut websocket_config = WebSocketConfig::new();
@@ -349,11 +358,12 @@ impl Default for BinanceOptions {
 			key: None,
 			secret: None,
 			recv_window: None,
-			http_url: BinanceHttpUrl::default(),
-			http_auth: BinanceAuth::default(),
-			request_config: RequestConfig::default(),
-			websocket_url: BinanceWebSocketUrl::default(),
+			http_url: Default::default(),
+			http_auth: Default::default(),
+			websocket_url: Default::default(),
 			websocket_config,
+			//..Default::default()
+			test: false,
 		}
 	}
 }

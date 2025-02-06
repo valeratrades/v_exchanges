@@ -30,9 +30,6 @@ pub enum BybitOption {
 	HttpAuth(BybitHttpAuth),
 	/// receive window parameter used for requests
 	RecvWindow(u16),
-	/// [RequestConfig] used when sending requests.
-	/// `url_prefix` will be overridden by [HttpUrl](Self::HttpUrl) unless `HttpUrl` is [BybitHttpUrl::None].
-	RequestConfig(RequestConfig),
 	/// Base url for WebSocket connections
 	WebSocketUrl(BybitWebSocketUrl),
 	/// Whether [BybitWebSocketHandler] should perform authentication
@@ -59,8 +56,6 @@ pub struct BybitOptions {
 	pub http_auth: BybitHttpAuth,
 	/// see [BybitOption::RecvWindow]
 	pub recv_window: Option<u16>,
-	/// see [BybitOption::RequestConfig]
-	pub request_config: RequestConfig,
 	/// see [BybitOption::WebSocketUrl]
 	pub websocket_url: BybitWebSocketUrl,
 	/// see [BybitOption::WebSocketAuth]
@@ -155,8 +150,11 @@ where
 {
 	type Successful = R;
 
-	fn base_url(&self) -> String {
-		self.options.http_url.as_str().to_owned()
+	fn base_url(&self, is_test: bool) -> String {
+		match is_test {
+			true => todo!(),
+			false => self.options.http_url.as_str().to_owned(),
+		}
 	}
 
 	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, BuildError> {
@@ -476,7 +474,6 @@ impl Default for BybitOptions {
 			http_url: BybitHttpUrl::default(),
 			http_auth: BybitHttpAuth::default(),
 			recv_window: None,
-			request_config: Default::default(),
 			websocket_url: BybitWebSocketUrl::default(),
 			websocket_auth: false,
 			websocket_topics: Vec::new(),
@@ -495,7 +492,6 @@ impl HandlerOptions for BybitOptions {
 			BybitOption::HttpUrl(v) => self.http_url = v,
 			BybitOption::HttpAuth(v) => self.http_auth = v,
 			BybitOption::RecvWindow(v) => self.recv_window = Some(v),
-			BybitOption::RequestConfig(v) => self.request_config = v,
 			BybitOption::WebSocketUrl(v) => self.websocket_url = v,
 			BybitOption::WebSocketAuth(v) => self.websocket_auth = v,
 			BybitOption::WebSocketTopics(v) => self.websocket_topics = v,

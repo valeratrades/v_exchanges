@@ -125,8 +125,11 @@ where
 	type Successful = R;
 	type Unsuccessful = BitFlyerHandlerError;
 
-	fn base_url(&self) -> String {
-		self.options.http_url.as_str().to_owned()
+	fn base_url(&self, is_test: bool) -> String {
+		match is_test {
+			true => unimplemented!(),
+			false => self.options.http_url.as_str().to_owned(),
+		}
 	}
 
 	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, Self::BuildError> {

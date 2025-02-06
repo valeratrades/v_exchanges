@@ -18,7 +18,7 @@ repository = "https://github.com/valeratrades/v_exchanges/tree/master/v_exchange
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
+rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 
 [package.metadata.cargo-machete]
 ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]

@@ -13,6 +13,23 @@ jobs:
         name: modified-cargo-files
     - run: cargo clippy --tests -- -Dwarnings
     timeout-minutes: 45
+  doc:
+    env:
+      RUSTDOCFLAGS: -Dwarnings
+    if: needs.pre_ci.outputs.continue
+    name: Documentation
+    needs: pre_ci
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@nightly
+    - name: Download modified by pre-ci Cargo.toml files
+      uses: actions/download-artifact@v4
+      with:
+        name: modified-cargo-files
+    - uses: dtolnay/install@cargo-docs-rs
+    - run: cargo docs-rs
+    timeout-minutes: 45
   machete:
     name: Unused Dependencies
     runs-on: ubuntu-latest

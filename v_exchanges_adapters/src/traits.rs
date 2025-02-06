@@ -12,6 +12,7 @@ pub trait HandlerOptions: Default + Clone + Debug {
 	/// The element of this set
 	type OptionItem: HandlerOption<Options = Self>;
 
+	//Q: searched through impls, only differing options are HttpAuth and RecvWindow, (on unimportant exchanges at that), rest seem to have exact same types and uses. So maybe I could describe OptionItem procedurally + have part of the implementation for free? Really only problem would be the differing types and the websocket_url/http_url, which are effectively enums of `&'static str`
 	fn update(&mut self, option: Self::OptionItem);
 	fn is_authenticated(&self) -> bool;
 }

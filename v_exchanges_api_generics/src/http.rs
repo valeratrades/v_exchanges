@@ -1,4 +1,4 @@
-use std::{fmt::Debug, time::Duration};
+use std::{fmt::Debug, path::PathBuf, sync::OnceLock, time::Duration};
 
 pub use bytes::Bytes;
 pub use reqwest::{
@@ -34,8 +34,8 @@ impl Client {
 		Q: Serialize + ?Sized + std::fmt::Debug,
 		H: RequestHandler<B>, {
 		let config = &self.config;
-		let base_url = handler.base_url();
 		config.verify();
+		let base_url = handler.base_url(config.test);
 		let url = base_url + url;
 		debug!(?config);
 
@@ -47,19 +47,51 @@ impl Client {
 			}
 			Span::current().record("request_builder", format!("{:?}", request_builder));
 
+			if config.test
+				&& let Some(cache_duration) = config.cache_test_calls
+			{
+				let path = test_calls_path(url.as_str(), &query);
+				if let Ok(file) = std::fs::read_to_string(&path)
+					&& path
+						.metadata()
+						.expect("already read the file, guaranteed to exist")
+						.modified()
+						.expect("switch OSes, you're on something stupid")
+						.elapsed()
+						.unwrap() < cache_duration
+				{
+					let body = Bytes::from(file);
+					let (status, headers) = (StatusCode::OK, header::HeaderMap::new()); // we only cache if we get a 200 (headers are only relevant on unsuccessful), so pass defaults.
+					return handler.handle_response(status, headers, body).map_err(RequestError::HandleResponse);
+				}
+			}
+
+			//let (status, headers, truncated_body): (StatusCode, HeaderMap, String) = {
 			let request = handler.build_request(request_builder, &body, i).map_err(RequestError::BuildRequest)?;
 			match self.client.execute(request).await {
 				Ok(mut response) => {
 					let status = response.status();
 					let headers = std::mem::take(response.headers_mut());
 					let body: Bytes = response.bytes().await.map_err(RequestError::ReceiveResponse)?;
-					//TODO!!!: we are only retrying when response is not received. Although there is a list of errors we would also like to retry on.
-					let body_str: &str = std::str::from_utf8(&body).unwrap_or_default().trim();
-					let truncated_body = v_utils::utils::truncate_msg(body_str);
-					debug!(truncated_body);
-					return handler.handle_response(status, headers, body).map_err(RequestError::HandleResponse);
+					{
+						let truncated_body = v_utils::utils::truncate_msg(std::str::from_utf8(&body)?.trim());
+						debug!(truncated_body);
+					}
+
+					match config.test {
+						true => {
+							// if we're here, the cache file didn't exist or is outdated
+							let handled = handler.handle_response(status, headers.clone(), body.clone())?;
+							std::fs::write(test_calls_path(&url, &query), &body).ok();
+							return Ok(handled);
+						}
+						false => {
+							return handler.handle_response(status, headers, body).map_err(RequestError::HandleResponse);
+						}
+					}
 				}
 				Err(e) =>
+				//TODO!!!: we are only retrying when response is not received. Although there is a list of errors we would also like to retry on.
 					if i < config.max_tries && e.is_timeout() {
 						info!("Retrying sending request; made so far: {i}");
 						tokio::time::sleep(config.retry_cooldown).await;
@@ -70,6 +102,7 @@ impl Client {
 					},
 			}
 		}
+
 		unreachable!()
 	}
 
@@ -164,7 +197,8 @@ pub trait RequestHandler<B> {
 	type Successful;
 
 	/// Produce a url prefix (if any).
-	fn base_url(&self) -> String {
+	#[allow(unused_variables)]
+	fn base_url(&self, is_test: bool) -> String {
 		String::default()
 	}
 
@@ -215,6 +249,11 @@ pub struct RequestConfig {
 	/// It is possible for the [RequestHandler] to override this in [RequestHandler::build_request()].
 	/// See also: [RequestBuilder::timeout()].
 	pub timeout: Duration,
+
+	/// Make all requests in test mode
+	pub test: bool,
+	/// if `test` is true, then we will try to read the file with the cached result of any request to the same URL, aged less than specified [Duration]
+	pub cache_test_calls: Option<Duration>,
 }
 
 impl RequestConfig {
@@ -229,6 +268,8 @@ impl Default for RequestConfig {
 			max_tries: 1,
 			retry_cooldown: Duration::from_millis(500),
 			timeout: Duration::from_secs(3),
+			test: Default::default(),
+			cache_test_calls: Some(Duration::from_days(30)),
 		}
 	}
 }
@@ -260,21 +301,24 @@ pub enum ApiError {
 /// An `enum` that represents errors that could be returned by [Client::request()]
 #[derive(Error, Debug)]
 pub enum RequestError {
-	/// An error which occurred while sending a HTTP request.
+	/// from sending a HTTP request.
 	#[error("failed to send HTTP request: {0}")]
 	SendRequest(#[source] reqwest::Error),
-	/// An error which occurred while receiving a HTTP response.
+	/// from parsing the response body as UTF-8.
+	#[error("failed to parse response body as UTF-8: {0}")]
+	Utf8Error(#[from] std::str::Utf8Error),
+	/// from receiving a HTTP response.
 	#[error("failed to receive HTTP response: {0}")]
 	ReceiveResponse(#[source] reqwest::Error),
-	/// Error occurred in [RequestHandler::build_request()].
-	#[error("the handler failed to build a request: {0}")]
-	BuildRequest(BuildError),
-	/// An error which was returned by [RequestHandler::handle_response()].
-	#[error("the handler returned an error: {0}")]
-	HandleResponse(HandleError),
+	/// from [RequestHandler::build_request()].
+	#[error("handler failed to build a request: {0}")]
+	BuildRequest(#[from] BuildError),
+	/// from [RequestHandler::handle_response()].
+	#[error("handler failed to process the response: {0}")]
+	HandleResponse(#[from] HandleError),
 	#[allow(missing_docs)]
 	#[error("{0}")]
-	Other(Report),
+	Other(#[from] Report),
 }
 
 /// Errors that can occur during exchange's implementation of the build-request process.
@@ -286,6 +330,9 @@ pub enum BuildError {
 	UrlSerialization(serde_urlencoded::ser::Error),
 	/// Could not serialize body as application/json
 	JsonSerialization(serde_json::Error),
+	//Q: not sure if there is ever a case when client could reach that, thus currently simply unwraping.
+	///// Error when calling reqwest::RequestBuilder::build()
+	//Reqwest(reqwest::Error),
 	#[allow(missing_docs)]
 	Other(Report),
 }
@@ -296,4 +343,16 @@ pub enum AuthError {
 	MissingApiKey,
 	MissingSecret,
 	InvalidCharacterInApiKey(String),
+}
+
+static TEST_CALLS_PATH: OnceLock<PathBuf> = OnceLock::new();
+fn test_calls_path<Q: Serialize>(url: &str, query: &Option<Q>) -> PathBuf {
+	let base = TEST_CALLS_PATH.get_or_init(|| create_xdg!(cache, "test_calls"));
+
+	let mut filename = url.to_string();
+	if query.is_some() {
+		filename.push('?');
+		filename.push_str(&serde_urlencoded::to_string(query).unwrap_or_default());
+	}
+	base.join(filename)
 }

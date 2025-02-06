@@ -20,9 +20,10 @@ pub type CoincheckRequestResult<T> = Result<T, CoincheckRequestError>;
 pub type CoincheckRequestError = RequestError<&'static str, CoincheckHandlerError>;
 
 /// Options that can be set when creating handlers
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum CoincheckOption {
 	/// [Default] variant, does nothing
+	#[default]
 	Default,
 	/// API key
 	Key(String),
@@ -115,8 +116,11 @@ where
 	type Successful = R;
 	type Unsuccessful = CoincheckHandlerError;
 
-	fn base_url(&self) -> String {
-		self.options.http_url.as_str().to_owned()
+	fn base_url(&self, is_test: bool) -> String {
+		match is_test {
+			true => todo!(),
+			false => self.options.http_url.as_str().to_owned(),
+		}
 	}
 
 	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, Self::BuildError> {
@@ -297,10 +301,4 @@ impl<H: FnMut(serde_json::Value) + Send + 'static> WebSocketOption<H> for Coinch
 
 impl HandlerOption for CoincheckOption {
 	type Options = CoincheckOptions;
-}
-
-impl Default for CoincheckOption {
-	fn default() -> Self {
-		Self::Default
-	}
 }

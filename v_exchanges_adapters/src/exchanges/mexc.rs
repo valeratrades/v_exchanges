@@ -32,8 +32,6 @@ pub enum MexcOption {
 	HttpAuth(MexcAuth),
 	/// receive window parameter used for requests
 	RecvWindow(u16),
-	/// RequestConfig used when sending requests
-	RequestConfig(RequestConfig),
 	/// Base url for WebSocket connections
 	WebSocketUrl(MexcWebSocketUrl),
 	/// WebSocketConfig used for creating WebSocketConnections
@@ -54,8 +52,6 @@ pub struct MexcOptions {
 	pub http_auth: MexcAuth,
 	/// see [MexcOption::RecvWindow]
 	pub recv_window: Option<u16>,
-	/// see [MexcOption::RequestConfig]
-	pub request_config: RequestConfig,
 	/// see [MexcOption::WebSocketUrl]
 	pub websocket_url: MexcWebSocketUrl,
 	/// see [MexcOption::WebSocketConfig]
@@ -144,8 +140,11 @@ where
 {
 	type Successful = R;
 
-	fn base_url(&self) -> String {
-		self.options.http_url.as_str().to_owned()
+	fn base_url(&self, is_test: bool) -> String {
+		match is_test {
+			true => unimplemented!(),
+			false => self.options.http_url.as_str().to_owned(),
+		}
 	}
 
 	#[tracing::instrument(skip_all, fields(?builder))]
@@ -275,7 +274,6 @@ impl HandlerOptions for MexcOptions {
 				} else {
 					self.recv_window = Some(v);
 				},
-			MexcOption::RequestConfig(v) => self.request_config = v,
 			MexcOption::WebSocketUrl(v) => self.websocket_url = v,
 			MexcOption::WebSocketConfig(v) => self.websocket_config = v,
 		}
@@ -297,7 +295,6 @@ impl Default for MexcOptions {
 			http_url: MexcHttpUrl::None,
 			http_auth: MexcAuth::None,
 			recv_window: None,
-			request_config: RequestConfig::default(),
 			websocket_url: MexcWebSocketUrl::None,
 			websocket_config,
 		}
