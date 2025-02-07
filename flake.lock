@@ -157,6 +157,23 @@
         "type": "github"
       }
     },
+    "readme-fw": {
+      "locked": {
+        "dir": "readme_fw",
+        "lastModified": 1738888712,
+        "narHash": "sha256-6nXUzeUBRNQp5cPcMuyXts/QdTmf+U5rVvspvQmx/es=",
+        "owner": "valeratrades",
+        "repo": ".github",
+        "rev": "0231e2c21065fd40aa6ba47caee6a979c9139a89",
+        "type": "github"
+      },
+      "original": {
+        "dir": "readme_fw",
+        "owner": "valeratrades",
+        "repo": ".github",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "files": "files",
@@ -164,6 +181,7 @@
         "hooks": "hooks",
         "nixpkgs": "nixpkgs",
         "pre-commit-hooks": "pre-commit-hooks",
+        "readme-fw": "readme-fw",
         "rust-overlay": "rust-overlay",
         "workflow-parts": "workflow-parts"
       }

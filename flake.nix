@@ -7,9 +7,10 @@
     workflow-parts.url = "github:valeratrades/.github?dir=.github/workflows/nix-parts";
     hooks.url = "github:valeratrades/.github?dir=hooks";
 		files.url = "github:valeratrades/.github?dir=files";
+    readme-fw.url = "github:valeratrades/.github?dir=readme_fw";
   };
 
-  outputs = { nixpkgs, rust-overlay, flake-utils, pre-commit-hooks, workflow-parts, hooks, files, ... }:
+  outputs = { nixpkgs, rust-overlay, flake-utils, pre-commit-hooks, workflow-parts, hooks, files, readme-fw, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         overlays = builtins.trace "flake.nix sourced" [ (import rust-overlay) ];
@@ -34,6 +35,9 @@
           };
         };
         workflowContents = (import ./.github/workflows/ci.nix) { inherit pkgs workflow-parts; };
+
+        readme = (readme-fw { inherit pkgs; prj_name = "v_exchanges"; loc = "5171"; licenses = [{name = "blue_oak"; out_path = "LICENSE";} {name = "mit license"; out_path = "LICENSE-MIT";} {name = "apache license"; out_path = "LICENSE-APACHE";}]; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ];}).combined;
+
       in
       {
         packages =
@@ -74,6 +78,8 @@
 
             cargo -Zscript -q ${hooks.appendCustom} ./.git/hooks/pre-commit
             cp -f ${(import hooks.treefmt {inherit pkgs;})} ./.treefmt.toml
+
+            cp -f ${readme} ./tmp/README.md
           '';
           packages = [
             mold-wrapped
