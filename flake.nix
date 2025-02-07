@@ -4,14 +4,10 @@
     rust-overlay.url = "github:oxalica/rust-overlay";
     flake-utils.url = "github:numtide/flake-utils";
     pre-commit-hooks.url = "github:cachix/git-hooks.nix";
-    workflow-parts.url = "github:valeratrades/.github?dir=.github/workflows/nix-parts";
-    hooks.url = "github:valeratrades/.github?dir=hooks";
-    #files.url = "github:valeratrades/.github?dir=files";
-    readme-fw.url = "github:valeratrades/.github?dir=readme_fw";
-    github-parts.url = "github:valeratrades/.github";
+    v-parts.url = "github:valeratrades/.github";
   };
 
-  outputs = { nixpkgs, rust-overlay, flake-utils, pre-commit-hooks, workflow-parts, hooks, github-parts, readme-fw, ... }:
+  outputs = { nixpkgs, rust-overlay, flake-utils, pre-commit-hooks, v-parts, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         overlays = builtins.trace "flake.nix sourced" [ (import rust-overlay) ];
@@ -35,10 +31,9 @@
             };
           };
         };
-        workflowContents = (import ./.github/workflows/ci.nix) { inherit pkgs workflow-parts; };
+        workflowContents = (import ./.github/workflows/ci.nix) { inherit pkgs; workflow-parts = v-parts.workflows; };
 
-        readme = (readme-fw { inherit pkgs; prj_name = "v_exchanges"; root = ./.; loc = "5171"; licenses = [{ name = "blue_oak"; out_path = "LICENSE"; }]; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; }).combined;
-
+        readme = (v-parts.readme-fw { inherit pkgs; prj_name = "v_exchanges"; root = ./.; loc = "5164"; licenses = [{ name = "blue_oak"; out_path = "LICENSE"; }]; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; }).combined;
       in
       {
         packages =
@@ -74,11 +69,12 @@
             rm -f ./.github/workflows/errors.yml; cp ${workflowContents.errors} ./.github/workflows/errors.yml
             rm -f ./.github/workflows/warnings.yml; cp ${workflowContents.warnings} ./.github/workflows/warnings.yml
 
-            #TODO!!!: make a readme framework, append a line to the licenses block
-            cp -f ${github-parts.files.licenses.blue_oak} ./LICENSE
+            cp -f ${v-parts.files.licenses.blue_oak} ./LICENSE
 
-            cargo -Zscript -q ${hooks.appendCustom} ./.git/hooks/pre-commit
-            cp -f ${(import hooks.treefmt {inherit pkgs;})} ./.treefmt.toml
+            cargo -Zscript -q ${v-parts.hooks.appendCustom} ./.git/hooks/pre-commit
+            cp -f ${(import v-parts.hooks.treefmt {inherit pkgs;})} ./.treefmt.toml
+            cp -f ${(import v-parts.files.rust.rustfmt {inherit pkgs;})} ./rustfmt.toml
+            cp -f ${(import v-parts.files.rust.deny {inherit pkgs;})} ./deny.toml
 
             cp -f ${readme} ./README.md
           '';

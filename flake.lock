@@ -34,24 +34,6 @@
         "type": "github"
       }
     },
-    "github-parts": {
-      "inputs": {
-        "nixpkgs": "nixpkgs"
-      },
-      "locked": {
-        "lastModified": 1738932354,
-        "narHash": "sha256-9W/yI51IsNRsGPKBoY3pv4TFO4YT6G7ykM20GfCl1Tg=",
-        "owner": "valeratrades",
-        "repo": ".github",
-        "rev": "fecc479b93894bba712dbb4cafaa31737888b1c2",
-        "type": "github"
-      },
-      "original": {
-        "owner": "valeratrades",
-        "repo": ".github",
-        "type": "github"
-      }
-    },
     "gitignore": {
       "inputs": {
         "nixpkgs": [
@@ -73,36 +55,7 @@
         "type": "github"
       }
     },
-    "hooks": {
-      "locked": {
-        "dir": "hooks",
-        "lastModified": 1737073423,
-        "narHash": "sha256-u+eLfdy2aBffNqKyjDqyP0Fkt5nlurc8qA/V5aspEYY=",
-        "owner": "valeratrades",
-        "repo": ".github",
-        "rev": "8c14b5c7c30f01df0699a62b321fcb24b176ab7e",
-        "type": "github"
-      },
-      "original": {
-        "dir": "hooks",
-        "owner": "valeratrades",
-        "repo": ".github",
-        "type": "github"
-      }
-    },
     "nixpkgs": {
-      "locked": {
-        "lastModified": 0,
-        "narHash": "sha256-nU6AezEX4EuahTO1YopzueAXfjFfmCHylYEFCagduHU=",
-        "path": "/nix/store/kmns8raz2za5ra55bnbj7srxrya3bild-source",
-        "type": "path"
-      },
-      "original": {
-        "id": "nixpkgs",
-        "type": "indirect"
-      }
-    },
-    "nixpkgs_2": {
       "locked": {
         "lastModified": 1736883708,
         "narHash": "sha256-uQ+NQ0/xYU0N1CnXsa2zghgNaOPxWpMJXSUJJ9W7140=",
@@ -118,7 +71,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_3": {
+    "nixpkgs_2": {
       "locked": {
         "lastModified": 1730768919,
         "narHash": "sha256-8AKquNnnSaJRXZxc5YmF/WfmxiHX6MMZZasRP6RRQkE=",
@@ -134,7 +87,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_4": {
+    "nixpkgs_3": {
       "locked": {
         "lastModified": 1736320768,
         "narHash": "sha256-nIYdTAiKIGnFNugbomgBJR+Xv5F1ZQU+HfaBqJKroC0=",
@@ -150,11 +103,23 @@
         "type": "github"
       }
     },
+    "nixpkgs_4": {
+      "locked": {
+        "lastModified": 0,
+        "narHash": "sha256-nU6AezEX4EuahTO1YopzueAXfjFfmCHylYEFCagduHU=",
+        "path": "/nix/store/kmns8raz2za5ra55bnbj7srxrya3bild-source",
+        "type": "path"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "type": "indirect"
+      }
+    },
     "pre-commit-hooks": {
       "inputs": {
         "flake-compat": "flake-compat",
         "gitignore": "gitignore",
-        "nixpkgs": "nixpkgs_3"
+        "nixpkgs": "nixpkgs_2"
       },
       "locked": {
         "lastModified": 1737043064,
@@ -170,38 +135,18 @@
         "type": "github"
       }
     },
-    "readme-fw": {
-      "locked": {
-        "dir": "readme_fw",
-        "lastModified": 1738931504,
-        "narHash": "sha256-GD/eocmyBtEpi6GHjfJpKgV+iSFQORWzJ+sGUzmeUP8=",
-        "owner": "valeratrades",
-        "repo": ".github",
-        "rev": "1e209d23667a2a8480520a7bf9c57ef0c67ff028",
-        "type": "github"
-      },
-      "original": {
-        "dir": "readme_fw",
-        "owner": "valeratrades",
-        "repo": ".github",
-        "type": "github"
-      }
-    },
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "github-parts": "github-parts",
-        "hooks": "hooks",
-        "nixpkgs": "nixpkgs_2",
+        "nixpkgs": "nixpkgs",
         "pre-commit-hooks": "pre-commit-hooks",
-        "readme-fw": "readme-fw",
         "rust-overlay": "rust-overlay",
-        "workflow-parts": "workflow-parts"
+        "v-parts": "v-parts"
       }
     },
     "rust-overlay": {
       "inputs": {
-        "nixpkgs": "nixpkgs_4"
+        "nixpkgs": "nixpkgs_3"
       },
       "locked": {
         "lastModified": 1737080704,
@@ -232,18 +177,19 @@
         "type": "github"
       }
     },
-    "workflow-parts": {
+    "v-parts": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_4"
+      },
       "locked": {
-        "dir": ".github/workflows/nix-parts",
-        "lastModified": 1737073423,
-        "narHash": "sha256-u+eLfdy2aBffNqKyjDqyP0Fkt5nlurc8qA/V5aspEYY=",
+        "lastModified": 1738943814,
+        "narHash": "sha256-m8rNS4/EtX76fnFi/yricfYppJptteLgis/cw3t4mqI=",
         "owner": "valeratrades",
         "repo": ".github",
-        "rev": "8c14b5c7c30f01df0699a62b321fcb24b176ab7e",
+        "rev": "6d6eae217a805effa927a91fe309a6d8f27a568c",
         "type": "github"
       },
       "original": {
-        "dir": ".github/workflows/nix-parts",
         "owner": "valeratrades",
         "repo": ".github",
         "type": "github"

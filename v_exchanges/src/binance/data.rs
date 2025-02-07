@@ -157,6 +157,6 @@ mod tests {
 	#[test]
 	fn display_short() {
 		let lsrs = init();
-		insta::assert_snapshot!(lsrs.display_short().unwrap(), @"BTCUSDT  : 0.55");
+		insta::assert_snapshot!(lsrs.display_short().unwrap(), @"BTC-USDT : 0.55");
 	}
 }
