@@ -65,7 +65,7 @@ Binance spot docs: <https://github.com/binance/binance-spot-api-docs?tab=readme-
 #### License
 
 <sup>
-	Licensed under either of <a href="LICENSE">blue_oak</a> OR <a href="LICENSE-MIT">mit license</a> OR <a href="LICENSE-APACHE">apache license</a> at your option.
+	Licensed under <a href="LICENSE">blue_oak</a>
 </sup>
 
 <br>
