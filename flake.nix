@@ -33,7 +33,7 @@
         };
         workflowContents = (import ./.github/workflows/ci.nix) { inherit pkgs; workflow-parts = v-parts.workflows; };
 
-        readme = (v-parts.readme-fw { inherit pkgs; prj_name = "v_exchanges"; root = ./.; loc = "5164"; licenses = [{ name = "blue_oak"; out_path = "LICENSE"; }]; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; }).combined;
+        readme = (v-parts.readme-fw { inherit pkgs; prj_name = "v_exchanges"; root = ./.; loc = "5166"; licenses = [{ name = "blue_oak"; out_path = "LICENSE"; }]; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; }).combined;
       in
       {
         packages =
@@ -75,6 +75,8 @@
             cp -f ${(import v-parts.hooks.treefmt {inherit pkgs;})} ./.treefmt.toml
             cp -f ${(import v-parts.files.rust.rustfmt {inherit pkgs;})} ./rustfmt.toml
             cp -f ${(import v-parts.files.rust.deny {inherit pkgs;})} ./deny.toml
+            cp -f ${(import v-parts.files.rust.config {inherit pkgs;})} ./.cargo/config.toml
+            cp -f ${(import v-parts.files.rust.toolchain {inherit pkgs;})} ./.cargo/rust-toolchain.toml
 
             cp -f ${readme} ./README.md
           '';
