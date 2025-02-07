@@ -6,7 +6,7 @@
     pre-commit-hooks.url = "github:cachix/git-hooks.nix";
     workflow-parts.url = "github:valeratrades/.github?dir=.github/workflows/nix-parts";
     hooks.url = "github:valeratrades/.github?dir=hooks";
-		files.url = "github:valeratrades/.github?dir=files";
+    files.url = "github:valeratrades/.github?dir=files";
     readme-fw.url = "github:valeratrades/.github?dir=readme_fw";
   };
 
@@ -36,7 +36,7 @@
         };
         workflowContents = (import ./.github/workflows/ci.nix) { inherit pkgs workflow-parts; };
 
-        readme = (readme-fw { inherit pkgs; prj_name = "v_exchanges"; loc = "5171"; licenses = [{name = "blue_oak"; out_path = "LICENSE";} {name = "mit license"; out_path = "LICENSE-MIT";} {name = "apache license"; out_path = "LICENSE-APACHE";}]; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ];}).combined;
+        readme = (readme-fw { inherit pkgs; prj_name = "v_exchanges"; root = ./.; loc = "5171"; licenses = [{ name = "blue_oak"; out_path = "LICENSE"; } { name = "mit license"; out_path = "LICENSE-MIT"; } { name = "apache license"; out_path = "LICENSE-APACHE"; }]; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; }).combined;
 
       in
       {
@@ -70,16 +70,16 @@
         devShells.default = with pkgs; mkShell {
           inherit stdenv;
           shellHook = checks.pre-commit-check.shellHook + ''
-            rm -f ./.github/workflows/errors.yml; cp ${workflowContents.errors} ./.github/workflows/errors.yml
-            rm -f ./.github/workflows/warnings.yml; cp ${workflowContents.warnings} ./.github/workflows/warnings.yml
+                        rm -f ./.github/workflows/errors.yml; cp ${workflowContents.errors} ./.github/workflows/errors.yml
+                        rm -f ./.github/workflows/warnings.yml; cp ${workflowContents.warnings} ./.github/workflows/warnings.yml
 
-						#TODO!!!: make a readme framework, append a line to the licenses block
-            cp -f ${files.licenses.blue_oak} ./LICENSE
+            						#TODO!!!: make a readme framework, append a line to the licenses block
+                        cp -f ${files.licenses.blue_oak} ./LICENSE
 
-            cargo -Zscript -q ${hooks.appendCustom} ./.git/hooks/pre-commit
-            cp -f ${(import hooks.treefmt {inherit pkgs;})} ./.treefmt.toml
+                        cargo -Zscript -q ${hooks.appendCustom} ./.git/hooks/pre-commit
+                        cp -f ${(import hooks.treefmt {inherit pkgs;})} ./.treefmt.toml
 
-            cp -f ${readme} ./tmp/README.md
+                        cp -f ${readme} ./README.md
           '';
           packages = [
             mold-wrapped

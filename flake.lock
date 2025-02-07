@@ -160,11 +160,11 @@
     "readme-fw": {
       "locked": {
         "dir": "readme_fw",
-        "lastModified": 1738888712,
-        "narHash": "sha256-6nXUzeUBRNQp5cPcMuyXts/QdTmf+U5rVvspvQmx/es=",
+        "lastModified": 1738931504,
+        "narHash": "sha256-GD/eocmyBtEpi6GHjfJpKgV+iSFQORWzJ+sGUzmeUP8=",
         "owner": "valeratrades",
         "repo": ".github",
-        "rev": "0231e2c21065fd40aa6ba47caee6a979c9139a89",
+        "rev": "1e209d23667a2a8480520a7bf9c57ef0c67ff028",
         "type": "github"
       },
       "original": {
