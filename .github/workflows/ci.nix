@@ -1,4 +1,4 @@
-{ pkgs, workflow-parts, ... }:
+{ pkgs, workflow-parts, last-supported-version, ... }:
 let
   shared-base = import workflow-parts.shared.base { inherit pkgs; };
   shared-jobs = {
@@ -7,7 +7,7 @@ let
   rust-base = import workflow-parts.rust.base { inherit pkgs; };
   rustc-versions = [
     "nightly"
-    "nightly-2025-01-01"
+		"${last-supported-version}"
   ];
   rust-jobs-errors = {
     tests = import workflow-parts.rust.tests { inherit rustc-versions; };
