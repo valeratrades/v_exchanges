@@ -64,7 +64,7 @@ pub struct Lsr {
 	#[deref]
 	pub long: Percent,
 }
-//Q: couldn't decide if `short()` and `long(0` should return `f64` or `Percent`. Postponing the decision.
+//Q: couldn't decide if `short()` and `long()` should return `f64` or `Percent`. Postponing the decision.
 impl Lsr {
 	pub fn ratio(&self) -> f64 {
 		*self.long / self.short()
