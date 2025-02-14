@@ -34,7 +34,7 @@
         manifest = (pkgs.lib.importTOML ./v_exchanges/Cargo.toml).package;
         pname = manifest.name;
 
-        workflowContents = (import ./.github/workflows/ci.nix) { inherit pkgs; last-supported-version = "nightly-2025-01-01"; workflow-parts = v-parts.workflows; };
+        workflowContents = (import ./.github/workflows/ci.nix) { inherit pkgs; last-supported-version = "nightly-1.85"; workflow-parts = v-parts.workflows; };
 
         readme = (v-parts.readme-fw { inherit pkgs pname; lastSupportedVersion = "nightly-1.85"; rootDir = ./.; licenses = [{ name = "Blue Oak 1.0.0"; outPath = "LICENSE"; }]; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; }).combined;
       in
