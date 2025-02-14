@@ -34,7 +34,7 @@
         manifest = (pkgs.lib.importTOML ./v_exchanges/Cargo.toml).package;
         pname = manifest.name;
 
-        workflowContents = import v-parts.ci { inherit pkgs; lastSupportedVersion = "nightly-2025-01-01"; jobsErrors = [ "rust-base" "rust-tests" "rust-miri" ]; jobsWarnings = [ "rust-base" "rust-doc" "rust-clippy" "rust-machete" "rust-sort" "tokei" ]; };
+        workflowContents = import v-parts.ci { inherit pkgs; lastSupportedVersion = "nightly-2025-01-01"; jobsErrors = [ "rust-tests" "rust-miri" ]; jobsWarnings = [ "rust-doc" "rust-clippy" "rust-machete" "rust-sort" "tokei" ]; };
 
         #workflowContents = (import ./.github/workflows/ci.nix) { inherit pkgs; lastSupportedVersion = "nightly-2025-01-01"; workflow-parts = v-parts.workflows; };
 

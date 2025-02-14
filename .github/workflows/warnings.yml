@@ -1,13 +1,11 @@
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_NET_RETRY: '10'
+  RUSTUP_MAX_RETRIES: '10'
+  RUST_BACKTRACE: short
 jobs:
-  rust-base:
-    env:
-      CARGO_INCREMENTAL: '0'
-      CARGO_NET_RETRY: '10'
-      RUSTUP_MAX_RETRIES: '10'
-      RUST_BACKTRACE: short
-    jobs:
-      pre_ci:
-        uses: valeratrades/.github/.github/workflows/pre_ci.yml@master
+  pre_ci:
+    uses: valeratrades/.github/.github/workflows/pre_ci.yml@master
   rust-clippy:
     if: github.event_name != 'pull_request'
     name: Clippy
