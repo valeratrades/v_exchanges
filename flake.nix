@@ -1,98 +1,81 @@
-{
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    rust-overlay.url = "github:oxalica/rust-overlay";
-    flake-utils.url = "github:numtide/flake-utils";
-    pre-commit-hooks.url = "github:cachix/git-hooks.nix";
-    v-parts.url = "github:valeratrades/.github";
+{ pkgs, lastSupportedVersion, jobsErrors, jobsWarnings }:
+let
+  shared = {
+    base = ./shared/base.nix;
+    tokei = ./shared/tokei.nix;
+  };
+  rust = {
+    base = ./rust/base.nix;
+    tests = import ./rust/tests.nix { inherit lastSupportedVersion; };
+    doc = ./rust/doc.nix;
+    miri = ./rust/miri.nix;
+    clippy = ./rust/clippy.nix;
+    machete = ./rust/machete.nix;
+    sort = ./rust/sort.nix;
+  };
+  go = {
+    tests = ./go/tests.nix;
+    gocritic = ./go/gocritic.nix;
+    security_audit = ./go/security_audit.nix;
   };
 
-  outputs = { nixpkgs, rust-overlay, flake-utils, pre-commit-hooks, v-parts, ... }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        overlays = builtins.trace "flake.nix sourced" [ (import rust-overlay) ];
-        pkgs = import nixpkgs {
-          inherit system overlays;
-        };
-        checks = {
-          pre-commit-check = pre-commit-hooks.lib.${system}.run {
-            src = ./.;
-            hooks = {
-              treefmt = {
-                enable = true;
-                settings = {
-                  #BUG: this option does NOTHING
-                  fail-on-change = false; # that's GHA's job, pre-commit hooks stricty *do*
-                  formatters = with pkgs; [
-                    nixpkgs-fmt
-                  ];
-                };
-              };
-            };
-          };
-        };
-        manifest = (pkgs.lib.importTOML ./v_exchanges/Cargo.toml).package;
-        pname = manifest.name;
+  pathToFile = path:
+    let
+      segments = pkgs.lib.splitString "." path;
+      category = builtins.head segments;
+      name = builtins.elemAt segments 1;
+    in
+    {
+      file = (
+        if category == "shared" then shared
+        else if category == "rust" then rust
+        else if category == "go" then go
+        else throw "Unknown category: ${category}"
+      ).${name};
+      category = category;
+    };
 
-        workflowContents = (import ./.github/workflows/ci.nix) { inherit pkgs; last-supported-version = "nightly-1.85"; workflow-parts = v-parts.workflows; };
+  # Group jobs by category and merge them separately
+  groupJobsByCategory = paths:
+    let
+      fileInfos = map pathToFile paths;
+      byCategory = pkgs.lib.groupBy (x: x.category) fileInfos;
+      mergeCategory = files: pkgs.lib.foldl pkgs.lib.recursiveUpdate { } (map (x: import x.file) files);
+    in
+    pkgs.lib.mapAttrs (category: files: mergeCategory files) byCategory;
 
-        readme = (v-parts.readme-fw { inherit pkgs pname; lastSupportedVersion = "nightly-1.85"; rootDir = ./.; licenses = [{ name = "Blue Oak 1.0.0"; outPath = "LICENSE"; }]; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; }).combined;
-      in
-      {
-        packages =
-          let
-            rust = (pkgs.rust-bin.fromRustupToolchainFile ./.cargo/rust-toolchain.toml);
-            rustc = rust;
-            cargo = rust;
-            stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv;
-            rustPlatform = pkgs.makeRustPlatform {
-              inherit rustc cargo stdenv;
-            };
-          in
-          {
-            default = rustPlatform.buildRustPackage rec {
-              inherit pname;
-              version = manifest.version;
+  constructJobs = paths:
+    let
+      categorizedJobs = groupJobsByCategory paths;
+      # Merge categories in specific order: rust first, then others
+      rustJobs = categorizedJobs.rust or { };
+      sharedJobs = categorizedJobs.shared or { };
+      goJobs = categorizedJobs.go or { };
+    in
+    rustJobs // sharedJobs // goJobs;
 
-              buildInputs = with pkgs; [
-                openssl.dev
-              ];
-              nativeBuildInputs = with pkgs; [ pkg-config ];
-              env.PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
-
-              cargoLock.lockFile = ./Cargo.lock;
-              src = pkgs.lib.cleanSource ./.;
-            };
-          };
-
-        devShells.default = with pkgs; mkShell {
-          inherit stdenv;
-          shellHook = checks.pre-commit-check.shellHook + ''
-            rm -f ./.github/workflows/errors.yml; cp ${workflowContents.errors} ./.github/workflows/errors.yml
-            rm -f ./.github/workflows/warnings.yml; cp ${workflowContents.warnings} ./.github/workflows/warnings.yml
-
-            cp -f ${v-parts.files.licenses.blue_oak} ./LICENSE
-
-            cargo -Zscript -q ${v-parts.hooks.appendCustom} ./.git/hooks/pre-commit
-            cp -f ${(import v-parts.hooks.treefmt {inherit pkgs;})} ./.treefmt.toml
-            cp -f ${(import v-parts.hooks.preCommit) { inherit pkgs pname; }} ./.git/hooks/custom.sh
-
-            cp -f ${(import v-parts.files.rust.rustfmt {inherit pkgs;})} ./rustfmt.toml
-            cp -f ${(import v-parts.files.rust.deny {inherit pkgs;})} ./deny.toml
-            cp -f ${(import v-parts.files.rust.config {inherit pkgs;})} ./.cargo/config.toml
-            cp -f ${(import v-parts.files.rust.toolchain {inherit pkgs;})} ./.cargo/rust-toolchain.toml
-            cp -f ${(import v-parts.files.gitignore) { inherit pkgs; langs = ["rs"];}} ./tmp/.gitignore
-
-            cp -f ${readme} ./README.md
-          '';
-          packages = [
-            mold-wrapped
-            openssl
-            pkg-config
-            (rust-bin.fromRustupToolchainFile ./.cargo/rust-toolchain.toml)
-          ] ++ checks.pre-commit-check.enabledPackages;
-        };
-      }
-    );
+  base = {
+    on = {
+      push = { };
+      pull_request = { };
+      workflow_dispatch = { };
+    };
+  };
+in
+{
+  errors = (pkgs.formats.yaml { }).generate "" (
+    pkgs.lib.recursiveUpdate base {
+      name = "Errors";
+      permissions = (import shared.base).permissions;
+      env = (import rust.base).env;
+      jobs = constructJobs jobsErrors;
+    }
+  );
+  warnings = (pkgs.formats.yaml { }).generate "" (
+    pkgs.lib.recursiveUpdate base {
+      name = "Warnings";
+      permissions = (import shared.base).permissions;
+      jobs = constructJobs jobsWarnings;
+    }
+  );
 }
-
