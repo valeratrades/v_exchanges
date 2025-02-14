@@ -34,11 +34,9 @@
         manifest = (pkgs.lib.importTOML ./v_exchanges/Cargo.toml).package;
         pname = manifest.name;
 
-        workflowContents = import v-parts.ci { inherit pkgs; lastSupportedVersion = "nightly-2025-01-01"; jobsErrors = [ "rust-tests" "rust-miri" ]; jobsWarnings = [ "rust-doc" "rust-clippy" "rust-machete" "rust-sort" "tokei" ]; };
+        workflowContents = import v-parts.ci { inherit pkgs; lastSupportedVersion = "nightly-2025-01-31"; jobsErrors = [ "rust-tests" ]; jobsWarnings = [ "rust-miri" "rust-doc" "rust-clippy" "rust-machete" "rust-sort" "tokei" ]; };
 
-        #workflowContents = (import ./.github/workflows/ci.nix) { inherit pkgs; lastSupportedVersion = "nightly-2025-01-01"; workflow-parts = v-parts.workflows; };
-
-        readme = (v-parts.readme-fw { inherit pkgs pname; lastSupportedVersion = "nightly-1.85"; rootDir = ./.; licenses = [{ name = "Blue Oak 1.0.0"; outPath = "LICENSE"; }]; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; }).combined;
+        readme = (v-parts.readme-fw { inherit pkgs pname; lastSupportedVersion = "nightly-1.86"; rootDir = ./.; licenses = [{ name = "Blue Oak 1.0.0"; outPath = "LICENSE"; }]; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; }).combined;
       in
       {
         packages =

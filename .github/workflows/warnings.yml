@@ -49,6 +49,23 @@ jobs:
       run: "\t\t\t\t\t\tcargo machete\n\t\t\t\t\t\texit_code=$?\n\t\t\t\t\t\tif [\
         \ $exit_code = 0 ]; then\n\t\t\t\t\t\t\techo \"Found unused dependencies\"\
         \n\t\t\t\t\t\t\texit $exit_code\n\t\t\t\t\t\tfi\n\t\t\t"
+  rust-miri:
+    if: needs.pre_ci.outputs.continue
+    name: Miri
+    needs: pre_ci
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@miri
+    - name: Download modified by pre-ci Cargo.toml files
+      uses: actions/download-artifact@v4
+      with:
+        name: modified-cargo-files
+    - run: cargo miri setup
+    - env:
+        MIRIFLAGS: -Zmiri-strict-provenance
+      run: cargo miri test
+    timeout-minutes: 45
   rust-sort:
     name: Cargo Sorted
     runs-on: ubuntu-latest
