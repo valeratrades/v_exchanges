@@ -31,15 +31,16 @@
             };
           };
         };
-        
+        manifest = (pkgs.lib.importTOML ./v_exchanges/Cargo.toml).package;
+        pname = manifest.name;
+
         workflowContents = (import ./.github/workflows/ci.nix) { inherit pkgs; last-supported-version = "nightly-2025-01-01"; workflow-parts = v-parts.workflows; };
 
-        readme = (v-parts.readme-fw { inherit pkgs; lastSupportedVersion = "nightly-1.85"; prjName = "v_exchanges"; rootDir = ./.; licenses = [{ name = "Blue Oak 1.0.0"; outPath = "LICENSE"; }]; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; }).combined;
+        readme = (v-parts.readme-fw { inherit pkgs pname; lastSupportedVersion = "nightly-1.85"; rootDir = ./.; licenses = [{ name = "Blue Oak 1.0.0"; outPath = "LICENSE"; }]; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; }).combined;
       in
       {
         packages =
           let
-            manifest = (pkgs.lib.importTOML ./Cargo.toml).package;
             rust = (pkgs.rust-bin.fromRustupToolchainFile ./.cargo/rust-toolchain.toml);
             rustc = rust;
             cargo = rust;
@@ -50,7 +51,7 @@
           in
           {
             default = rustPlatform.buildRustPackage rec {
-              pname = manifest.name;
+              inherit pname;
               version = manifest.version;
 
               buildInputs = with pkgs; [
@@ -74,6 +75,8 @@
 
             cargo -Zscript -q ${v-parts.hooks.appendCustom} ./.git/hooks/pre-commit
             cp -f ${(import v-parts.hooks.treefmt {inherit pkgs;})} ./.treefmt.toml
+            cp -f ${(import v-parts.hooks.preCommit) { inherit pkgs pname; }} ./.git/hooks/custom.sh
+
             cp -f ${(import v-parts.files.rust.rustfmt {inherit pkgs;})} ./rustfmt.toml
             cp -f ${(import v-parts.files.rust.deny {inherit pkgs;})} ./deny.toml
             cp -f ${(import v-parts.files.rust.config {inherit pkgs;})} ./.cargo/config.toml
