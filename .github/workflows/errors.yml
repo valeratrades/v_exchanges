@@ -4,8 +4,8 @@ env:
   RUSTUP_MAX_RETRIES: '10'
   RUST_BACKTRACE: short
 jobs:
-  jobs:
-  - env:
+  rust-base:
+    env:
       CARGO_INCREMENTAL: '0'
       CARGO_NET_RETRY: '10'
       RUSTUP_MAX_RETRIES: '10'
@@ -13,7 +13,25 @@ jobs:
     jobs:
       pre_ci:
         uses: valeratrades/.github/.github/workflows/pre_ci.yml@master
-  - if: needs.pre_ci.outputs.continue
+  rust-miri:
+    if: needs.pre_ci.outputs.continue
+    name: Miri
+    needs: pre_ci
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@miri
+    - name: Download modified by pre-ci Cargo.toml files
+      uses: actions/download-artifact@v4
+      with:
+        name: modified-cargo-files
+    - run: cargo miri setup
+    - env:
+        MIRIFLAGS: -Zmiri-strict-provenance
+      run: cargo miri test
+    timeout-minutes: 45
+  rust-tests:
+    if: needs.pre_ci.outputs.continue
     name: Rust ${{matrix.rust}}
     needs: pre_ci
     runs-on: ubuntu-latest
@@ -41,22 +59,6 @@ jobs:
         rust:
         - nightly
         - nightly-2025-01-01
-    timeout-minutes: 45
-  - if: needs.pre_ci.outputs.continue
-    name: Miri
-    needs: pre_ci
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - uses: dtolnay/rust-toolchain@miri
-    - name: Download modified by pre-ci Cargo.toml files
-      uses: actions/download-artifact@v4
-      with:
-        name: modified-cargo-files
-    - run: cargo miri setup
-    - env:
-        MIRIFLAGS: -Zmiri-strict-provenance
-      run: cargo miri test
     timeout-minutes: 45
 name: Errors
 'on':
