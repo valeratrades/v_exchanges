@@ -5,6 +5,7 @@
 **/bin/
 **/*.test
 **/*.out
+**/**.db
 
 ## Personal
 **/_*
@@ -19,7 +20,8 @@ commit
 functions.sh
 
 ## Nix
-**/.direnv/
+result/
+.direnv/
 
 ## Vim
 *.sw[po]
@@ -51,7 +53,7 @@ venv/
 *.exe
 *.exe~
 *.dll
-
-
 ## Rust
 **/**.pending-snap
+### could be used for initial debugging of apps using `config` crate
+config.toml

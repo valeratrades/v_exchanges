@@ -14,7 +14,18 @@ skip-tree = []
 wildcards = "allow"
 
 [licenses]
-allow = ["Apache-2.0 WITH LLVM-exception", "Apache-2.0", "BSD-3-Clause", "BlueOak-1.0.0", "CC0-1.0", "ISC", "MIT", "MPL-2.0", "Unicode-DFS-2016", "Unlicense"]
+allow = [
+    "Apache-2.0 WITH LLVM-exception",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "BlueOak-1.0.0",
+    "CC0-1.0",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "Unicode-DFS-2016",
+    "Unlicense",
+]
 allow-osi-fsf-free = "neither"
 confidence-threshold = 0.925
 copyleft = "deny"
