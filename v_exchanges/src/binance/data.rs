@@ -118,8 +118,8 @@ impl Lsrs {
 
 	fn format_pair(&self) -> String {
 		let s = match self.pair.quote().as_ref() {
-			"USDT" => self.pair.to_string(), // if the quote is NOT usdt, we don't align it (theoretically should help with spotting such)
-			_ => format!("{:<width$}", self.pair.base().to_string(), width = Self::MAX_LEN_BASE),
+			"USDT" => format!("{:<width$}", self.pair.base().to_string(), width = Self::MAX_LEN_BASE), // if the quote is NOT usdt, we don't align it (theoretically should help with spotting such)
+			_ => self.pair.to_string(),
 		};
 		format!("{:<width$}", s, width = Self::MAX_LEN_BASE)
 	}
