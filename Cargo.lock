@@ -2705,7 +2705,7 @@ checksum = "ced87ca4be083373936a67f8de945faa23b6b42384bd5b64434850802c6dccd0"
 
 [[package]]
 name = "v_exchanges"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2731,7 +2731,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_adapters"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "chrono",
  "derive-new",
@@ -2757,7 +2757,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_api_generics"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "bytes",
  "derive-new",
