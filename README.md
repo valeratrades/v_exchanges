@@ -25,7 +25,6 @@ To run:
 ```sh
 cargo run -p v_exchanges --example binance_market
 ```
-		
 
 ## Roadmap
 - [x] full binance integration
@@ -53,12 +52,12 @@ cargo run -p v_exchanges --example binance_market
 Binance main docs: <https://developers.binance.com/docs>
 Binance spot docs: <https://github.com/binance/binance-spot-api-docs?tab=readme-ov-file>
 
+
 <br>
 
 <sup>
 	This repository follows <a href="https://github.com/valeratrades/.github/tree/master/best_practices">my best practices</a> and <a href="https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md">Tiger Style</a> (except "proper capitalization for acronyms": (VsrState, not VSRState) and formatting).
 </sup>
-	
 
 #### License
 
@@ -73,5 +72,3 @@ Binance spot docs: <https://github.com/binance/binance-spot-api-docs?tab=readme-
 for inclusion in this crate by you, as defined in the Apache-2.0 license, shall
 be licensed as above, without any additional terms or conditions.
 </sub>
-	
-

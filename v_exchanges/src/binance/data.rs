@@ -130,7 +130,7 @@ impl Lsrs {
 
 	pub fn display_change(&self) -> Result<String> {
 		let diff = NowThen::new(*self.last()?.long, *self.first().expect("can't be empty, otherwise `last()` would have had panicked").long);
-		let diff_f = format!("{diff}");
+		let diff_f = format!("{:<width$}", diff, width = Self::MAX_LEN_BASE);
 		let s = format!("{}: {:<12}", self.format_pair(), diff_f); // `to_string`s are required because rust is dumb as of today (2024/01/16)
 		assert_eq!(s.len(), Self::CHANGE_STR_LEN);
 		Ok(s)
