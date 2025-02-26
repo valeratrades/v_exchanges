@@ -118,7 +118,7 @@ impl Lsrs {
 
 	fn format_pair(&self) -> String {
 		let s = match self.pair.quote().as_ref() {
-			"USDT" => format!("{:<width$}", self.pair.base().to_string(), width = Self::MAX_LEN_BASE), // if the quote is NOT usdt, we don't align it (theoretically should help with spotting such)
+			"USDT" => self.pair.base().to_string(),
 			_ => self.pair.to_string(),
 		};
 		format!("{:<width$}", s, width = Self::MAX_LEN_BASE)
@@ -130,10 +130,8 @@ impl Lsrs {
 
 	pub fn display_change(&self) -> Result<String> {
 		let diff = NowThen::new(*self.last()?.long, *self.first().expect("can't be empty, otherwise `last()` would have had panicked").long);
-		let diff_f = format!("{:<width$}", diff, width = Self::MAX_LEN_BASE);
-		let s = format!("{}: {:<12}", self.format_pair(), diff_f); // `to_string`s are required because rust is dumb as of today (2024/01/16)
-		assert_eq!(s.len(), Self::CHANGE_STR_LEN);
-		Ok(s)
+		let s = format!("{}: {:<12}", self.format_pair(), diff.to_string()); // `to_string`s are required because rust is dumb as of today and will fuck with padding (2024/01/16)
+		Ok(format!("{:<width$}", s, width = Self::CHANGE_STR_LEN))
 	}
 }
 
@@ -143,20 +141,44 @@ mod tests {
 	static INIT: OnceLock<()> = OnceLock::new();
 	use super::*;
 
-	fn init() -> Lsrs {
+	fn init() -> (Lsrs, Lsrs) {
 		if INIT.get().is_none() {
 			let _ = INIT.set(());
 			color_eyre::install().unwrap();
 		}
-		Lsrs {
-			values: vec![0.4, 0.5, 0.6, 0.55].into_iter().map(Lsr::from).collect(),
-			pair: Pair::from(("BTC", "USDT")),
-		}
+		(
+			Lsrs {
+				values: vec![0.4, 0.5, 0.6, 0.55].into_iter().map(Lsr::from).collect(),
+				pair: Pair::from(("BTC", "USDT")),
+			},
+			Lsrs {
+				values: vec![0.9, 0.6, 0.6, 0.7].into_iter().map(Lsr::from).collect(),
+				pair: Pair::from(("TRUMP", "SOL")),
+			},
+		)
 	}
 
 	#[test]
-	fn display_short() {
+	fn display_short_usdt_pair() {
 		let lsrs = init();
-		insta::assert_snapshot!(lsrs.display_short().unwrap(), @"BTC-USDT : 0.55");
+		insta::assert_snapshot!(lsrs.0.display_short().unwrap(), @"BTC      : 0.55");
+	}
+
+	#[test]
+	fn display_short_non_usdt_pair() {
+		let lsrs = init();
+		insta::assert_snapshot!(lsrs.1.display_short().unwrap(), @"TRUMP-SOL: 0.70");
+	}
+
+	#[test]
+	fn display_change() {
+		let lsrs = init();
+		insta::assert_snapshot!(lsrs.0.display_change().unwrap(), @"BTC      : 0.55+0.15");
+	}
+
+	#[test]
+	fn display_change_non_usdt() {
+		let lsrs = init();
+		insta::assert_snapshot!(lsrs.1.display_change().unwrap(), @"TRUMP-SOL: 0.7-0.2");
 	}
 }
