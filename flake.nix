@@ -65,7 +65,7 @@
               cp -f ${(v-utils.hooks.preCommit) { inherit pkgs pname; }} ./.git/hooks/custom.sh
 
               mkdir -p ./.cargo
-              cp -f ${(v-utils.files.rust.config {inherit pkgs;})} ./.cargo/config.toml
+              cp -f ${(v-utils.files.rust.config {inherit pkgs;})} ./.cargo/config.toml #dbg
               cp -f ${(v-utils.files.rust.toolchain {inherit pkgs; toolchain = "nightly";})} ./.cargo/rust-toolchain.toml
               cp -f ${(v-utils.files.rust.rustfmt {inherit pkgs;})} ./rustfmt.toml
               cp -f ${(v-utils.files.rust.deny {inherit pkgs;})} ./deny.toml
