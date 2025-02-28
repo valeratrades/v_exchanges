@@ -347,7 +347,7 @@ pub enum AuthError {
 
 static TEST_CALLS_PATH: OnceLock<PathBuf> = OnceLock::new();
 fn test_calls_path<Q: Serialize>(url: &str, query: &Option<Q>) -> PathBuf {
-	let base = TEST_CALLS_PATH.get_or_init(|| create_xdg!(cache, "test_calls"));
+	let base = TEST_CALLS_PATH.get_or_init(|| create_xdg("cache", "test_calls"));
 
 	let mut filename = url.to_string();
 	if query.is_some() {
