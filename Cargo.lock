@@ -2776,7 +2776,7 @@ dependencies = [
 
 [[package]]
 name = "v_utils"
-version = "2.5.3"
+version = "2.5.5"
 dependencies = [
  "chrono",
  "const_format",
