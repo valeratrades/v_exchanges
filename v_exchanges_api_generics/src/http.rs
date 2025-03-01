@@ -5,7 +5,7 @@ pub use reqwest::{
 	Method, Request, RequestBuilder, StatusCode,
 	header::{self, HeaderMap},
 };
-use v_utils::prelude::*;
+use v_utils::{prelude::*, xdg_cache};
 
 /// The User Agent string
 pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_PKG_VERSION"));
@@ -347,7 +347,7 @@ pub enum AuthError {
 
 static TEST_CALLS_PATH: OnceLock<PathBuf> = OnceLock::new();
 fn test_calls_path<Q: Serialize>(url: &str, query: &Option<Q>) -> PathBuf {
-	let base = TEST_CALLS_PATH.get_or_init(|| xdg_cache("test_calls"));
+	let base = TEST_CALLS_PATH.get_or_init(|| xdg_cache!("test_calls"));
 
 	let mut filename = url.to_string();
 	if query.is_some() {
