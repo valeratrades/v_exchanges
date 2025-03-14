@@ -1,4 +1,5 @@
 #![feature(array_try_map)]
+#![feature(doc_auto_cfg)]
 #![feature(formatting_options)]
 pub extern crate v_exchanges_adapters as adapters;
 
@@ -24,12 +25,9 @@ pub mod bybit;
 #[cfg_attr(docsrs, doc(cfg(feature = "mexc")))]
 pub mod mexc;
 
-macro_rules! data_feature_module {
-    ($mod_name:ident) => {
-        #[cfg(feature = "data")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "data")))]
-        pub mod $mod_name;
-    };
+cfg_if::cfg_if! {
+	if #[cfg(feature = "data")] {
+		pub mod bitmex;
+		pub mod yahoo;
+	}
 }
-data_feature_module!(bitmex);
-data_feature_module!(yahoo);

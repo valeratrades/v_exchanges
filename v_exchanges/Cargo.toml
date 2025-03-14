@@ -38,7 +38,8 @@ serde_with.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-v_utils = { workspace = true }
+v_utils.workspace = true 
+cfg-if.workspace = true
 
 v_exchanges_adapters = { version = "^0.6.4", path = "../v_exchanges_adapters/", optional = true }
 

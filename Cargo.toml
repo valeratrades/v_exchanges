@@ -33,6 +33,7 @@ sha2 = "^0.10.8"
 hex = "^0.4.3"
 derive-new = "^0.7.0"
 secrecy = "^0.10.3"
+cfg-if = "^1.0.0"
 
 #[dev-dependencies]
 insta = "1.42.2"

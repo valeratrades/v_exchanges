@@ -2707,6 +2707,7 @@ name = "v_exchanges"
 version = "0.6.6"
 dependencies = [
  "async-trait",
+ "cfg-if",
  "chrono",
  "color-eyre",
  "derive-new",
