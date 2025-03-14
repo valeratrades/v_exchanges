@@ -24,6 +24,12 @@ pub mod bybit;
 #[cfg_attr(docsrs, doc(cfg(feature = "mexc")))]
 pub mod mexc;
 
-#[cfg(feature = "data")]
-#[cfg_attr(docsrs, doc(cfg(feature = "data")))]
-pub mod bitmex;
+macro_rules! data_feature_module {
+    ($mod_name:ident) => {
+        #[cfg(feature = "data")]
+        #[cfg_attr(docsrs, doc(cfg(feature = "data")))]
+        pub mod $mod_name;
+    };
+}
+data_feature_module!(bitmex);
+data_feature_module!(yahoo);

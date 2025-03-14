@@ -124,25 +124,4 @@ impl crate::core::MarketTrait for Market {
 	}
 }
 
-static TFS_BYBIT: [&str; 13] = ["1", "3", "5", "15", "30", "60", "120", "240", "360", "720", "D", "W", "M"];
-#[derive(Debug, Clone, Default, Copy, derive_more::Deref, derive_more::DerefMut)]
-pub struct BybitTimeframe(Timeframe);
-impl std::fmt::Display for BybitTimeframe {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let s = self
-			.0
-			.try_as_predefined(&TFS_BYBIT)
-			.expect("We can't create a BybitTimeframe object if that doesn't succeed in the first place");
-		write!(f, "{s}")
-	}
-}
-impl TryFrom<Timeframe> for BybitTimeframe {
-	type Error = UnsupportedTimeframeError;
-
-	fn try_from(t: Timeframe) -> Result<Self, Self::Error> {
-		match t.try_as_predefined(&TFS_BYBIT) {
-			Some(_) => Ok(Self(t)),
-			None => Err(UnsupportedTimeframeError::new(t, TFS_BYBIT.iter().map(Timeframe::from).collect())),
-		}
-	}
-}
+crate::define_provider_timeframe!(BybitTimeframe, ["1", "3", "5", "15", "30", "60", "120", "240", "360", "720", "D", "W", "M"], "Bybit");

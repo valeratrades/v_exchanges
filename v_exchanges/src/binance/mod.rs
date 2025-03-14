@@ -5,12 +5,11 @@ mod market;
 mod spot;
 use adapters::binance::BinanceOption;
 use derive_more::{Deref, DerefMut};
-use eyre::Result;
 use secrecy::SecretString;
 use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
-use crate::{AbsMarket, AssetBalance, Balances, Exchange, ExchangeInfo, ExchangeResult, Klines, RequestRange, UnsupportedTimeframeError, WrongExchangeError};
+use crate::{AbsMarket, AssetBalance, Balances, Exchange, ExchangeInfo, ExchangeResult, Klines, RequestRange, WrongExchangeError};
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
 pub struct Binance {
@@ -127,27 +126,10 @@ impl crate::core::MarketTrait for Market {
 	}
 }
 
-static TFS_BINANCE: [&str; 19] = [
-	"1s", "5s", "15s", "30s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M",
-];
-#[derive(Debug, Clone, Default, Copy, derive_more::Deref, derive_more::DerefMut, derive_more::AsRef)]
-pub struct BinanceTimeframe(Timeframe);
-impl std::fmt::Display for BinanceTimeframe {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let s = self
-			.0
-			.try_as_predefined(&TFS_BINANCE)
-			.expect("We can't create a BinanceTimeframe object if that doesn't succeed in the first place");
-		write!(f, "{s}")
-	}
-}
-impl TryFrom<Timeframe> for BinanceTimeframe {
-	type Error = UnsupportedTimeframeError;
-
-	fn try_from(t: Timeframe) -> Result<Self, Self::Error> {
-		match t.try_as_predefined(&TFS_BINANCE) {
-			Some(_) => Ok(Self(t)),
-			None => Err(UnsupportedTimeframeError::new(t, TFS_BINANCE.iter().map(Timeframe::from).collect())),
-		}
-	}
-}
+crate::define_provider_timeframe!(
+	BinanceTimeframe,
+	[
+		"1s", "5s", "15s", "30s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"
+	],
+	"Binance"
+);
