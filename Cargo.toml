@@ -15,10 +15,10 @@ get_first = "allow" # const fn, so actually more performant
 get_last_with_len = "allow"
 
 [workspace.dependencies]
-v_utils = { version = "^2.6.2", path = "../v_utils/v_utils" } #ga: rm path
+v_utils = { version = "^2.6.4", path = "../v_utils/v_utils" } #ga: rm path
 futures-util = "^0.3.31"
-reqwest = { version = "^0.12.12", features = ["blocking", "json"] }
-serde = { version = "^1.0.218", features = ["derive"] }
+reqwest = { version = "^0.12.14", features = ["blocking", "json"] }
+serde = { version = "^1.0.219", features = ["derive"] }
 serde_plain = "^1.0.2" #TEST
 serde_json = "^1.0.140"
 chrono = { version = "^0.4.40", features = ["serde"] }
@@ -26,7 +26,7 @@ serde_with = "^3.12.0"
 thiserror = "^2.0.12"
 serde_urlencoded = "^0.7.1"
 derive_more = { version = "^2.0.1", features = ["deref", "deref_mut"] }
-tokio = { version = "^1.44.0", features = ["sync", "macros", "io-util", "rt", "time"] } # enable only features that play with wasm.
+tokio = { version = "^1.44.1", features = ["sync", "macros", "io-util", "rt", "time"] } # enable only features that play with wasm.
 tracing = "^0.1.41"
 hmac = "^0.12.1"
 sha2 = "^0.10.8"
