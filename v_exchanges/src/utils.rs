@@ -50,7 +50,7 @@ macro_rules! define_provider_timeframe {
 
 				match t.try_as_predefined(&TIMEFRAMES) {
 					Some(_) => Ok(Self(t)),
-					None => Err($crate::UnsupportedTimeframeError::new(t, TIMEFRAMES.iter().map(v_utils::trades::Timeframe::from).collect())),
+					_ => Err($crate::UnsupportedTimeframeError::new(t, TIMEFRAMES.iter().map(v_utils::trades::Timeframe::from).collect())),
 				}
 			}
 		}

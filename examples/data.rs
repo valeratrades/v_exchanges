@@ -15,7 +15,7 @@ async fn main() {
 	let lsrs = bn.lsr(("BTC", "USDT").into(), "5m".into(), (24 * 12 + 1).into(), "Global".into()).await.unwrap();
 	dbg!(&lsrs[..2]);
 
-	let vix = v_exchanges::yahoo::vix("1h".into(), 24).await.unwrap();
+	let vix = v_exchanges::yahoo::vix_change("1h".into(), 24).await.unwrap();
 	dbg!(&vix);
 }
 
