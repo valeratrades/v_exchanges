@@ -34,8 +34,8 @@ impl Exchange for Binance {
 		&mut self.client
 	}
 
-	fn auth(&mut self, key: String, secret: SecretString) {
-		self.update_default_option(BinanceOption::Key(key));
+	fn auth(&mut self, pubkey: String, secret: SecretString) {
+		self.update_default_option(BinanceOption::Pubkey(pubkey));
 		self.update_default_option(BinanceOption::Secret(secret));
 	}
 

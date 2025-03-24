@@ -70,6 +70,9 @@ data = ["dep:reqwest"]
 [[example]]
 name = "test"
 path = "../examples/test.rs"
+[[example]]
+name = "test2"
+path = "../examples/websocket_private.rs"
 
 [[example]]
 name = "binance_market_futures"

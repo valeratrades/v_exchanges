@@ -21,7 +21,7 @@ pub enum BybitOption {
 	/// [Default] variant, does nothing
 	Default,
 	/// API key
-	Key(String),
+	Pubkey(String),
 	/// Api secret
 	Secret(SecretString),
 	/// Base url for HTTP requests
@@ -46,7 +46,7 @@ pub enum BybitOption {
 #[derive(Clone, derive_more::Debug)]
 pub struct BybitOptions {
 	/// see [BybitOption::Key]
-	pub key: Option<String>,
+	pub pubkey: Option<String>,
 	/// see [BybitOption::Secret]
 	#[debug("[REDACTED]")]
 	pub secret: Option<SecretString>,
@@ -166,7 +166,7 @@ where
 			return Ok(builder.build().expect("My understanding is client can't trigger this. So fail fast for dev"));
 		}
 
-		let key = self.options.key.as_deref().ok_or(AuthError::MissingApiKey)?;
+		let pubkey = self.options.pubkey.as_deref().ok_or(AuthError::MissingApiKey)?;
 		let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(AuthError::MissingSecret)?;
 
 		let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
@@ -175,10 +175,10 @@ where
 		let hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap(); // hmac accepts key of any length
 
 		match self.options.http_auth {
-			BybitHttpAuth::SpotV1 => Self::v1_auth(builder, request_body, key, timestamp, hmac, true, self.options.recv_window),
-			BybitHttpAuth::BelowV3 => Self::v1_auth(builder, request_body, key, timestamp, hmac, false, self.options.recv_window),
-			BybitHttpAuth::UsdcContractV1 => Self::v3_auth(builder, request_body, key, timestamp, hmac, true, self.options.recv_window),
-			BybitHttpAuth::V3AndAbove => Self::v3_auth(builder, request_body, key, timestamp, hmac, false, self.options.recv_window),
+			BybitHttpAuth::SpotV1 => Self::v1_auth(builder, request_body, pubkey, timestamp, hmac, true, self.options.recv_window),
+			BybitHttpAuth::BelowV3 => Self::v1_auth(builder, request_body, pubkey, timestamp, hmac, false, self.options.recv_window),
+			BybitHttpAuth::UsdcContractV1 => Self::v3_auth(builder, request_body, pubkey, timestamp, hmac, true, self.options.recv_window),
+			BybitHttpAuth::V3AndAbove => Self::v3_auth(builder, request_body, pubkey, timestamp, hmac, false, self.options.recv_window),
 			BybitHttpAuth::None => unreachable!(), // we've already handled this case
 		}
 	}
@@ -367,7 +367,7 @@ impl WebSocketHandler for BybitWebSocketHandler {
 
 	fn handle_start(&mut self) -> Vec<WebSocketMessage> {
 		if self.options.websocket_auth {
-			if let Some(key) = self.options.key.as_deref() {
+			if let Some(key) = self.options.pubkey.as_deref() {
 				if let Some(secret) = self.options.secret.as_ref().map(|s| s.expose_secret()) {
 					let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
 					let expires = time.as_millis() as u64 + 1000;
@@ -469,7 +469,7 @@ impl Default for BybitOptions {
 
 		Self {
 			websocket_config,
-			key: None,
+			pubkey: None,
 			secret: None,
 			http_url: BybitHttpUrl::default(),
 			http_auth: BybitHttpAuth::default(),
@@ -487,7 +487,7 @@ impl HandlerOptions for BybitOptions {
 	fn update(&mut self, option: Self::OptionItem) {
 		match option {
 			BybitOption::Default => (),
-			BybitOption::Key(v) => self.key = Some(v),
+			BybitOption::Pubkey(v) => self.pubkey = Some(v),
 			BybitOption::Secret(v) => self.secret = Some(v),
 			BybitOption::HttpUrl(v) => self.http_url = v,
 			BybitOption::HttpAuth(v) => self.http_auth = v,
@@ -500,7 +500,7 @@ impl HandlerOptions for BybitOptions {
 	}
 
 	fn is_authenticated(&self) -> bool {
-		self.key.is_some() // some endpoints are satisfied with just the key, and it's really difficult to provide only a key without a secret from the clientside, so assume intent if it's missing.
+		self.pubkey.is_some() // some endpoints are satisfied with just the key, and it's really difficult to provide only a key without a secret from the clientside, so assume intent if it's missing.
 	}
 }
 

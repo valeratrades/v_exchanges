@@ -40,8 +40,8 @@ impl Exchange for Bybit {
 		&mut self.client
 	}
 
-	fn auth(&mut self, key: String, secret: SecretString) {
-		self.update_default_option(BybitOption::Key(key));
+	fn auth(&mut self, pubkey: String, secret: SecretString) {
+		self.update_default_option(BybitOption::Pubkey(pubkey));
 		self.update_default_option(BybitOption::Secret(secret));
 	}
 

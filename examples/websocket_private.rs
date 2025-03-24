@@ -1,19 +1,19 @@
 use std::{env, time::Duration};
 
-use crypto_botters::{
+use tracing::log::LevelFilter;
+use v_exchanges_adapters::{
 	Client,
 	binance::{BinanceAuth, BinanceHttpUrl, BinanceOption, BinanceWebSocketUrl},
 };
-use log::LevelFilter;
 
 #[tokio::main]
 async fn main() {
 	env_logger::builder().filter_level(LevelFilter::Debug).init();
-	let key = env::var("BINANCE_API_KEY").expect("no API key found");
-	let secret = env::var("BINANCE_API_SECRET").expect("no API secret found");
-	let mut client = Client::new();
-	client.update_default_option(BinanceOption::Key(key));
-	client.update_default_option(BinanceOption::Secret(secret));
+	let pubkey = env::var("BINANCE_TIGER_READ_PUBKEY").expect("no API pubkey found");
+	let secret = env::var("BINANCE_TIGER_READ_SECRET").expect("no API secret found");
+	let mut client = Client::default();
+	client.update_default_option(BinanceOption::Pubkey(pubkey));
+	client.update_default_option(BinanceOption::Secret(secret.into()));
 
 	let key: serde_json::Value = client
 		.post(

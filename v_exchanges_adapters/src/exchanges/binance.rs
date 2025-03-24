@@ -41,8 +41,8 @@ where
 
 		if self.options.http_auth != BinanceAuth::None {
 			// https://binance-docs.github.io/apidocs/spot/en/#signed-trade-user_data-and-margin-endpoint-security
-			let key = self.options.key.as_deref().ok_or(AuthError::MissingApiKey)?;
-			builder = builder.header("X-MBX-APIKEY", key);
+			let pubkey = self.options.pubkey.as_deref().ok_or(AuthError::MissingApiKey)?;
+			builder = builder.header("X-MBX-APIKEY", pubkey);
 
 			if self.options.http_auth == BinanceAuth::Sign {
 				let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
@@ -135,7 +135,7 @@ impl WebSocketHandler for BinanceWebSocketHandler {
 					tracing::debug!("Invalid JSON message received");
 				},
 			WebSocketMessage::Binary(_) => tracing::debug!("Unexpected binary message received"),
-			WebSocketMessage::Ping(_) | WebSocketMessage::Pong(_) => (),
+			WebSocketMessage::Ping(_) | WebSocketMessage::Pong(_) => (), //TODO!!!!!: send Pong on Ping
 		}
 		vec![]
 	}
@@ -146,7 +146,7 @@ pub enum BinanceOption {
 	/// [Default] variant, does nothing
 	Default,
 	/// API key
-	Key(String),
+	Pubkey(String),
 	/// Api secret
 	Secret(SecretString),
 	/// Number of milliseconds the request is valid for. Only applicable for signed requests.
@@ -312,7 +312,7 @@ impl BinanceWebSocketUrl {
 #[derive(Clone, derive_more::Debug)]
 pub struct BinanceOptions {
 	/// see [BinanceOption::Key]
-	pub key: Option<String>,
+	pub pubkey: Option<String>,
 	/// see [BinanceOption::Secret]
 	#[debug("[REDACTED]")]
 	pub secret: Option<SecretString>,
@@ -335,7 +335,7 @@ impl HandlerOptions for BinanceOptions {
 	fn update(&mut self, option: Self::OptionItem) {
 		match option {
 			Self::OptionItem::Default => (),
-			Self::OptionItem::Key(v) => self.key = Some(v),
+			Self::OptionItem::Pubkey(v) => self.pubkey = Some(v),
 			Self::OptionItem::RecvWindow(v) => self.recv_window = Some(v),
 			Self::OptionItem::Secret(v) => self.secret = Some(v),
 			Self::OptionItem::HttpUrl(v) => self.http_url = v,
@@ -346,7 +346,7 @@ impl HandlerOptions for BinanceOptions {
 	}
 
 	fn is_authenticated(&self) -> bool {
-		self.key.is_some() // some end points are satisfied with just the key, and it's really difficult to provide only a key without a secret from the clientside, so assume intent if it's missing.
+		self.pubkey.is_some() // some end points are satisfied with just the key, and it's really difficult to provide only a key without a secret from the clientside, so assume intent if it's missing.
 	}
 }
 impl Default for BinanceOptions {
@@ -355,7 +355,7 @@ impl Default for BinanceOptions {
 		websocket_config.refresh_after = time::Duration::from_secs(60 * 60 * 12);
 		websocket_config.ignore_duplicate_during_reconnection = true;
 		Self {
-			key: None,
+			pubkey: None,
 			secret: None,
 			recv_window: None,
 			http_url: Default::default(),

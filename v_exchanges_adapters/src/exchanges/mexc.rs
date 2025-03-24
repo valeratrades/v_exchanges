@@ -23,7 +23,7 @@ pub enum MexcOption {
 	/// [Default] variant, does nothing
 	Default,
 	/// API key
-	Key(String),
+	Pubkey(String),
 	/// Api secret
 	Secret(SecretString),
 	/// Base url for HTTP requests
@@ -42,7 +42,7 @@ pub enum MexcOption {
 #[derive(Clone, derive_more::Debug)]
 pub struct MexcOptions {
 	/// see [MexcOption::Key]
-	pub key: Option<String>,
+	pub pubkey: Option<String>,
 	/// see [MexcOption::Secret]
 	#[debug("[REDACTED]")]
 	pub secret: Option<SecretString>,
@@ -156,8 +156,8 @@ where
 		}
 
 		if self.options.http_auth != MexcAuth::None {
-			let key = self.options.key.as_deref().ok_or(AuthError::MissingApiKey)?;
-			builder = builder.header("ApiKey", key);
+			let pubkey = self.options.pubkey.as_deref().ok_or(AuthError::MissingApiKey)?;
+			builder = builder.header("ApiKey", pubkey);
 
 			let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
 			let timestamp = time.as_millis();
@@ -179,7 +179,7 @@ where
 					String::from_utf8(request.body().and_then(|body| body.as_bytes()).unwrap_or_default().to_vec()).unwrap_or_default()
 				};
 
-				let signature_base = format!("{}{}{}", key, timestamp, param_string);
+				let signature_base = format!("{pubkey}{timestamp}{param_string}");
 				hmac.update(signature_base.as_bytes());
 				let signature = hex::encode(hmac.finalize().into_bytes());
 				request.headers_mut().insert("Signature", signature.parse().unwrap());
@@ -263,7 +263,7 @@ impl HandlerOptions for MexcOptions {
 	fn update(&mut self, option: Self::OptionItem) {
 		match option {
 			MexcOption::Default => (),
-			MexcOption::Key(v) => self.key = Some(v),
+			MexcOption::Pubkey(v) => self.pubkey = Some(v),
 			MexcOption::Secret(v) => self.secret = Some(v),
 			MexcOption::HttpUrl(v) => self.http_url = v,
 			MexcOption::HttpAuth(v) => self.http_auth = v,
@@ -280,7 +280,7 @@ impl HandlerOptions for MexcOptions {
 	}
 
 	fn is_authenticated(&self) -> bool {
-		self.key.is_some() // some end points are satisfied with just the key, and it's really difficult to provide only a key without a secret from the clientside, so assume intent if it's missing.
+		self.pubkey.is_some() // some end points are satisfied with just the key, and it's really difficult to provide only a key without a secret from the clientside, so assume intent if it's missing.
 	}
 }
 
@@ -290,7 +290,7 @@ impl Default for MexcOptions {
 		websocket_config.refresh_after = time::Duration::from_secs(60 * 60 * 12);
 		websocket_config.ignore_duplicate_during_reconnection = true;
 		Self {
-			key: None,
+			pubkey: None,
 			secret: None,
 			http_url: MexcHttpUrl::None,
 			http_auth: MexcAuth::None,

@@ -14,8 +14,8 @@ async fn main() {
 	let price = c.price(("BTC", "USDT").into(), m).await.unwrap();
 	dbg!(&price);
 
-	if let (Ok(key), Ok(secret)) = (env::var("BYBIT_TIGER_READ_KEY"), env::var("BYBIT_TIGER_READ_SECRET")) {
-		c.auth(key, secret.into());
+	if let (Ok(pubkey), Ok(secret)) = (env::var("BYBIT_TIGER_READ_PUBKEY"), env::var("BYBIT_TIGER_READ_SECRET")) {
+		c.auth(pubkey, secret.into());
 		private(&*c, m).await;
 	} else {
 		eprintln!("BYBIT_TIGER_READ_KEY or BYBIT_TIGER_READ_SECRET is missing, skipping private API methods.");

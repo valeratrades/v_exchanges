@@ -40,8 +40,8 @@ impl Exchange for Mexc {
 		&mut self.client
 	}
 
-	fn auth(&mut self, key: String, secret: SecretString) {
-		self.update_default_option(MexcOption::Key(key));
+	fn auth(&mut self, pubkey: String, secret: SecretString) {
+		self.update_default_option(MexcOption::Pubkey(pubkey));
 		self.update_default_option(MexcOption::Secret(secret));
 	}
 

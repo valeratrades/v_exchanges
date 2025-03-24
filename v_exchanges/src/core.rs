@@ -29,7 +29,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync {
 	//,}}}
 
 	// Config {{{
-	fn auth(&mut self, key: String, secret: SecretString);
+	fn auth(&mut self, pubkey: String, secret: SecretString);
 	/// Set number of **milliseconds** the request is valid for. Recv Window of over a minute does not make sense, thus it's expressed as u16.
 	//Q: really don't think this should be used like that, globally, - if unable to find cases, rm in a month (now is 2025/01/24)
 	#[deprecated(note = "This shouldn't be a global setting, but a per-request one. Use `recv_window` in the request instead.")]
