@@ -75,6 +75,10 @@ name = "test2"
 path = "../examples/test2.rs"
 
 [[example]]
+name = "specify_exchange_from_cli"
+path = "../examples/specify_exchange_from_cli.rs"
+
+[[example]]
 name = "binance_market_futures"
 path = "../examples/binance/market_futures.rs"
 

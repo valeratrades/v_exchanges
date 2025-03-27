@@ -168,6 +168,10 @@ impl Client {
 		Self: GetOptions<O::Options>, {
 		WebSocketConnection::new(url, O::websocket_handler(handler, self.merged_options(options))).await
 	}
+
+	//TODO: ws()
+
+	//pub async fn ws<-> Result<WebSocketConnection<O::WebSocketHandler>, TungsteniteError>
 }
 
 pub trait GetOptions<O: HandlerOptions> {

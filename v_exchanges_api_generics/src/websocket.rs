@@ -496,6 +496,7 @@ pub struct WebSocketConfig {
 	pub connect_cooldown: Duration = Duration::from_millis(3000),
 	/// The [WebSocketConnection] will automatically reconnect when `refresh_after` has elapsed since
 	/// the last connection started. If you don't want this feature, set it to [Duration::ZERO].
+	//TODO: switch to Option<Duration> instead of getting weird with special meanings.
 	pub refresh_after: Duration,
 	/// Prefix which will be used for connections that started using this `WebSocketConfig`.
 	///

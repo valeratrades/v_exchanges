@@ -187,7 +187,7 @@ impl std::str::FromStr for AbsMarket {
 	fn from_str(s: &str) -> Result<Self> {
 		let parts: Vec<&str> = s.split('/').collect();
 		if parts.len() != 2 {
-			bail!("Invalid market string: {}", s);
+			bail!("Invalid market string: {s}\nMust be in the form of `Exchange/SubMarket`; eg `Binance/Futures`");
 		}
 		let exchange = parts[0];
 		let sub_market = parts[1];
