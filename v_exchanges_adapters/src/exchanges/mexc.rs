@@ -19,8 +19,10 @@ use crate::traits::*;
 static MAX_RECV_WINDOW: u16 = 60000; // as of (2025/01/18)
 
 /// Options that can be set when creating handlers
+#[derive(Debug, Default)]
 pub enum MexcOption {
-	/// [Default] variant, does nothing
+	/// Does nothing
+	#[default]
 	Default,
 	/// API key
 	Pubkey(String),
@@ -286,7 +288,7 @@ impl HandlerOptions for MexcOptions {
 
 impl Default for MexcOptions {
 	fn default() -> Self {
-		let mut websocket_config = WebSocketConfig::new();
+		let mut websocket_config = WebSocketConfig::default();
 		websocket_config.refresh_after = time::Duration::from_secs(60 * 60 * 12);
 		websocket_config.ignore_duplicate_during_reconnection = true;
 		Self {
@@ -328,10 +330,4 @@ impl<H: FnMut(serde_json::Value) + Send + 'static> WebSocketOption<H> for MexcOp
 
 impl HandlerOption for MexcOption {
 	type Options = MexcOptions;
-}
-
-impl Default for MexcOption {
-	fn default() -> Self {
-		Self::Default
-	}
 }

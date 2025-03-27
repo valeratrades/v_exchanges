@@ -3,6 +3,7 @@ mod futures;
 use std::collections::BTreeMap;
 mod market;
 mod spot;
+mod ws;
 use adapters::binance::BinanceOption;
 use derive_more::{Deref, DerefMut};
 use secrecy::SecretString;
@@ -104,6 +105,10 @@ impl Exchange for Binance {
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
 		}
 	}
+
+	//TODO!!!!!!!!!!!!!: \
+	//async fn websocket_agg_trades(&self, pair: Pair, am: AbsMarket) -> ExchangeResult<tokio::sync::mpsc::Receiver<
+	//Q: what should it be returning?
 }
 
 #[derive(Debug, Clone, Default, Copy, derive_more::Display, derive_more::FromStr)]

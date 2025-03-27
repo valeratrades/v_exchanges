@@ -20,7 +20,7 @@ commit
 functions.sh
 
 ## Nix
-result/
+result
 .direnv/
 
 ## Vim

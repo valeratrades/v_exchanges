@@ -72,7 +72,7 @@ name = "test"
 path = "../examples/test.rs"
 [[example]]
 name = "test2"
-path = "../examples/websocket_private.rs"
+path = "../examples/test2.rs"
 
 [[example]]
 name = "binance_market_futures"

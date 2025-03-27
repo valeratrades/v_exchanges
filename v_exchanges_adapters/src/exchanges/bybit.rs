@@ -464,7 +464,7 @@ impl BybitWebSocketUrl {
 
 impl Default for BybitOptions {
 	fn default() -> Self {
-		let mut websocket_config = WebSocketConfig::new();
+		let mut websocket_config = WebSocketConfig::default();
 		websocket_config.ignore_duplicate_during_reconnection = true;
 
 		Self {

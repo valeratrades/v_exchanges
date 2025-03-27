@@ -136,7 +136,7 @@ impl WebSocketHandler for BinanceWebSocketHandler {
 				},
 			WebSocketMessage::Binary(_) => tracing::debug!("Unexpected binary message received"),
 			WebSocketMessage::Ping(_) | WebSocketMessage::Pong(_) => (), //TODO!!!!!: send Pong on Ping
-		}
+		};
 		vec![]
 	}
 }
@@ -351,7 +351,7 @@ impl HandlerOptions for BinanceOptions {
 }
 impl Default for BinanceOptions {
 	fn default() -> Self {
-		let mut websocket_config = WebSocketConfig::new();
+		let mut websocket_config = WebSocketConfig::default();
 		websocket_config.refresh_after = time::Duration::from_secs(60 * 60 * 12);
 		websocket_config.ignore_duplicate_during_reconnection = true;
 		Self {

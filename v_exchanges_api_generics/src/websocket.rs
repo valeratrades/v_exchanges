@@ -232,7 +232,7 @@ impl<H: WebSocketHandler> WebSocketConnection<H> {
 					Ok(new_sink) => {
 						// replace the sink with the new one
 						let mut old_sink = mem::replace(&mut *sink.lock().await, new_sink);
-						tracing::debug!("New connection established");
+						tracing::info!("New connection established");
 
 						if no_duplicate {
 							tokio::time::sleep(wait).await;
@@ -246,7 +246,7 @@ impl<H: WebSocketHandler> WebSocketConnection<H> {
 					}
 					Err(error) => {
 						// try reconnecting again
-						tracing::error!("Failed to reconnect because of an error: {}, trying again ...", error);
+						tracing::error!("Failed to reconnect: {error}. Trying again ...");
 						reconnect_manager.inner.reconnect_notify.notify_one();
 					}
 				}
@@ -310,9 +310,43 @@ impl<H: WebSocketHandler> WebSocketConnection<H> {
 			// the underlying WebSocket connection was closed
 
 			drop(connection.message_tx.send((id, FeederMessage::ConnectionClosed))); // this may be Err
-			tracing::debug!("WebSocket stream closed");
+			tracing::info!("WebSocket stream closed");
 		});
 		Ok(sink)
+	}
+
+	async fn connection(connection: Arc<ConnectionInner<H>>) -> Result<(WebSocketSplitSink, impl Future<Output = ()>), TungsteniteError> {
+		let (websocket_stream, _) = tokio_tungstenite::connect_async(connection.url.clone()).await?;
+		let (mut sink, mut stream) = websocket_stream.split();
+
+		let messages = connection.handler.lock().handle_start();
+		for message in messages {
+			sink.send(message.into_message()).await?;
+		}
+		sink.flush().await?;
+
+		// fetch_not is unstable so we use fetch_xor
+		let id = connection.next_connection_id.fetch_xor(true, Ordering::SeqCst);
+
+		// Create the future that will process the stream
+		let process_future = async move {
+			let connection = connection.clone();
+
+			while let Some(message) = stream.next().await {
+				// send the received message to the task running feed_handler
+				if connection.message_tx.send((id, FeederMessage::Message(message))).is_err() {
+					// the channel is closed. we can't disconnect because we don't have the sink
+					tracing::debug!("WebSocket message receiver is closed; abandon connection");
+					return;
+				}
+			}
+			// the underlying WebSocket connection was closed
+
+			drop(connection.message_tx.send((id, FeederMessage::ConnectionClosed))); // this may be Err
+			tracing::info!("WebSocket stream closed");
+		};
+
+		Ok((sink, process_future))
 	}
 
 	/// Sends a message to the connection.
@@ -453,18 +487,17 @@ pub trait WebSocketHandler: Send + 'static {
 /// Configuration for [WebSocketHandler].
 ///
 /// Should be returned by [WebSocketHandler::websocket_config()].
-#[derive(Debug, Clone)]
-#[non_exhaustive]
+#[derive(Debug, Clone, Default)]
 pub struct WebSocketConfig {
 	/// Duration that should elapse between each attempt to start a new connection.
 	///
 	/// This matters because the [WebSocketConnection] reconnects on error. If the error
-	/// continues to happen, it could spam the server if `connect_cooldown` is too short. [Default]s to 3000ms.
-	pub connect_cooldown: Duration,
+	/// continues to happen, it could spam the server if `connect_cooldown` is too short.
+	pub connect_cooldown: Duration = Duration::from_millis(3000),
 	/// The [WebSocketConnection] will automatically reconnect when `refresh_after` has elapsed since
-	/// the last connection started. If you don't want this feature, set it to [Duration::ZERO]. [Default]s to [Duration::ZERO].
+	/// the last connection started. If you don't want this feature, set it to [Duration::ZERO].
 	pub refresh_after: Duration,
-	/// Prefix which will be used for connections that started using this `WebSocketConfig`. [Default]s to `""`.
+	/// Prefix which will be used for connections that started using this `WebSocketConfig`.
 	///
 	/// Example usage: `"wss://example.com"`
 	pub url_prefix: String,
@@ -477,29 +510,8 @@ pub struct WebSocketConfig {
 	/// even this option is set to `true`.
 	pub ignore_duplicate_during_reconnection: bool,
 	/// When `ignore_duplicate_during_reconnection` is set to `true`, [WebSocketConnection] will wait for a
-	/// certain amount of time to make sure no message is lost. [Default]s to 300ms
-	pub reconnection_wait: Duration,
+	/// certain amount of time to make sure no message is lost.
+	pub reconnection_wait: Duration = Duration::from_millis(300),
 	/// A reconnection will be triggered if no messages are received within this amount of time.
-	/// [Default]s to [Duration::ZERO], which means no timeout will be applied.
 	pub message_timeout: Duration,
-}
-
-impl WebSocketConfig {
-	/// Constructs a new `WebSocketConfig` with its fields set to [default][WebSocketConfig::default()].
-	pub fn new() -> Self {
-		Self::default()
-	}
-}
-
-impl Default for WebSocketConfig {
-	fn default() -> Self {
-		Self {
-			connect_cooldown: Duration::from_millis(3000),
-			refresh_after: Duration::ZERO,
-			url_prefix: String::new(),
-			ignore_duplicate_during_reconnection: false,
-			reconnection_wait: Duration::from_millis(300),
-			message_timeout: Duration::ZERO,
-		}
-	}
 }

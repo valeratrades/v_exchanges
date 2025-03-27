@@ -4,11 +4,9 @@ use tracing::log::LevelFilter;
 use v_exchanges::prelude::*;
 use v_exchanges_adapters::{
 	Client,
-	binance::{BinanceOption, BinanceWebSocketUrl},
+	binance::{BinanceAuth, BinanceHttpUrl, BinanceOption, BinanceWebSocketUrl},
 };
 use v_utils::prelude::*;
-
-// Random test stuff, for dev purposes only
 
 #[tokio::main]
 async fn main() {
@@ -22,11 +20,14 @@ async fn main() {
 	let connection = client
 		.websocket(
 			"/ws/btcusdt@trade",
-			|message| println!("{}", message),
+			|message| println!("{message}"), //
 			[BinanceOption::WebSocketUrl(BinanceWebSocketUrl::Spot443)],
 		)
 		.await
 		.expect("failed to connect websocket");
+
+	//TODO: restructure so that we use it through loop-racing on .next().await
+	//NOTE: the pings, pongs and whatever else are going to be handled higher up. Through the generics we only get eg Result<TradeEven, WsError>
 
 	// receive messages
 	tokio::time::sleep(Duration::from_secs(1)).await;
@@ -42,4 +43,36 @@ async fn main() {
 
 	// wait for the "close" message to be logged
 	tokio::time::sleep(Duration::from_secs(1)).await;
+
+	dbg!(&"now private stuff");
+	private_stuff().await;
+}
+
+async fn private_stuff() {
+	let pubkey = std::env::var("BINANCE_TIGER_READ_PUBKEY").expect("no API pubkey found");
+	let secret = std::env::var("BINANCE_TIGER_READ_SECRET").expect("no API secret found");
+	let mut client = Client::default();
+	client.update_default_option(BinanceOption::Pubkey(pubkey));
+	client.update_default_option(BinanceOption::Secret(secret.into()));
+
+	let key: serde_json::Value = client
+		.post(
+			"/sapi/v1/userDataStream/isolated",
+			Some(&[("symbol", "BTCUSDT")]),
+			[BinanceOption::HttpAuth(BinanceAuth::Key), BinanceOption::HttpUrl(BinanceHttpUrl::Spot)],
+		)
+		.await
+		.expect("failed to get listen key");
+
+	let _connection = client
+		.websocket(
+			&format!("/ws/{}", key["listenKey"].as_str().unwrap()),
+			|message| println!("{}", message),
+			[BinanceOption::WebSocketUrl(BinanceWebSocketUrl::Spot9443)],
+		)
+		.await
+		.expect("failed to connect websocket");
+
+	// receive messages
+	tokio::time::sleep(Duration::from_secs(60)).await;
 }
