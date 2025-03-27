@@ -51,6 +51,10 @@ secrecy.workspace = true
 [dev-dependencies]
 color-eyre = "^0.6.3"
 insta.workspace = true
+
+tokio-tungstenite = "*" #dbg: ws dev
+tungstenite = "*" #dbg: ws dev
+futures-util = "*" #dbg: ws dev
 #
 
 [features]

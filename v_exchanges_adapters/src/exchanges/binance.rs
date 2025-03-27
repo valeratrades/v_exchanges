@@ -261,7 +261,7 @@ pub enum BinanceWebSocketUrl {
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
 pub enum BinanceAuth {
 	Sign,
-	Key,
+	Key, //Q: Not sure if anything uses it.
 	#[default]
 	None,
 }

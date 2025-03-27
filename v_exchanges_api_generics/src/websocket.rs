@@ -23,8 +23,7 @@ use tokio::{
 use tokio_tungstenite::{MaybeTlsStream, tungstenite};
 pub use tungstenite::Error as TungsteniteError;
 
-type WebSocketStream = tokio_tungstenite::WebSocketStream<MaybeTlsStream<TcpStream>>;
-type WebSocketSplitSink = SplitSink<WebSocketStream, tungstenite::Message>;
+type WebSocketSplitSink = SplitSink<tokio_tungstenite::WebSocketStream<MaybeTlsStream<TcpStream>>, tungstenite::Message>;
 
 /// A `struct` that holds a websocket connection.
 ///
@@ -68,6 +67,7 @@ struct ConnectionInner<H: WebSocketHandler> {
 	url: String,
 	handler: Arc<SyncMutex<H>>,
 	message_tx: tokio_mpsc::UnboundedSender<(bool, FeederMessage)>,
+	//Q: why is it _id if it's bool?
 	next_connection_id: AtomicBool,
 }
 
@@ -294,8 +294,7 @@ impl<H: WebSocketHandler> WebSocketConnection<H> {
 		}
 		sink.flush().await?;
 
-		// fetch_not is unstable so we use fetch_xor
-		let id = connection.next_connection_id.fetch_xor(true, Ordering::SeqCst);
+		let id = connection.next_connection_id.fetch_not(Ordering::SeqCst);
 
 		// pass messages to task_feed_handler
 		tokio::spawn(async move {
@@ -475,7 +474,7 @@ pub trait WebSocketHandler: Send + 'static {
 	/// - `false`, it means that the connection will not be reconnected, because the [WebSocketConnection] was dropped.
 	#[allow(unused_variables)]
 	fn handle_close(&mut self, reconnect: bool) {
-		tracing::debug!("WebSocket connection closed; reconnect: {reconnect}");
+		tracing::debug!("WebSocket connection closed; will attempt to reconnect: {reconnect}");
 	}
 }
 

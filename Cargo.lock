@@ -2748,6 +2748,7 @@ dependencies = [
  "enum_dispatch",
  "env_logger",
  "eyre",
+ "futures-util",
  "insta",
  "reqwest",
  "secrecy",
@@ -2757,7 +2758,9 @@ dependencies = [
  "serde_with",
  "thiserror",
  "tokio",
+ "tokio-tungstenite",
  "tracing",
+ "tungstenite",
  "v_exchanges_adapters",
  "v_utils",
 ]
