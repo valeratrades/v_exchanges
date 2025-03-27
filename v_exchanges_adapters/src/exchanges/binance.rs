@@ -68,7 +68,6 @@ where
 				return Ok(request);
 			}
 		}
-		//Ok(builder.build()?)
 		Ok(builder.build().expect("don't expect this to be reached by client, so fail fast for dev"))
 	}
 
@@ -103,7 +102,7 @@ where
 						let until = Some(Utc::now() + Duration::seconds(s as i64));
 						ApiError::IpTimeout { until }.into()
 					}
-					None => eyre!("Could't interpret Retry-After header").into(),
+					_ => eyre!("Could't interpret Retry-After header").into(),
 				};
 				return Err(e);
 			}
@@ -142,9 +141,10 @@ impl WebSocketHandler for BinanceWebSocketHandler {
 }
 
 /// Options that can be set when creating handlers
+#[derive(Debug, Default)]
 pub enum BinanceOption {
-	/// [Default] variant, does nothing
-	Default,
+	#[default]
+	None,
 	/// API key
 	Pubkey(String),
 	/// Api secret
@@ -160,7 +160,6 @@ pub enum BinanceOption {
 	WebSocketUrl(BinanceWebSocketUrl),
 	/// [WebSocketConfig] used for creating [WebSocketConnection]s
 	/// `url_prefix` will be overridden by [WebSocketUrl](Self::WebSocketUrl) unless `WebSocketUrl` is [BinanceWebSocketUrl::None].
-	/// By default, `refresh_after` is set to 12 hours and `ignore_duplicate_during_reconnection` is set to `true`.
 	WebSocketConfig(WebSocketConfig),
 }
 
@@ -334,7 +333,7 @@ impl HandlerOptions for BinanceOptions {
 
 	fn update(&mut self, option: Self::OptionItem) {
 		match option {
-			Self::OptionItem::Default => (),
+			Self::OptionItem::None => (),
 			Self::OptionItem::Pubkey(v) => self.pubkey = Some(v),
 			Self::OptionItem::RecvWindow(v) => self.recv_window = Some(v),
 			Self::OptionItem::Secret(v) => self.secret = Some(v),
@@ -394,12 +393,6 @@ impl<H: FnMut(serde_json::Value) + Send + 'static> WebSocketOption<H> for Binanc
 
 impl HandlerOption for BinanceOption {
 	type Options = BinanceOptions;
-}
-
-impl Default for BinanceOption {
-	fn default() -> Self {
-		Self::Default
-	}
 }
 
 #[derive(Clone, Debug, Deserialize)]

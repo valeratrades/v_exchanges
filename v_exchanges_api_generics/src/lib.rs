@@ -17,8 +17,8 @@
 //!
 //! For a more detailed documentation, see the links above.
 
-/// Module for interacting with HTTP/HTTPS APIs.
 pub mod http;
-/// Module for interacting with WebSocket APIs.
+#[deprecated(note = "switching to `ws`")]
 pub mod websocket;
+pub mod ws;
 pub extern crate reqwest;

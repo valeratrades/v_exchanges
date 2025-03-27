@@ -31,7 +31,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Bybit
 	base_map.extend(range_map.clone());
 	let params = filter_nulls(serde_json::Value::Object(base_map));
 
-	let kline_response: KlineResponse = client.get("/v5/market/kline", &params, [BybitOption::Default]).await.unwrap();
+	let kline_response: KlineResponse = client.get("/v5/market/kline", &params, [BybitOption::None]).await.unwrap();
 
 	let mut klines = VecDeque::with_capacity(kline_response.result.list.len());
 	for k in kline_response.result.list {
@@ -90,7 +90,7 @@ pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> Exchang
 		"category": "linear",
 		"symbol": pair.fmt_bybit(),
 	}));
-	let response: MarketTickerResponse = client.get("/v5/market/tickers", &params, [BybitOption::Default]).await?;
+	let response: MarketTickerResponse = client.get("/v5/market/tickers", &params, [BybitOption::None]).await?;
 	Ok(response.result.list[0].last_price)
 }
 

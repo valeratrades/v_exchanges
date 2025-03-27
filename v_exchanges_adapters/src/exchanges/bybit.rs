@@ -17,9 +17,10 @@ use v_utils::prelude::*;
 use crate::traits::*;
 
 /// Options that can be set when creating handlers
+#[derive(Debug, Default)]
 pub enum BybitOption {
-	/// [Default] variant, does nothing
-	Default,
+	#[default]
+	None,
 	/// API key
 	Pubkey(String),
 	/// Api secret
@@ -367,7 +368,7 @@ impl WebSocketHandler for BybitWebSocketHandler {
 
 	fn handle_start(&mut self) -> Vec<WebSocketMessage> {
 		if self.options.websocket_auth {
-			if let Some(key) = self.options.pubkey.as_deref() {
+			if let Some(pubkey) = self.options.pubkey.as_deref() {
 				if let Some(secret) = self.options.secret.as_ref().map(|s| s.expose_secret()) {
 					let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
 					let expires = time.as_millis() as u64 + 1000;
@@ -380,15 +381,16 @@ impl WebSocketHandler for BybitWebSocketHandler {
 					return vec![WebSocketMessage::Text(
 						json!({
 							"op": "auth",
-							"args": [key, expires, signature],
+							"args": [pubkey, expires, signature],
 						})
 						.to_string(),
 					)];
 				} else {
-					tracing::debug!("API secret not set.");
+					//Q: why does this not panic?
+					tracing::error!("API secret not set.");
 				};
 			} else {
-				tracing::debug!("API key not set.");
+				tracing::error!("API pubkey not set.");
 			};
 		}
 		self.message_subscribe()
@@ -486,7 +488,7 @@ impl HandlerOptions for BybitOptions {
 
 	fn update(&mut self, option: Self::OptionItem) {
 		match option {
-			BybitOption::Default => (),
+			BybitOption::None => (),
 			BybitOption::Pubkey(v) => self.pubkey = Some(v),
 			BybitOption::Secret(v) => self.secret = Some(v),
 			BybitOption::HttpUrl(v) => self.http_url = v,
@@ -531,10 +533,4 @@ impl<H: FnMut(serde_json::Value) + Send + 'static> WebSocketOption<H> for BybitO
 
 impl HandlerOption for BybitOption {
 	type Options = BybitOptions;
-}
-
-impl Default for BybitOption {
-	fn default() -> Self {
-		Self::Default
-	}
 }

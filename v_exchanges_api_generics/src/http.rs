@@ -17,7 +17,6 @@ pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_P
 #[derive(Debug, Clone, Default)]
 pub struct Client {
 	client: reqwest::Client,
-	#[doc(hidden)]
 	pub config: RequestConfig,
 }
 
@@ -233,44 +232,31 @@ pub trait RequestHandler<B> {
 /// Configuration when sending a request using [Client].
 ///
 /// Modified in-place later if necessary.
-#[derive(Debug, Clone)]
-#[non_exhaustive]
+#[derive(Debug, Clone, Default)]
 pub struct RequestConfig {
 	/// [Client] will retry sending a request if it failed to send. `max_try` can be used limit the number of attempts.
 	///
 	/// Do not set this to `0` or [Client::request()] will **panic**. [Default]s to `1` (which means no retry).
-	pub max_tries: u8,
+	//TODO: change to `num_retries`, so there is no special case.
+	pub max_tries: u8 = 1,
 	/// Duration that should elapse after retrying sending a request.
-	///
-	/// [Default]s to 500ms. See also: `max_try`.
-	pub retry_cooldown: Duration,
+	pub retry_cooldown: Duration = Duration::from_millis(500),
 	/// The timeout set when sending a request. [Default]s to 3s.
 	///
 	/// It is possible for the [RequestHandler] to override this in [RequestHandler::build_request()].
 	/// See also: [RequestBuilder::timeout()].
-	pub timeout: Duration,
+	pub timeout: Duration = Duration::from_secs(3),
 
 	/// Make all requests in test mode
 	pub use_testnet: bool,
 	/// if `test` is true, then we will try to read the file with the cached result of any request to the same URL, aged less than specified [Duration]
-	pub cache_testnet_calls: Option<Duration>,
+	pub cache_testnet_calls: Option<Duration> = Some(Duration::from_days(30)),
 }
 
 impl RequestConfig {
 	#[inline(always)]
 	fn verify(&self) {
 		assert_ne!(self.max_tries, 0, "RequestConfig.max_tries must not be equal to 0");
-	}
-}
-impl Default for RequestConfig {
-	fn default() -> Self {
-		Self {
-			max_tries: 1,
-			retry_cooldown: Duration::from_millis(500),
-			timeout: Duration::from_secs(3),
-			use_testnet: Default::default(),
-			cache_testnet_calls: Some(Duration::from_days(30)),
-		}
 	}
 }
 

@@ -6,7 +6,8 @@ use serde::Serialize;
 use traits::*;
 use v_exchanges_api_generics::{
 	http::{self, *},
-	websocket::*,
+	websocket::*, //dbg
+	ws::*,
 };
 
 mod exchanges;
@@ -169,9 +170,14 @@ impl Client {
 		WebSocketConnection::new(url, O::websocket_handler(handler, self.merged_options(options))).await
 	}
 
-	//TODO: ws()
-
-	//pub async fn ws<-> Result<WebSocketConnection<O::WebSocketHandler>, TungsteniteError>
+	#[inline(always)]
+	pub async fn ws<O, H>(&self, url: &str, handler: H, options: impl IntoIterator<Item = O>) -> Result<WsConnection<O::WsHandler>, TungsteniteError>
+	where
+		O: WsOption<H>,
+		O::WsHandler: WsHandler,
+		Self: GetOptions<O::Options>, {
+		WsConnection::new(url, O::ws_handler(handler, self.merged_options(options))).await
+	}
 }
 
 pub trait GetOptions<O: HandlerOptions> {

@@ -124,6 +124,7 @@ pub trait MarketTrait {
 	fn abs_market(&self) -> AbsMarket;
 }
 
+//Q: potentially rename to `ExchangeMarket` for 1:1 meaning mapping to the contents?
 #[derive(Debug, Clone, Copy)]
 pub enum AbsMarket {
 	#[cfg(feature = "binance")]

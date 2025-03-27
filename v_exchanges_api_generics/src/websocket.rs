@@ -418,16 +418,12 @@ impl ReconnectState {
 
 /// An enum that represents a websocket message.
 ///
-/// See also [tungstenite::Message].
+/// Follows [tungstenite::Message], only missing the `Close` arm
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum WebSocketMessage {
-	/// A text message
 	Text(String),
-	/// A binary message
 	Binary(Vec<u8>),
-	/// A ping message
 	Ping(Vec<u8>),
-	/// A pong message
 	Pong(Vec<u8>),
 }
 
@@ -454,8 +450,7 @@ impl WebSocketMessage {
 
 /// A `trait` which is used to handle events on the [WebSocketConnection].
 ///
-/// The `struct` implementing this `trait` is required to be [Send] and ['static] because
-/// it will be sent between threads.
+/// The `struct` implementing this `trait` is required to be [Send] and ['static] because it will be sent between threads.
 pub trait WebSocketHandler: Send + 'static {
 	/// Returns a [WebSocketConfig] that will be applied for all WebSocket connections handled by this handler.
 	fn websocket_config(&self) -> WebSocketConfig {
@@ -480,7 +475,7 @@ pub trait WebSocketHandler: Send + 'static {
 	/// - `false`, it means that the connection will not be reconnected, because the [WebSocketConnection] was dropped.
 	#[allow(unused_variables)]
 	fn handle_close(&mut self, reconnect: bool) {
-		tracing::debug!("WebSocket connection closed; reconnect: {}", reconnect);
+		tracing::debug!("WebSocket connection closed; reconnect: {reconnect}");
 	}
 }
 
@@ -500,7 +495,7 @@ pub struct WebSocketConfig {
 	pub refresh_after: Duration,
 	/// Prefix which will be used for connections that started using this `WebSocketConfig`.
 	///
-	/// Example usage: `"wss://example.com"`
+	/// Ex: `"wss://example.com"`
 	pub url_prefix: String,
 	/// During reconnection, [WebSocketHandler] might receive two identical messages
 	/// even though the server sent only one message. By setting this to `true`, [WebSocketConnection]
