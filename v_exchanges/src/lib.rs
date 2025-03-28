@@ -1,6 +1,8 @@
 #![feature(array_try_map)]
 #![feature(doc_auto_cfg)]
 #![feature(formatting_options)]
+#![feature(try_blocks)]
+
 pub extern crate v_exchanges_adapters as adapters;
 
 pub mod core;

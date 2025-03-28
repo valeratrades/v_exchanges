@@ -1,6 +1,7 @@
 #![warn(future_incompatible, let_underscore, nonstandard_style, missing_docs)]
 #![feature(slice_pattern)]
 #![feature(default_field_values)]
+#![feature(try_blocks)]
 #![feature(duration_constructors)]
 #![feature(let_chains)]
 

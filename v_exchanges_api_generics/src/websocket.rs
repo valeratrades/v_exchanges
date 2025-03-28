@@ -415,6 +415,7 @@ impl ReconnectState {
 	}
 }
 
+//NB: until some exchange starts using Binary, can actually nuke this
 /// An enum that represents a websocket message.
 ///
 /// Follows [tungstenite::Message], only missing the `Close` arm
