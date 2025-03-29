@@ -52,10 +52,15 @@ secrecy.workspace = true
 color-eyre = "^0.6.3"
 insta.workspace = true
 
-tokio-tungstenite = "*" #dbg: ws dev
-tungstenite = "*" #dbg: ws dev
-futures-util = "*" #dbg: ws dev
-#
+
+#dbg: ws dev {{{
+tokio-tungstenite = "*"
+tungstenite = "*"
+futures-util = "*"
+sha2 = "*"
+hmac = "*"
+hex = "*"
+#,}}}
 
 [features]
 default = ["major"]

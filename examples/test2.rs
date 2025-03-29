@@ -1,10 +1,20 @@
 #![feature(try_blocks)]
-use std::{env, time::Duration};
+use std::{
+	borrow::Cow,
+	env,
+	marker::PhantomData,
+	time::{Duration, SystemTime},
+	vec,
+};
 
 use futures_util::{
 	SinkExt as _, StreamExt as _,
 	stream::{SplitSink, SplitStream},
 };
+use hmac::{Hmac, Mac};
+use secrecy::{ExposeSecret as _, SecretString};
+use serde_json::json;
+use sha2::Sha256;
 use tokio::net::TcpStream;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tracing::log::LevelFilter;
@@ -35,31 +45,80 @@ Result<(serde_json::Value, Vec<TungsteniteMessage>), TungsteniteError>
 */
 
 trait WsHandler {
-	fn handle_start(&mut self) -> Vec<tungstenite::Message>; // will be a `Vec` for topic requests
-	fn handle_message(&mut self, message: &serde_json::Value) -> Option<tungstenite::Message>;
+	/// Return list of messages necessary to establish the connection.
+	fn handle_start(&mut self) -> Vec<tungstenite::Message>;
+	/// Determines if further communication is necessary. If the message received is the desired content, returns `None`.
+	fn handle_message(&mut self, message: &serde_json::Value) -> Option<Vec<tungstenite::Message>>;
 }
 
-struct BinanceWsHandler {}
-impl WsHandler for BinanceWsHandler {
+#[derive(Clone, derive_more::Debug)]
+struct BybitWsHandler {
+	pubkey: String,
+	#[debug("[REDACTED]")]
+	secret: SecretString,
+	topics: Vec<String>,
+	auth: bool,
+}
+impl BybitWsHandler {
+	#[inline(always)]
+	fn subscribe_messages(&self) -> Vec<tungstenite::Message> {
+		vec![tungstenite::Message::Text(json!({ "op": "subscribe", "args": self.topics }).to_string().into())]
+	}
+}
+impl WsHandler for BybitWsHandler {
 	fn handle_start(&mut self) -> Vec<tungstenite::Message> {
-		vec![]
+		if self.auth {
+			let pubkey = self.pubkey.clone();
+			let secret = self.secret.expose_secret().to_owned();
+
+			let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
+			let expires = time.as_millis() as u64 + 1000;
+
+			let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap(); // hmac accepts key of any length
+
+			hmac.update(format!("GET/realtime{expires}").as_bytes());
+			let signature = hex::encode(hmac.finalize().into_bytes());
+
+			return vec![tungstenite::Message::Text(
+				json!({
+					"op": "auth",
+					"args": [pubkey, expires, signature],
+				})
+				.to_string()
+				.into(),
+			)];
+		}
+		self.subscribe_messages()
 	}
 
-	/// Determines if further communication is necessary. If the message received is the desired content, returns `None`.
-	fn handle_message(&mut self, message: &serde_json::Value) -> Option<tungstenite::Message> {
-		None //dbg: for now assume we never need to auth
+	fn handle_message(&mut self, message: &serde_json::Value) -> Option<Vec<tungstenite::Message>> {
+		match message["op"].as_str() {
+			Some("auth") => {
+				if message["success"].as_bool() == Some(true) {
+					tracing::debug!("WebSocket authentication successful");
+				} else {
+					tracing::debug!("WebSocket authentication unsuccessful; message: {}", message["ret_msg"]);
+				}
+				Some(self.subscribe_messages())
+			}
+			Some("subscribe") => {
+				if message["success"].as_bool() == Some(true) {
+					tracing::debug!("WebSocket topics subscription successful");
+				} else {
+					tracing::debug!("WebSocket topics subscription unsuccessful; message: {}", message["ret_msg"]);
+				}
+				None
+			}
+			_ => None,
+		}
 	}
 }
 
 //Q: is it possible to get rid of Mutexes, if we make all methods take `&mut self`?
 #[derive(Clone, Debug)]
 struct WsConnection<H: WsHandler> {
-	//connection_prerequisites: {url, handler: {auth, .handle_start()},
-	//
-	//Q: problem: authenticated streams require initial acquisition of a key.
 	url: String,
 	handler: Arc<Mutex<H>>,
-	//Q: could maybe get rid of this Arc-Mutex
 	inner: Arc<Mutex<Option<WsStream>>>,
 }
 impl<H: WsHandler> WsConnection<H> {
@@ -78,18 +137,17 @@ impl<H: WsHandler> WsConnection<H> {
 		}
 		let stream = inner_lock.as_mut().unwrap();
 
-		//let (mut sink, mut stream) = inner_lock.expect("connect ensures this is some");
-
 		while let Some(resp) = stream.next().await {
 			let resp: Result<tungstenite::Message, tungstenite::Error> = resp; //dbg: lsp can't infer type
 			match resp {
 				Ok(succ_resp) => match succ_resp {
 					tungstenite::Message::Text(text) => {
-						//DO: assume serde_json::Value
 						let value: serde_json::Value = serde_json::from_str(&text).expect("TODO: handle error");
 						if let Some(further_communication) = self.handler.lock().unwrap().handle_message(&value) {
-							stream.send(further_communication.clone()).await?; //HACK: probably can evade the clone()
-							continue; // all the times we need to send something, it was not the desired message already.
+							//Q: check if it's actually more performant than default `send` (that effectively flushes on each)
+							let mut messages_stream = futures_util::stream::iter(further_communication).map(Ok);
+							stream.send_all(&mut messages_stream).await?; //HACK: probably can evade the clone()
+							continue; // only need to send responses when it's not yet the desired content.
 						}
 
 						//DO: interpret as target type
@@ -179,12 +237,19 @@ async fn main() {
 	clientside!();
 	dbg!("hardcoded impl for Binance");
 
-	let url = "wss://stream.binance.com:443/ws/btcusdt@trade";
-	//let url = "wss://stream.binance.com:443/ws/btcusiaednt@trade"; //binance error
-	//let url = "wss://strbinance.com:443/ws/btcusiaednt@trade"; //connection error
+	let bn_url = "wss://stream.binance.com:443/ws/btcusdt@trade";
+	//let bn_url = "wss://stream.binance.com:443/ws/btcusiaednt@trade"; //binance error
+	//let bn_url = "wss://strbinance.com:443/ws/btcusiaednt@trade"; //connection error
 
-	let handler = BinanceWsHandler {};
-	let mut ws_connection = WsConnection::new(url.to_owned(), handler);
+	let bb_url = "wss://stream.bybit.com/v5/private";
+
+	let handler = BybitWsHandler {
+		pubkey: env::var("BYBIT_TIGER_READ_PUBKEY").unwrap(),
+		secret: SecretString::new(env::var("BYBIT_TIGER_READ_SECRET").unwrap().into()),
+		topics: vec!["wallet".to_owned()],
+		auth: true,
+	};
+	let mut ws_connection = WsConnection::new(bb_url.to_owned(), handler);
 
 	let mut i = 0;
 	while let Ok(trade_event) = ws_connection.next().await {
@@ -205,9 +270,5 @@ async fn main() {
 			break;
 		}
 	}
-
-	//DO: - deser into TradeEvent
-
-	//Q: maybe wrap - need a way to encode Network Timeouts
-	// So `next() -> TradeEvent' // Not a Result<TradeEvent, TungsteniteError>, because if they are not handled at ws level, we panic
 }
+

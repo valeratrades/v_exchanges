@@ -170,6 +170,7 @@ impl Client {
 		WebSocketConnection::new(url, O::websocket_handler(handler, self.merged_options(options))).await
 	}
 
+	//dbg
 	#[inline(always)]
 	pub async fn ws<O, H>(&self, url: &str, handler: H, options: impl IntoIterator<Item = O>) -> Result<WsConnection<O::WsHandler>, TungsteniteError>
 	where
