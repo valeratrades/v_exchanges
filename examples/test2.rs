@@ -121,39 +121,42 @@ struct BinanceWsHandler {}
 impl WsHandler for BinanceWsHandler {}
 
 //Q: is it possible to get rid of Mutexes, if we make all methods take `&mut self`?
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct WsConnection<H: WsHandler> {
 	url: String,
 	handler: Arc<Mutex<H>>,
-	inner: Arc<Mutex<Option<WsStream>>>,
+	inner: Option<WsStream>,
 }
 impl<H: WsHandler> WsConnection<H> {
 	pub fn new(url: String, handler: H) -> Self {
 		let handler = Arc::new(Mutex::new(handler));
-		let inner = Arc::new(Mutex::new(None));
+		let inner = None;
 		Self { url, handler, inner }
 	}
 
 	/// The main interface. All ws operations are hidden, only thing getting through are the content messages or the lack thereof.
 	pub async fn next(&mut self) -> Result<String, tungstenite::Error> {
-		let mut inner_lock = self.inner.lock().unwrap();
-		if inner_lock.is_none() {
+		//let mut inner_lock = self.inner.lock().unwrap();
+		if self.inner.is_none() {
 			//let stream = self.connect().await.expect("TODO: .");
 			let stream = Self::connect(&self.url, self.handler.clone()).await.expect("TODO: .");
-			*inner_lock = Some(stream);
+			self.inner = Some(stream);
 		}
-		let stream = inner_lock.as_mut().unwrap();
+		//let stream = self.inner.as_mut().unwrap();
 
-		while let Some(resp) = stream.next().await {
+		while let Some(resp) = { self.inner.as_mut().unwrap().next().await } {
 			let resp: Result<tungstenite::Message, tungstenite::Error> = resp; //dbg: lsp can't infer type
 			match resp {
 				Ok(succ_resp) => match succ_resp {
 					tungstenite::Message::Text(text) => {
 						let value: serde_json::Value = serde_json::from_str(&text).expect("TODO: handle error");
-						if let Some(further_communication) = self.handler.lock().unwrap().handle_message(&value) {
+						if let Some(further_communication) = { self.handler.lock().unwrap().handle_message(&value) } {
 							//Q: check if it's actually more performant than default `send` (that effectively flushes on each)
 							let mut messages_stream = futures_util::stream::iter(further_communication).map(Ok);
-							stream.send_all(&mut messages_stream).await?; //HACK: probably can evade the clone()
+							{
+								let stream = self.inner.as_mut().unwrap();
+								stream.send_all(&mut messages_stream).await?; //HACK: probably can evade the clone()
+							}
 							continue; // only need to send responses when it's not yet the desired content.
 						}
 
@@ -164,7 +167,10 @@ impl<H: WsHandler> WsConnection<H> {
 						panic!("Received binary. But exchanges are not smart enough to send this, what is happening");
 					}
 					tungstenite::Message::Ping(_) => {
-						stream.send(tungstenite::Message::Pong(Bytes::default())).await?;
+						{
+							let stream = self.inner.as_mut().unwrap();
+							stream.send(tungstenite::Message::Pong(Bytes::default())).await?;
+						}
 						tracing::debug!("ponged");
 						continue;
 					}
@@ -182,7 +188,7 @@ impl<H: WsHandler> WsConnection<H> {
 								tracing::info!("Server closed connection; no reason specified.");
 							}
 						}
-						*self.inner.lock().unwrap() = None;
+						self.inner = None;
 						//TODO!!!!!: wait configured [Duration] before reconnect
 						//self.connect().await?;
 						Self::connect(&self.url, self.handler.clone()).await?;
@@ -200,17 +206,6 @@ impl<H: WsHandler> WsConnection<H> {
 		todo!("Handle stream exhaustion (My guess is this can happen due to connection issues)"); //TODO: check when exactly `stream.next()` can fail
 	}
 
-	//async fn connect<H: WsHandler>(&self) -> Result<WsStream, tungstenite::Error> {
-	//	let (mut stream, http_resp) = tokio_tungstenite::connect_async(&self.url).await?;
-	//	tracing::debug!("Ws handshake with server: {http_resp:?}");
-	//
-	//	let messages = self.handler.lock().unwrap().handle_start();
-	//	let mut message_stream = futures_util::stream::iter(messages).map(Ok);
-	//	stream.send_all(&mut message_stream).await?;
-	//
-	//	Ok(stream)
-	//}
-
 	async fn connect(url: &str, handler: Arc<Mutex<H>>) -> Result<WsStream, tungstenite::Error> {
 		let (mut stream, http_resp) = tokio_tungstenite::connect_async(url).await?;
 		tracing::debug!("Ws handshake with server: {http_resp:?}");
@@ -222,34 +217,34 @@ impl<H: WsHandler> WsConnection<H> {
 		Ok(stream)
 	}
 
-	#[doc(hidden)]
-	/// Returns on a message confirming the reconnection. All messages sent by the server before it accepting the first `Close` message are discarded.
-	pub async fn request_reconnect(&self) -> Result<(), tungstenite::Error> {
-		let mut lock = self.inner.lock().unwrap();
-		if let Some(stream) = lock.as_mut() {
-			stream.send(tungstenite::Message::Close(None)).await?;
-
-			while let Some(resp) = stream.next().await {
-				match resp {
-					Ok(succ_resp) => match succ_resp {
-						tungstenite::Message::Close(maybe_reason) => {
-							tracing::debug!(?maybe_reason, "Server accepted close request");
-							break;
-						}
-						_ => {
-							// Ok to discard everything else, as this fn will only be triggered manually
-							continue;
-						}
-					},
-					Err(err) => {
-						panic!("Error: {:?}", err);
-					}
-				}
-			}
-			*lock = None;
-		}
-		Ok(())
-	}
+	//#[doc(hidden)]
+	///// Returns on a message confirming the reconnection. All messages sent by the server before it accepting the first `Close` message are discarded.
+	//pub async fn request_reconnect(&self) -> Result<(), tungstenite::Error> {
+	//	let mut lock = self.inner.lock().unwrap();
+	//	if let Some(stream) = lock.as_mut() {
+	//		stream.send(tungstenite::Message::Close(None)).await?;
+	//
+	//		while let Some(resp) = stream.next().await {
+	//			match resp {
+	//				Ok(succ_resp) => match succ_resp {
+	//					tungstenite::Message::Close(maybe_reason) => {
+	//						tracing::debug!(?maybe_reason, "Server accepted close request");
+	//						break;
+	//					}
+	//					_ => {
+	//						// Ok to discard everything else, as this fn will only be triggered manually
+	//						continue;
+	//					}
+	//				},
+	//				Err(err) => {
+	//					panic!("Error: {:?}", err);
+	//				}
+	//			}
+	//		}
+	//		*lock = None;
+	//	}
+	//	Ok(())
+	//}
 }
 
 #[tokio::main]
@@ -265,35 +260,35 @@ async fn main() {
 		println!("{trade_event:?}");
 	}
 
-	todo!();
-	let bb_url = "wss://stream.bybit.com/v5/private";
-
-	let handler = BybitWsHandler {
-		pubkey: env::var("BYBIT_TIGER_READ_PUBKEY").unwrap(),
-		secret: SecretString::new(env::var("BYBIT_TIGER_READ_SECRET").unwrap().into()),
-		//topics: vec!["wallet".to_owned()],
-		topics: vec!["kline.30.BTCUSDT".to_owned()],
-		auth: true,
-	};
-	let mut ws_connection = WsConnection::new(bb_url.to_owned(), handler);
-
-	let mut i = 0;
-	while let Ok(trade_event) = ws_connection.next().await {
-		println!("{trade_event:?}");
-		i += 1;
-		if i > 10 {
-			break;
-		}
-	}
-	println!("\ngonna request reeconnect\n");
-	ws_connection.request_reconnect().await.unwrap();
-	println!("\nran request reconnect\n");
-
-	while let Ok(trade_event) = ws_connection.next().await {
-		println!("{trade_event:?}");
-		i += 1;
-		if i > 20 {
-			break;
-		}
-	}
+	//todo!();
+	//let bb_url = "wss://stream.bybit.com/v5/private";
+	//
+	//let handler = BybitWsHandler {
+	//	pubkey: env::var("BYBIT_TIGER_READ_PUBKEY").unwrap(),
+	//	secret: SecretString::new(env::var("BYBIT_TIGER_READ_SECRET").unwrap().into()),
+	//	//topics: vec!["wallet".to_owned()],
+	//	topics: vec!["kline.30.BTCUSDT".to_owned()],
+	//	auth: true,
+	//};
+	//let mut ws_connection = WsConnection::new(bb_url.to_owned(), handler);
+	//
+	//let mut i = 0;
+	//while let Ok(trade_event) = ws_connection.next().await {
+	//	println!("{trade_event:?}");
+	//	i += 1;
+	//	if i > 10 {
+	//		break;
+	//	}
+	//}
+	//println!("\ngonna request reeconnect\n");
+	//ws_connection.request_reconnect().await.unwrap();
+	//println!("\nran request reconnect\n");
+	//
+	//while let Ok(trade_event) = ws_connection.next().await {
+	//	println!("{trade_event:?}");
+	//	i += 1;
+	//	if i > 20 {
+	//		break;
+	//	}
+	//}
 }
