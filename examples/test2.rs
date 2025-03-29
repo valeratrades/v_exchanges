@@ -217,34 +217,36 @@ impl<H: WsHandler> WsConnection<H> {
 		Ok(stream)
 	}
 
-	//#[doc(hidden)]
-	///// Returns on a message confirming the reconnection. All messages sent by the server before it accepting the first `Close` message are discarded.
-	//pub async fn request_reconnect(&self) -> Result<(), tungstenite::Error> {
-	//	let mut lock = self.inner.lock().unwrap();
-	//	if let Some(stream) = lock.as_mut() {
-	//		stream.send(tungstenite::Message::Close(None)).await?;
-	//
-	//		while let Some(resp) = stream.next().await {
-	//			match resp {
-	//				Ok(succ_resp) => match succ_resp {
-	//					tungstenite::Message::Close(maybe_reason) => {
-	//						tracing::debug!(?maybe_reason, "Server accepted close request");
-	//						break;
-	//					}
-	//					_ => {
-	//						// Ok to discard everything else, as this fn will only be triggered manually
-	//						continue;
-	//					}
-	//				},
-	//				Err(err) => {
-	//					panic!("Error: {:?}", err);
-	//				}
-	//			}
-	//		}
-	//		*lock = None;
-	//	}
-	//	Ok(())
-	//}
+	#[doc(hidden)]
+	/// Returns on a message confirming the reconnection. All messages sent by the server before it accepting the first `Close` message are discarded.
+	pub async fn request_reconnect(&mut self) -> Result<(), tungstenite::Error> {
+		if self.inner.is_some() {
+			{
+				let stream = self.inner.as_mut().unwrap();
+				stream.send(tungstenite::Message::Close(None)).await?;
+
+				while let Some(resp) = stream.next().await {
+					match resp {
+						Ok(succ_resp) => match succ_resp {
+							tungstenite::Message::Close(maybe_reason) => {
+								tracing::debug!(?maybe_reason, "Server accepted close request");
+								break;
+							}
+							_ => {
+								// Ok to discard everything else, as this fn will only be triggered manually
+								continue;
+							}
+						},
+						Err(err) => {
+							panic!("Error: {:?}", err);
+						}
+					}
+				}
+				self.inner = None;
+			}
+		}
+		Ok(())
+	}
 }
 
 #[tokio::main]
@@ -256,8 +258,24 @@ async fn main() {
 	//let bn_url = "wss://strbinance.com:443/ws/btcusiaednt@trade"; //connection error
 	let bn_handler = BinanceWsHandler {};
 	let mut ws_connection = WsConnection::new(bn_url.to_owned(), bn_handler);
+	let mut i = 0;
 	while let Ok(trade_event) = ws_connection.next().await {
 		println!("{trade_event:?}");
+		i += 1;
+		if i > 10 {
+			break;
+		}
+	}
+	println!("\ngonna request reeconnect\n");
+	ws_connection.request_reconnect().await.unwrap();
+	println!("\nran request reconnect\n");
+
+	while let Ok(trade_event) = ws_connection.next().await {
+		println!("{trade_event:?}");
+		i += 1;
+		if i > 20 {
+			break;
+		}
 	}
 
 	//todo!();
