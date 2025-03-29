@@ -46,9 +46,13 @@ Result<(serde_json::Value, Vec<TungsteniteMessage>), TungsteniteError>
 
 trait WsHandler {
 	/// Return list of messages necessary to establish the connection.
-	fn handle_start(&mut self) -> Vec<tungstenite::Message>;
+	fn handle_start(&mut self) -> Vec<tungstenite::Message> {
+		vec![]
+	}
 	/// Determines if further communication is necessary. If the message received is the desired content, returns `None`.
-	fn handle_message(&mut self, message: &serde_json::Value) -> Option<Vec<tungstenite::Message>>;
+	fn handle_message(&mut self, message: &serde_json::Value) -> Option<Vec<tungstenite::Message>> {
+		None
+	}
 }
 
 #[derive(Clone, derive_more::Debug)]
@@ -113,6 +117,8 @@ impl WsHandler for BybitWsHandler {
 		}
 	}
 }
+struct BinanceWsHandler {}
+impl WsHandler for BinanceWsHandler {}
 
 //Q: is it possible to get rid of Mutexes, if we make all methods take `&mut self`?
 #[derive(Clone, Debug)]
@@ -132,7 +138,8 @@ impl<H: WsHandler> WsConnection<H> {
 	pub async fn next(&mut self) -> Result<String, tungstenite::Error> {
 		let mut inner_lock = self.inner.lock().unwrap();
 		if inner_lock.is_none() {
-			let stream = self.connect().await.expect("TODO: .");
+			//let stream = self.connect().await.expect("TODO: .");
+			let stream = Self::connect(&self.url, self.handler.clone()).await.expect("TODO: .");
 			*inner_lock = Some(stream);
 		}
 		let stream = inner_lock.as_mut().unwrap();
@@ -177,7 +184,8 @@ impl<H: WsHandler> WsConnection<H> {
 						}
 						*self.inner.lock().unwrap() = None;
 						//TODO!!!!!: wait configured [Duration] before reconnect
-						self.connect().await?;
+						//self.connect().await?;
+						Self::connect(&self.url, self.handler.clone()).await?;
 						continue;
 					}
 					tungstenite::Message::Frame(_) => {
@@ -192,17 +200,29 @@ impl<H: WsHandler> WsConnection<H> {
 		todo!("Handle stream exhaustion (My guess is this can happen due to connection issues)"); //TODO: check when exactly `stream.next()` can fail
 	}
 
-	async fn connect(&self) -> Result<WsStream, tungstenite::Error> {
-		let (mut stream, http_resp) = tokio_tungstenite::connect_async(&self.url).await?;
+	//async fn connect<H: WsHandler>(&self) -> Result<WsStream, tungstenite::Error> {
+	//	let (mut stream, http_resp) = tokio_tungstenite::connect_async(&self.url).await?;
+	//	tracing::debug!("Ws handshake with server: {http_resp:?}");
+	//
+	//	let messages = self.handler.lock().unwrap().handle_start();
+	//	let mut message_stream = futures_util::stream::iter(messages).map(Ok);
+	//	stream.send_all(&mut message_stream).await?;
+	//
+	//	Ok(stream)
+	//}
+
+	async fn connect(url: &str, handler: Arc<Mutex<H>>) -> Result<WsStream, tungstenite::Error> {
+		let (mut stream, http_resp) = tokio_tungstenite::connect_async(url).await?;
 		tracing::debug!("Ws handshake with server: {http_resp:?}");
 
-		let messages = self.handler.lock().unwrap().handle_start();
+		let messages = handler.lock().unwrap().handle_start();
 		let mut message_stream = futures_util::stream::iter(messages).map(Ok);
 		stream.send_all(&mut message_stream).await?;
 
 		Ok(stream)
 	}
 
+	#[doc(hidden)]
 	/// Returns on a message confirming the reconnection. All messages sent by the server before it accepting the first `Close` message are discarded.
 	pub async fn request_reconnect(&self) -> Result<(), tungstenite::Error> {
 		let mut lock = self.inner.lock().unwrap();
@@ -235,18 +255,24 @@ impl<H: WsHandler> WsConnection<H> {
 #[tokio::main]
 async fn main() {
 	clientside!();
-	dbg!("hardcoded impl for Binance");
 
 	let bn_url = "wss://stream.binance.com:443/ws/btcusdt@trade";
 	//let bn_url = "wss://stream.binance.com:443/ws/btcusiaednt@trade"; //binance error
 	//let bn_url = "wss://strbinance.com:443/ws/btcusiaednt@trade"; //connection error
+	let bn_handler = BinanceWsHandler {};
+	let mut ws_connection = WsConnection::new(bn_url.to_owned(), bn_handler);
+	while let Ok(trade_event) = ws_connection.next().await {
+		println!("{trade_event:?}");
+	}
 
+	todo!();
 	let bb_url = "wss://stream.bybit.com/v5/private";
 
 	let handler = BybitWsHandler {
 		pubkey: env::var("BYBIT_TIGER_READ_PUBKEY").unwrap(),
 		secret: SecretString::new(env::var("BYBIT_TIGER_READ_SECRET").unwrap().into()),
-		topics: vec!["wallet".to_owned()],
+		//topics: vec!["wallet".to_owned()],
+		topics: vec!["kline.30.BTCUSDT".to_owned()],
 		auth: true,
 	};
 	let mut ws_connection = WsConnection::new(bb_url.to_owned(), handler);
@@ -271,4 +297,3 @@ async fn main() {
 		}
 	}
 }
-
