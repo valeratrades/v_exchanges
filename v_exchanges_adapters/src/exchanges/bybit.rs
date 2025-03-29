@@ -402,7 +402,7 @@ impl WebSocketHandler for BybitWebSocketHandler {
 				let message: serde_json::Value = match serde_json::from_str(&message) {
 					Ok(message) => message,
 					Err(_) => {
-						tracing::debug!("Invalid JSON received");
+						tracing::error!("Invalid JSON received");
 						return vec![];
 					}
 				};

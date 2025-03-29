@@ -1,12 +1,10 @@
 use std::time::Duration;
 
 use tracing::log::LevelFilter;
-use v_exchanges::prelude::*;
 use v_exchanges_adapters::{
 	Client,
 	binance::{BinanceAuth, BinanceHttpUrl, BinanceOption, BinanceWebSocketUrl},
 };
-use v_utils::prelude::*;
 
 #[tokio::main]
 async fn main() {

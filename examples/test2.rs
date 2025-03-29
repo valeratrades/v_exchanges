@@ -6,7 +6,7 @@ use futures_util::{
 	stream::{SplitSink, SplitStream},
 };
 use tokio::net::TcpStream;
-use tokio_tungstenite::MaybeTlsStream;
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tracing::log::LevelFilter;
 use tungstenite::{
 	Bytes,
@@ -20,33 +20,88 @@ use v_exchanges_adapters::{
 };
 use v_utils::prelude::*;
 
-type WebSocketSplitSink = SplitSink<tokio_tungstenite::WebSocketStream<MaybeTlsStream<TcpStream>>, tungstenite::Message>;
+type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
+
+/*
+trait: {
+.handle_start() // will conditionally acquire a temp listen key
+//DO: in: Value,  out: Vec<TungsteniteMessage>
+
+.handle_message() // exchange-protocol level wrapper, will handle {auth, subscribe, etc} responses, before propagating contents to type interpreter `next`
+
+-> Result<serde_json::Value>
+Result<(serde_json::Value, Vec<TungsteniteMessage>), TungsteniteError>
+}
+*/
+
+trait WsHandler {
+	fn handle_start(&mut self) -> Vec<tungstenite::Message>; // will be a `Vec` for topic requests
+	fn handle_message(&mut self, message: &serde_json::Value) -> Option<tungstenite::Message>;
+}
+
+struct BinanceWsHandler {}
+impl WsHandler for BinanceWsHandler {
+	fn handle_start(&mut self) -> Vec<tungstenite::Message> {
+		vec![]
+	}
+
+	/// Determines if further communication is necessary. If the message received is the desired content, returns `None`.
+	fn handle_message(&mut self, message: &serde_json::Value) -> Option<tungstenite::Message> {
+		None //dbg: for now assume we never need to auth
+	}
+}
 
 //Q: is it possible to get rid of Mutexes, if we make all methods take `&mut self`?
-#[derive(Clone, Debug, derive_new::new)]
-struct WsConnection {
-	sink: Arc<Mutex<SplitSink<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>, tungstenite::Message>>>,
-	stream: Arc<Mutex<SplitStream<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>>>,
-	state: Arc<Mutex<ReconnectState>>,
+#[derive(Clone, Debug)]
+struct WsConnection<H: WsHandler> {
+	//connection_prerequisites: {url, handler: {auth, .handle_start()},
+	//
+	//Q: problem: authenticated streams require initial acquisition of a key.
+	url: String,
+	handler: Arc<Mutex<H>>,
+	//Q: could maybe get rid of this Arc-Mutex
+	inner: Arc<Mutex<Option<WsStream>>>,
 }
-impl WsConnection {
-	pub async fn next(&mut self) -> String {
-		while let Some(resp) = self.stream.lock().unwrap().next().await {
+impl<H: WsHandler> WsConnection<H> {
+	pub fn new(url: String, handler: H) -> Self {
+		let handler = Arc::new(Mutex::new(handler));
+		let inner = Arc::new(Mutex::new(None));
+		Self { url, handler, inner }
+	}
+
+	/// The main interface. All ws operations are hidden, only thing getting through are the content messages or the lack thereof.
+	pub async fn next(&mut self) -> Result<String, tungstenite::Error> {
+		let mut inner_lock = self.inner.lock().unwrap();
+		if inner_lock.is_none() {
+			let stream = self.connect().await.expect("TODO: .");
+			*inner_lock = Some(stream);
+		}
+		let stream = inner_lock.as_mut().unwrap();
+
+		//let (mut sink, mut stream) = inner_lock.expect("connect ensures this is some");
+
+		while let Some(resp) = stream.next().await {
+			let resp: Result<tungstenite::Message, tungstenite::Error> = resp; //dbg: lsp can't infer type
 			match resp {
 				Ok(succ_resp) => match succ_resp {
 					tungstenite::Message::Text(text) => {
-						if self.state.lock().unwrap().is_reconnecting() {
-							tracing::debug!("Ignoring a message received while reconnecting: {text}.");
-							continue;
+						//DO: assume serde_json::Value
+						let value: serde_json::Value = serde_json::from_str(&text).expect("TODO: handle error");
+						if let Some(further_communication) = self.handler.lock().unwrap().handle_message(&value) {
+							stream.send(further_communication.clone()).await?; //HACK: probably can evade the clone()
+							continue; // all the times we need to send something, it was not the desired message already.
 						}
-						return text.to_string();
+
+						//DO: interpret as target type
+						return Ok(text.to_string());
 					}
-					tungstenite::Message::Binary(bin) => {
+					tungstenite::Message::Binary(_) => {
 						panic!("Received binary. But exchanges are not smart enough to send this, what is happening");
 					}
 					tungstenite::Message::Ping(_) => {
-						self.send(tungstenite::Message::Pong(Bytes::default())).await;
+						stream.send(tungstenite::Message::Pong(Bytes::default())).await?;
 						tracing::debug!("ponged");
+						continue;
 					}
 					//Q: Do I even need to send them? TODO: check if just replying to pings is sufficient
 					tungstenite::Message::Pong(_) => {
@@ -62,8 +117,10 @@ impl WsConnection {
 								tracing::info!("Server closed connection; no reason specified.");
 							}
 						}
+						*self.inner.lock().unwrap() = None;
 						//TODO!!!!!: wait configured [Duration] before reconnect
-						self.reconnect().await;
+						self.connect().await?;
+						continue;
 					}
 					tungstenite::Message::Frame(_) => {
 						unreachable!("Can't get from reading");
@@ -77,36 +134,43 @@ impl WsConnection {
 		todo!("Handle stream exhaustion (My guess is this can happen due to connection issues)"); //TODO: check when exactly `stream.next()` can fail
 	}
 
-	async fn send(&self, message: tungstenite::Message) {
-		let r: Result<(), tungstenite::Error> = try {
-			let mut sink = self.sink.lock().unwrap();
-			sink.send(message).await?;
-			sink.flush().await?;
-		};
-		r.expect("not sure it's handleable");
+	async fn connect(&self) -> Result<WsStream, tungstenite::Error> {
+		let (mut stream, http_resp) = tokio_tungstenite::connect_async(&self.url).await?;
+		tracing::debug!("Ws handshake with server: {http_resp:?}");
+
+		let messages = self.handler.lock().unwrap().handle_start();
+		let mut message_stream = futures_util::stream::iter(messages).map(Ok);
+		stream.send_all(&mut message_stream).await?;
+
+		Ok(stream)
 	}
 
-	pub async fn request_reconnect(&self) {
-		self.send(tungstenite::Message::Close(None)).await;
-		//TODO!!!!!!!!!: poll until `Close` comes in
-		//Q: wait, would I not rather open a new connection simultaneously?
-	}
+	/// Returns on a message confirming the reconnection. All messages sent by the server before it accepting the first `Close` message are discarded.
+	pub async fn request_reconnect(&self) -> Result<(), tungstenite::Error> {
+		let mut lock = self.inner.lock().unwrap();
+		if let Some(stream) = lock.as_mut() {
+			stream.send(tungstenite::Message::Close(None)).await?;
 
-	/// At this point the connection is already closed.
-	async fn reconnect(&self) {
-		todo!();
-	}
-}
-
-#[derive(Debug, Default)]
-enum ReconnectState {
-	#[default]
-	None,
-	Reconnecting,
-}
-impl ReconnectState {
-	fn is_reconnecting(&self) -> bool {
-		matches!(self, ReconnectState::Reconnecting)
+			while let Some(resp) = stream.next().await {
+				match resp {
+					Ok(succ_resp) => match succ_resp {
+						tungstenite::Message::Close(maybe_reason) => {
+							tracing::debug!(?maybe_reason, "Server accepted close request");
+							break;
+						}
+						_ => {
+							// Ok to discard everything else, as this fn will only be triggered manually
+							continue;
+						}
+					},
+					Err(err) => {
+						panic!("Error: {:?}", err);
+					}
+				}
+			}
+			*lock = None;
+		}
+		Ok(())
 	}
 }
 
@@ -116,25 +180,32 @@ async fn main() {
 	dbg!("hardcoded impl for Binance");
 
 	let url = "wss://stream.binance.com:443/ws/btcusdt@trade";
-	//let url = "wss://stream.binance.com:443/ws/btcusiaednt@trade";
-	//let url = "wss://strbinance.com:443/ws/btcusiaednt@trade";
+	//let url = "wss://stream.binance.com:443/ws/btcusiaednt@trade"; //binance error
+	//let url = "wss://strbinance.com:443/ws/btcusiaednt@trade"; //connection error
 
-	let (websocket_stream, _) = tokio_tungstenite::connect_async(url).await.unwrap();
-	let (sink, stream) = websocket_stream.split();
+	let handler = BinanceWsHandler {};
+	let mut ws_connection = WsConnection::new(url.to_owned(), handler);
 
-	let mut ws_connection = WsConnection {
-		sink: Arc::new(Mutex::new(sink)),
-		stream: Arc::new(Mutex::new(stream)),
-		state: Arc::new(Mutex::new(ReconnectState::None)),
-	};
-	while let trade_event = ws_connection.next().await {
+	let mut i = 0;
+	while let Ok(trade_event) = ws_connection.next().await {
 		println!("{trade_event:?}");
+		i += 1;
+		if i > 10 {
+			break;
+		}
+	}
+	println!("\ngonna request reeconnect\n");
+	ws_connection.request_reconnect().await.unwrap();
+	println!("\nran request reconnect\n");
+
+	while let Ok(trade_event) = ws_connection.next().await {
+		println!("{trade_event:?}");
+		i += 1;
+		if i > 20 {
+			break;
+		}
 	}
 
-	//DO: - handle tungstenite errors (ie reconnect on all tungstenite errors but {Io, Url})
-
-	//DO: - ping/pong handling, also close handling. On binary just panic for now.
-	//DO: here we have a `String`
 	//DO: - deser into TradeEvent
 
 	//Q: maybe wrap - need a way to encode Network Timeouts

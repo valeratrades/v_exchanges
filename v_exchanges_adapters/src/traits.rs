@@ -24,7 +24,7 @@ pub trait HttpOption<'a, R, B>: HandlerOption {
 	fn request_handler(options: Self::Options) -> Self::RequestHandler;
 }
 
-#[deprecated(note = "switching to WsOption")]
+//dbg: switching to WsOption
 /// A `trait` that shows the implementing type is able to create [websocket::WebSocketHandler]s
 pub trait WebSocketOption<H>: HandlerOption {
 	type WebSocketHandler: websocket::WebSocketHandler;

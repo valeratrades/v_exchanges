@@ -29,6 +29,7 @@
             rust = (pkgs.rust-bin.fromRustupToolchainFile ./.cargo/rust-toolchain.toml);
             rustc = rust;
             cargo = rust;
+            #rust-analyzer 
             rustPlatform = pkgs.makeRustPlatform {
               inherit rustc cargo stdenv;
             };
@@ -66,7 +67,7 @@
 
                             mkdir -p ./.cargo
               							#cp -f ${(v-utils.files.rust.config {inherit pkgs;})} ./.cargo/config.toml #dbg
-                            cp -f ${(v-utils.files.rust.toolchain {inherit pkgs;})} ./.cargo/rust-toolchain.toml
+                            #cp -f ${(v-utils.files.rust.toolchain {inherit pkgs;})} ./.cargo/rust-toolchain.toml
                             cp -f ${(v-utils.files.rust.rustfmt {inherit pkgs;})} ./rustfmt.toml
                             cp -f ${(v-utils.files.rust.deny {inherit pkgs;})} ./deny.toml
                             cp -f ${(v-utils.files.gitignore { inherit pkgs; langs = ["rs"];})} ./.gitignore

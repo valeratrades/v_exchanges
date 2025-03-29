@@ -19,7 +19,6 @@
 //! For a more detailed documentation, see the links above.
 
 pub mod http;
-#[deprecated(note = "switching to `ws`")]
-pub mod websocket;
+pub mod websocket; //dbg: deprecated
 pub mod ws;
 pub extern crate reqwest;

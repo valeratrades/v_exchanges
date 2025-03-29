@@ -1,3 +1,4 @@
 [toolchain]
 channel = "nightly"
-components = ["rustc-codegen-cranelift-preview"]
+components = ["rustc-codegen-cranelift-preview", "rust-analyzer"]
+

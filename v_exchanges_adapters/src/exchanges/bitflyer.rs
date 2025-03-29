@@ -265,7 +265,7 @@ impl WebSocketHandler for BitFlyerWebSocketHandler {
 						tracing::debug!("WebSocket authentication successful");
 						return self.message_subscribe();
 					} else {
-						tracing::debug!("WebSocket authentication unsuccessful");
+						tracing::error!("WebSocket authentication unsuccessful");
 					}
 					self.auth_id = None;
 				} else if message.method.as_deref() == Some("channelMessage") {
