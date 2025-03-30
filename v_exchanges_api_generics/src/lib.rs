@@ -19,6 +19,5 @@
 //! For a more detailed documentation, see the links above.
 
 pub mod http;
-pub mod websocket; //dbg: deprecated
 pub mod ws;
 pub extern crate reqwest;

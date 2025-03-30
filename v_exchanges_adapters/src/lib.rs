@@ -1,4 +1,5 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![feature(default_field_values)]
 #![feature(duration_constructors)]
 pub extern crate v_exchanges_api_generics as generics;
 pub use exchanges::*;
@@ -6,7 +7,6 @@ use serde::Serialize;
 use traits::*;
 use v_exchanges_api_generics::{
 	http::{self, *},
-	websocket::*, //dbg
 	ws::*,
 };
 
@@ -159,16 +159,6 @@ impl Client {
 		O::RequestHandler: RequestHandler<()>,
 		Self: GetOptions<O::Options>, {
 		self.client.delete_no_query(url, &O::request_handler(self.merged_options(options))).await
-	}
-
-	#[deprecated(note = "use ws_connection() instead")]
-	#[inline(always)]
-	pub async fn websocket<O, H>(&self, url: &str, handler: H, options: impl IntoIterator<Item = O>) -> Result<WebSocketConnection<O::WebSocketHandler>, TungsteniteError>
-	where
-		O: WebSocketOption<H>,
-		O::WebSocketHandler: WebSocketHandler,
-		Self: GetOptions<O::Options>, {
-		WebSocketConnection::new(url, O::websocket_handler(handler, self.merged_options(options))).await
 	}
 
 	#[inline(always)]

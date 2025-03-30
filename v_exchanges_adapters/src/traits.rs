@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use v_exchanges_api_generics::{http, websocket, ws};
+use v_exchanges_api_generics::{http, ws};
 
 /// A `trait` that represents an option which can be set when creating handlers
 pub trait HandlerOption: Default {
@@ -22,14 +22,6 @@ pub trait HttpOption<'a, R, B>: HandlerOption {
 	type RequestHandler: http::RequestHandler<B>;
 
 	fn request_handler(options: Self::Options) -> Self::RequestHandler;
-}
-
-//dbg: switching to WsOption
-/// A `trait` that shows the implementing type is able to create [websocket::WebSocketHandler]s
-pub trait WebSocketOption<H>: HandlerOption {
-	type WebSocketHandler: websocket::WebSocketHandler;
-
-	fn websocket_handler(handler: H, options: Self::Options) -> Self::WebSocketHandler;
 }
 
 /// shows that the implementing type is able to create [websocket::WebSocketHandler]s

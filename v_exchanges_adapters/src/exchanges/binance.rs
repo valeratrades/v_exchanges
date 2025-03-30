@@ -8,14 +8,13 @@ use std::{
 
 use chrono::{Duration, Utc};
 use generics::{
-	http::{ApiError, BuildError, HandleError},
-	ws::WsHandler,
+	http::{ApiError, BuildError, HandleError, *},
+	ws::{WsConfig, WsHandler},
 };
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
-use v_exchanges_api_generics::{http::*, websocket::*};
 use v_utils::prelude::*;
 
 use crate::traits::*;
@@ -119,65 +118,25 @@ where
 	}
 }
 
-// Web Sockets {{{
-pub struct BinanceWebSocketHandler {
-	message_handler: Box<dyn FnMut(serde_json::Value) + Send>,
-	options: BinanceOptions,
-}
-impl WebSocketHandler for BinanceWebSocketHandler {
-	fn websocket_config(&self) -> WebSocketConfig {
-		let mut config = self.options.websocket_config.clone();
-		if self.options.websocket_url != BinanceWebSocketUrl::None {
-			config.url_prefix = self.options.websocket_url.as_str().to_owned();
-		}
-		config
-	}
-
-	//HACK: ignores possibility of server requisting auth
-	fn handle_message(&mut self, message: WebSocketMessage) -> Vec<WebSocketMessage> {
-		match message {
-			WebSocketMessage::Text(message) =>
-				if let Ok(message) = serde_json::from_str(&message) {
-					(self.message_handler)(message);
-				} else {
-					tracing::debug!("Invalid JSON message received");
-				},
-			WebSocketMessage::Binary(_) => tracing::debug!("Unexpected binary message received"),
-			WebSocketMessage::Ping(_) | WebSocketMessage::Pong(_) => (), //TODO!!!!!: send Pong on Ping
-		};
-		vec![]
-	}
-}
-impl<H: FnMut(serde_json::Value) + Send + 'static> WebSocketOption<H> for BinanceOption {
-	type WebSocketHandler = BinanceWebSocketHandler;
-
-	#[inline(always)]
-	fn websocket_handler(handler: H, options: Self::Options) -> Self::WebSocketHandler {
-		BinanceWebSocketHandler {
-			message_handler: Box::new(handler),
-			options,
-		}
-	}
-}
-//,}}}
-
 // Ws {{{
 #[derive(Clone, Debug, derive_new::new)]
 pub struct BinanceWsHandler {
 	options: BinanceOptions,
 }
 impl WsHandler for BinanceWsHandler {
-	//fn websocket_config(&self) -> WebSocketConfig {
-	//	let mut config = self.options.websocket_config.clone();
-	//	if self.options.websocket_url != BinanceWebSocketUrl::None {
-	//		config.url_prefix = self.options.websocket_url.as_str().to_owned();
-	//	}
-	//	config
-	//}
+	#[inline(always)]
+	fn ws_config(&self) -> WsConfig {
+		let mut config = self.options.ws_config.clone();
+		if self.options.ws_url != BinanceWsUrl::None {
+			config.url_prefix = self.options.ws_url.as_str().to_owned();
+		}
+		config
+	}
 }
 impl WsOption for BinanceOption {
 	type WsHandler = BinanceWsHandler;
 
+	#[inline(always)]
 	fn ws_handler(options: Self::Options) -> Self::WsHandler {
 		BinanceWsHandler::new(options)
 	}
@@ -201,10 +160,10 @@ pub enum BinanceOption {
 	HttpAuth(BinanceAuth),
 
 	/// Base url for WebSocket connections
-	WebSocketUrl(BinanceWebSocketUrl),
+	WebSocketUrl(BinanceWsUrl),
 	/// [WebSocketConfig] used for creating [WebSocketConnection]s
 	/// `url_prefix` will be overridden by [WebSocketUrl](Self::WebSocketUrl) unless `WebSocketUrl` is [BinanceWebSocketUrl::None].
-	WebSocketConfig(WebSocketConfig),
+	WebSocketConfig(WsConfig),
 }
 
 /// A `enum` that represents the base url of the Binance REST API.
@@ -272,7 +231,7 @@ impl BinanceHttpUrl {
 /// A `enum` that represents the base url of the Binance WebSocket API
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
 #[non_exhaustive]
-pub enum BinanceWebSocketUrl {
+pub enum BinanceWsUrl {
 	/// `wss://stream.binance.com:9443`
 	Spot9443,
 	/// `wss://stream.binance.com:443`
@@ -301,7 +260,7 @@ pub enum BinanceWebSocketUrl {
 	#[default]
 	None,
 }
-impl BinanceWebSocketUrl {
+impl BinanceWsUrl {
 	/// The URL that this variant represents.
 	#[inline(always)]
 	pub fn as_str(&self) -> &'static str {
@@ -359,11 +318,29 @@ pub struct BinanceOptions {
 	/// see [BinanceOption::HttpAuth]
 	pub http_auth: BinanceAuth,
 	/// see [BinanceOption::WebSocketUrl]
-	pub websocket_url: BinanceWebSocketUrl,
+	pub ws_url: BinanceWsUrl,
 	/// see [BinanceOption::WebSocketConfig]
-	pub websocket_config: WebSocketConfig,
+	pub ws_config: WsConfig,
 	/// see [BinanceOption::Test]
 	pub test: bool,
+}
+impl Default for BinanceOptions {
+	fn default() -> Self {
+		let ws_config = WsConfig {
+			refresh_after: Some(std::time::Duration::from_hours(12)),
+			..Default::default()
+		};
+		Self {
+			pubkey: None,
+			secret: None,
+			recv_window: None,
+			http_url: Default::default(),
+			http_auth: Default::default(),
+			ws_url: Default::default(),
+			ws_config,
+			test: false,
+		}
+	}
 }
 impl HandlerOptions for BinanceOptions {
 	type OptionItem = BinanceOption;
@@ -376,30 +353,13 @@ impl HandlerOptions for BinanceOptions {
 			Self::OptionItem::Secret(v) => self.secret = Some(v),
 			Self::OptionItem::HttpUrl(v) => self.http_url = v,
 			Self::OptionItem::HttpAuth(v) => self.http_auth = v,
-			Self::OptionItem::WebSocketUrl(v) => self.websocket_url = v,
-			Self::OptionItem::WebSocketConfig(v) => self.websocket_config = v,
+			Self::OptionItem::WebSocketUrl(v) => self.ws_url = v,
+			Self::OptionItem::WebSocketConfig(v) => self.ws_config = v,
 		}
 	}
 
 	fn is_authenticated(&self) -> bool {
 		self.pubkey.is_some() // some end points are satisfied with just the key, and it's really difficult to provide only a key without a secret from the clientside, so assume intent if it's missing.
-	}
-}
-impl Default for BinanceOptions {
-	fn default() -> Self {
-		let mut websocket_config = WebSocketConfig::default();
-		websocket_config.refresh_after = time::Duration::from_secs(60 * 60 * 12);
-		websocket_config.ignore_duplicate_during_reconnection = true;
-		Self {
-			pubkey: None,
-			secret: None,
-			recv_window: None,
-			http_url: Default::default(),
-			http_auth: Default::default(),
-			websocket_url: Default::default(),
-			websocket_config,
-			test: false,
-		}
 	}
 }
 

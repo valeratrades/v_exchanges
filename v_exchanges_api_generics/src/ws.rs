@@ -1,4 +1,3 @@
-#![feature(try_blocks)]
 use std::{
 	borrow::Cow,
 	env,
@@ -7,11 +6,7 @@ use std::{
 	vec,
 };
 
-use futures_util::{
-	SinkExt as _, StreamExt as _,
-	stream::{SplitSink, SplitStream},
-};
-use serde_json::json;
+use futures_util::{SinkExt as _, StreamExt as _};
 use tokio::net::TcpStream;
 use tokio_tungstenite::{
 	MaybeTlsStream, WebSocketStream,
@@ -21,17 +16,25 @@ use tokio_tungstenite::{
 		http::{Method, Request},
 	},
 };
-use tracing::log::LevelFilter;
 use v_utils::prelude::*;
 
 type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
+/// handle exchange-level events on the [WsConnection].
 pub trait WsHandler {
-	/// Return list of messages necessary to establish the connection.
+	/// Returns a [WsConfig] that will be applied for all WebSocket connections handled by this handler.
+	fn ws_config(&self) -> WsConfig {
+		WsConfig::default()
+	}
+
+	/// Called when a new connection has been started, and returns messages that should be sent to the server.
+	///
+	/// This could be called multiple times because the connection can be reconnected.
 	fn handle_start(&mut self) -> Vec<tungstenite::Message> {
 		vec![]
 	}
-	/// Determines if further communication is necessary. If the message received is the desired content, returns `None`.
+
+	/// Called when the [WsConnection] received a message, returns messages to be sent to the server. If the message received is the desired content, should just return `None`.
 	fn handle_message(&mut self, message: &serde_json::Value) -> Option<Vec<tungstenite::Message>> {
 		None
 	}
@@ -42,11 +45,16 @@ pub struct WsConnection<H: WsHandler> {
 	url: String,
 	handler: H,
 	inner: Option<WsStream>,
+	last_reconnect_attempt: DateTime<Utc>,
 }
 impl<H: WsHandler> WsConnection<H> {
 	pub fn new(url: String, handler: H) -> Self {
-		let inner = None;
-		Self { url, handler, inner }
+		Self {
+			url,
+			handler,
+			inner: None,
+			last_reconnect_attempt: SystemTime::UNIX_EPOCH.into(),
+		}
 	}
 
 	/// The main interface. All ws operations are hidden, only thing getting through are the content messages or the lack thereof.
@@ -158,4 +166,24 @@ impl<H: WsHandler> WsConnection<H> {
 		}
 		Ok(())
 	}
+}
+
+/// Configuration for [WsHandler].
+///
+/// Should be returned by [WsHandler::ws_config()].
+#[derive(Clone, Debug, Default)]
+pub struct WsConfig {
+	/// Prefix which will be used for connections that started using this `WebSocketConfig`.
+	///
+	/// Ex: `"wss://example.com"`
+	pub url_prefix: String,
+	/// Duration that should elapse between each attempt to start a new connection.
+	///
+	/// This matters because the [WebSocketConnection] reconnects on error. If the error
+	/// continues to happen, it could spam the server if `connect_cooldown` is too short.
+	pub connect_cooldown: Duration = Duration::from_millis(3000),
+	/// The [WebSocketConnection] will automatically reconnect when `refresh_after` has elapsed since the last connection started.
+	pub refresh_after: Option<Duration>,
+	/// A reconnection will be triggered if no messages are received within this amount of time.
+	pub message_timeout: Duration,
 }

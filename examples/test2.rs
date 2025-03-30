@@ -26,7 +26,7 @@ use tungstenite::{
 use v_exchanges::AbsMarket;
 use v_exchanges_adapters::{
 	Client,
-	binance::{BinanceAuth, BinanceHttpUrl, BinanceOption, BinanceWebSocketUrl},
+	binance::{BinanceAuth, BinanceHttpUrl, BinanceOption, BinanceWsUrl},
 };
 use v_utils::prelude::*;
 
@@ -122,7 +122,6 @@ async fn main() {
 		}
 	}
 
-	//todo!();
 	//let bb_url = "wss://stream.bybit.com/v5/private";
 	//
 	//let handler = BybitWsHandler {
@@ -132,25 +131,4 @@ async fn main() {
 	//	topics: vec!["kline.30.BTCUSDT".to_owned()],
 	//	auth: true,
 	//};
-	//let mut ws_connection = WsConnection::new(bb_url.to_owned(), handler);
-	//
-	//let mut i = 0;
-	//while let Ok(trade_event) = ws_connection.next().await {
-	//	println!("{trade_event:?}");
-	//	i += 1;
-	//	if i > 10 {
-	//		break;
-	//	}
-	//}
-	//println!("\ngonna request reeconnect\n");
-	//ws_connection.request_reconnect().await.unwrap();
-	//println!("\nran request reconnect\n");
-	//
-	//while let Ok(trade_event) = ws_connection.next().await {
-	//	println!("{trade_event:?}");
-	//	i += 1;
-	//	if i > 20 {
-	//		break;
-	//	}
-	//}
 }
