@@ -1,10 +1,6 @@
 // A module for communicating with the [Binance API](https://binance-docs.github.io/apidocs/spot/en/).
 
-use std::{
-	marker::PhantomData,
-	str::FromStr,
-	time::SystemTime,
-};
+use std::{marker::PhantomData, str::FromStr, time::SystemTime};
 
 use chrono::{Duration, Utc};
 use generics::{

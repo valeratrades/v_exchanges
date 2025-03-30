@@ -40,25 +40,38 @@ pub struct WsConnection<H: WsHandler> {
 	url: String,
 	config: WsConfig,
 	handler: H,
-	inner: Option<WsStream>,
+	inner: Option<WsConnectionInner>,
 	last_reconnect_attempt: SystemTime, // will not escape application boundary, so no need to be Tz-aware
+}
+#[derive(Debug, derive_more::Deref, derive_more::DerefMut)]
+struct WsConnectionInner {
+	#[deref_mut]
+	#[deref]
+	stream: WsStream,
+	connected_since: SystemTime,
 }
 impl<H: WsHandler> WsConnection<H> {
 	#[allow(missing_docs)]
-	pub fn new(url: String, handler: H) -> Self {
+	pub fn new(url: &str, handler: H) -> Self {
 		let config = handler.ws_config();
 		config.validate().expect("ws config is invalid"); // not expected to be seen by the user. Correctness should theoretically be checked at the moment of merging provided options; before this is ever constructed.
 		Self {
-			url,
+			url: config.url_prefix.clone() + url,
 			config,
 			handler,
 			inner: None,
-			last_reconnect_attempt: SystemTime::UNIX_EPOCH,
+			last_reconnect_attempt: SystemTime::UNIX_EPOCH,	
 		}
 	}
 
 	/// The main interface. All ws operations are hidden, only thing getting through are the content messages or the lack thereof.
-	pub async fn next(&mut self) -> Result<String, tungstenite::Error> {
+	pub async fn next(&mut self) -> Result<serde_json::Value, tungstenite::Error> {
+		if let Some(inner) = &self.inner {
+			if inner.connected_since + self.config.refresh_after < SystemTime::now() {
+				tracing::info!("Refreshing connection, as `refresh_after` specified in WsConfig has elapsed ({})", self.config.refresh_after);
+				self.request_reconnect().await?;
+			}
+		}
 		if self.inner.is_none() {
 			self.connect().await?;
 		}
@@ -69,19 +82,16 @@ impl<H: WsHandler> WsConnection<H> {
 			match resp {
 				Ok(succ_resp) => match succ_resp {
 					tungstenite::Message::Text(text) => {
-						let value: serde_json::Value = serde_json::from_str(&text).expect("TODO: handle error");
+						let value: serde_json::Value = serde_json::from_str(&text).expect("API sent invalid JSON, which is completely unexpected. Disappointment is immeasurable and the day is ruined.");
 						if let Some(further_communication) = { self.handler.handle_message(&value) } {
-							//Q: check if it's actually more performant than default `send` (that effectively flushes on each)
 							let mut messages_stream = futures_util::stream::iter(further_communication).map(Ok);
 							{
 								let stream = self.inner.as_mut().unwrap();
-								stream.send_all(&mut messages_stream).await?; //HACK: probably can evade the clone()
+								stream.send_all(&mut messages_stream).await?;
 							}
 							continue; // only need to send responses when it's not yet the desired content.
 						}
-
-						//DO: interpret as target type
-						return Ok(text.to_string());
+						return Ok(value);
 					}
 					tungstenite::Message::Binary(_) => {
 						panic!("Received binary. But exchanges are not smart enough to send this, what is happening");
@@ -117,6 +127,7 @@ impl<H: WsHandler> WsConnection<H> {
 					}
 				},
 				Err(err) => {
+					//TODO!!!!!!: match on error types, attempt reconnect if that could help it
 					panic!("Error: {:?}", err);
 				}
 			}
@@ -129,7 +140,7 @@ impl<H: WsHandler> WsConnection<H> {
 			let now = SystemTime::now();
 			let timeout = self.config.connect_cooldown;
 			if self.last_reconnect_attempt + timeout > now {
-				tracing::debug!("Waiting for reconnect cooldown");
+				tracing::warn!("Reconnect cooldown is triggered. Likely indicative of a bad connection.");
 				let duration = (self.last_reconnect_attempt + timeout).duration_since(now).unwrap();
 				tokio::time::sleep(duration).await;
 			}
@@ -143,12 +154,11 @@ impl<H: WsHandler> WsConnection<H> {
 		let mut message_stream = futures_util::stream::iter(messages).map(Ok);
 		stream.send_all(&mut message_stream).await?;
 
-		self.inner = Some(stream);
+		self.inner = Some(WsConnectionInner {stream, connected_since: SystemTime::now()} );
 		Ok(())
 	}
 
-	#[doc(hidden)]
-	/// Returns on a message confirming the reconnection. All messages sent by the server before it accepting the first `Close` message are discarded.
+	/// Returns on a message confirming the reconnection. All messages sent by the server before it accepting our `Close` message are discarded.
 	pub async fn request_reconnect(&mut self) -> Result<(), tungstenite::Error> {
 		if self.inner.is_some() {
 			{

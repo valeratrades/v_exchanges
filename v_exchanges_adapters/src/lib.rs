@@ -167,7 +167,7 @@ impl Client {
 		O: WsOption,
 		O::WsHandler: WsHandler,
 		Self: GetOptions<O::Options>, {
-		WsConnection::new(url.to_owned(), O::ws_handler(self.merged_options(options)))
+		WsConnection::new(url, O::ws_handler(self.merged_options(options)))
 	}
 }
 
