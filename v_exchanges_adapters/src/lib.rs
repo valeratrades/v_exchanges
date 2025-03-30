@@ -161,6 +161,7 @@ impl Client {
 		self.client.delete_no_query(url, &O::request_handler(self.merged_options(options))).await
 	}
 
+	#[deprecated(note = "use ws_connection() instead")]
 	#[inline(always)]
 	pub async fn websocket<O, H>(&self, url: &str, handler: H, options: impl IntoIterator<Item = O>) -> Result<WebSocketConnection<O::WebSocketHandler>, TungsteniteError>
 	where
@@ -170,14 +171,13 @@ impl Client {
 		WebSocketConnection::new(url, O::websocket_handler(handler, self.merged_options(options))).await
 	}
 
-	//dbg
 	#[inline(always)]
-	pub async fn ws<O, H>(&self, url: &str, handler: H, options: impl IntoIterator<Item = O>) -> Result<WsConnection<O::WsHandler>, TungsteniteError>
+	pub fn ws_connection<O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> WsConnection<O::WsHandler>
 	where
-		O: WsOption<H>,
+		O: WsOption,
 		O::WsHandler: WsHandler,
 		Self: GetOptions<O::Options>, {
-		WsConnection::new(url, O::ws_handler(handler, self.merged_options(options))).await
+		WsConnection::new(url.to_owned(), O::ws_handler(self.merged_options(options)))
 	}
 }
 

@@ -7,7 +7,10 @@ use std::{
 };
 
 use chrono::{Duration, Utc};
-use generics::http::{ApiError, BuildError, HandleError};
+use generics::{
+	http::{ApiError, BuildError, HandleError},
+	ws::WsHandler,
+};
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -116,6 +119,11 @@ where
 	}
 }
 
+// Web Sockets {{{
+pub struct BinanceWebSocketHandler {
+	message_handler: Box<dyn FnMut(serde_json::Value) + Send>,
+	options: BinanceOptions,
+}
 impl WebSocketHandler for BinanceWebSocketHandler {
 	fn websocket_config(&self) -> WebSocketConfig {
 		let mut config = self.options.websocket_config.clone();
@@ -140,6 +148,41 @@ impl WebSocketHandler for BinanceWebSocketHandler {
 		vec![]
 	}
 }
+impl<H: FnMut(serde_json::Value) + Send + 'static> WebSocketOption<H> for BinanceOption {
+	type WebSocketHandler = BinanceWebSocketHandler;
+
+	#[inline(always)]
+	fn websocket_handler(handler: H, options: Self::Options) -> Self::WebSocketHandler {
+		BinanceWebSocketHandler {
+			message_handler: Box::new(handler),
+			options,
+		}
+	}
+}
+//,}}}
+
+// Ws {{{
+#[derive(Clone, Debug, derive_new::new)]
+pub struct BinanceWsHandler {
+	options: BinanceOptions,
+}
+impl WsHandler for BinanceWsHandler {
+	//fn websocket_config(&self) -> WebSocketConfig {
+	//	let mut config = self.options.websocket_config.clone();
+	//	if self.options.websocket_url != BinanceWebSocketUrl::None {
+	//		config.url_prefix = self.options.websocket_url.as_str().to_owned();
+	//	}
+	//	config
+	//}
+}
+impl WsOption for BinanceOption {
+	type WsHandler = BinanceWsHandler;
+
+	fn ws_handler(options: Self::Options) -> Self::WsHandler {
+		BinanceWsHandler::new(options)
+	}
+}
+//,}}}
 
 /// Options that can be set when creating handlers
 #[derive(Debug, Default)]
@@ -258,34 +301,6 @@ pub enum BinanceWebSocketUrl {
 	#[default]
 	None,
 }
-
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
-pub enum BinanceAuth {
-	Sign,
-	Key, //Q: Not sure if anything uses it.
-	#[default]
-	None,
-}
-
-#[derive(Debug)]
-pub enum BinanceHandlerError {
-	ApiError(BinanceError),
-	RateLimitError { retry_after: Option<u32> },
-	ParseError,
-}
-
-/// A `struct` that implements [RequestHandler]
-pub struct BinanceRequestHandler<'a, R: DeserializeOwned> {
-	options: BinanceOptions,
-	_phantom: PhantomData<&'a R>,
-}
-
-/// A `struct` that implements [WebSocketHandler]
-pub struct BinanceWebSocketHandler {
-	message_handler: Box<dyn FnMut(serde_json::Value) + Send>,
-	options: BinanceOptions,
-}
-
 impl BinanceWebSocketUrl {
 	/// The URL that this variant represents.
 	#[inline(always)]
@@ -306,6 +321,27 @@ impl BinanceWebSocketUrl {
 			Self::None => "",
 		}
 	}
+}
+
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+pub enum BinanceAuth {
+	Sign,
+	Key, //Q: Not sure if anything uses it.
+	#[default]
+	None,
+}
+
+#[derive(Debug)]
+pub enum BinanceHandlerError {
+	ApiError(BinanceError),
+	RateLimitError { retry_after: Option<u32> },
+	ParseError,
+}
+
+/// A `struct` that implements [RequestHandler]
+pub struct BinanceRequestHandler<'a, R: DeserializeOwned> {
+	options: BinanceOptions,
+	_phantom: PhantomData<&'a R>,
 }
 
 /// A `struct` that represents a set of [BinanceOption] s.
@@ -380,22 +416,11 @@ where
 	}
 }
 
-impl<H: FnMut(serde_json::Value) + Send + 'static> WebSocketOption<H> for BinanceOption {
-	type WebSocketHandler = BinanceWebSocketHandler;
-
-	#[inline(always)]
-	fn websocket_handler(handler: H, options: Self::Options) -> Self::WebSocketHandler {
-		BinanceWebSocketHandler {
-			message_handler: Box::new(handler),
-			options,
-		}
-	}
-}
-
 impl HandlerOption for BinanceOption {
 	type Options = BinanceOptions;
 }
 
+// Error Codes {{{
 #[derive(Clone, Debug, Deserialize)]
 pub struct BinanceError {
 	pub code: BinanceErrorCode,
@@ -608,3 +633,4 @@ impl From<i32> for BinanceErrorCode {
 		}
 	}
 }
+//,}}}

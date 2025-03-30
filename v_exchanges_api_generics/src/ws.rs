@@ -1,513 +1,161 @@
-use core::slice::SlicePattern;
+#![feature(try_blocks)]
 use std::{
-	collections::hash_map::{Entry, HashMap},
-	mem,
-	sync::{
-		Arc,
-		atomic::{AtomicBool, Ordering},
-	},
-	time::Duration,
+	borrow::Cow,
+	env,
+	marker::PhantomData,
+	time::{Duration, SystemTime},
+	vec,
 };
 
 use futures_util::{
-	sink::SinkExt,
-	stream::{SplitSink, StreamExt},
+	SinkExt as _, StreamExt as _,
+	stream::{SplitSink, SplitStream},
 };
-use parking_lot::Mutex as SyncMutex;
-use tokio::{
-	net::TcpStream,
-	sync::{Mutex as AsyncMutex, Notify, mpsc as tokio_mpsc},
-	task::JoinHandle,
-	time::{MissedTickBehavior, timeout},
+use serde_json::json;
+use tokio::net::TcpStream;
+use tokio_tungstenite::{
+	MaybeTlsStream, WebSocketStream,
+	tungstenite::{
+		self, Bytes,
+		client::IntoClientRequest as _,
+		http::{Method, Request},
+	},
 };
-use tokio_tungstenite::{MaybeTlsStream, tungstenite};
-pub use tungstenite::Error as TungsteniteError;
+use tracing::log::LevelFilter;
+use v_utils::prelude::*;
 
-type WsStream = tokio_tungstenite::WebSocketStream<MaybeTlsStream<TcpStream>>;
-type WsSplitSink = SplitSink<WsStream, tungstenite::Message>;
+type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
-/// A `struct` that holds a websocket connection.
-///
-/// Dropping this `struct` terminates the connection.
-///
-/// # Reconnecting
-/// `WsConnection` automatically reconnects when an [TungsteniteError] occurs.
-/// Note, that during reconnection, it is **possible** that the [WsHandler] receives multiple identical messages
-/// even though the message was sent only once by the server, or receives only one message even though
-/// multiple identical messages were sent by the server, because there could be a time difference in the new connection and
-/// the old connection.
-///
-/// You can use the [reconnect_state()][Self::reconnect_state()] method to check if the connection is under
-/// a reconnection, or manually request a reconnection.
-#[derive(Debug)]
-#[must_use = "dropping WsConnection closes the connection"]
-pub struct WsConnection<H: WsHandler> {
-	task_reconnect: JoinHandle<()>,
-	sink: Arc<AsyncMutex<WsSplitSink>>,
-	inner: Arc<ConnectionInner<H>>,
-	reconnect_state: ReconnectState,
-}
-
-// Two ways connections end:
-// - User drops WsConnection
-//     1. feed_handler receives a message and closes the connection, then terminates
-//     2. start_connection notices that the connection is closed, and attempts to notify feed_handler, then terminates
-// - Reconnection
-//     This happens when:
-//     - the user requests so
-//     - message timeout
-//     - the server closes the connection
-//     - some kind of error occurs while receiving the message
-//
-//     1. task_reconnect starts a new connection
-//     2. task_reconnect closes the old connection
-//     3. start_connection (old) notices that the connection is closed, and notifies feed_handler, then terminates
-//     4. feed_handler receives the message, but ignores it because it is from the old connection
-#[derive(Debug)]
-struct ConnectionInner<H: WsHandler> {
-	url: String,
-	handler: Arc<SyncMutex<H>>,
-	message_tx: tokio_mpsc::UnboundedSender<(bool, FeederMessage)>,
-	next_connection_id: AtomicBool,
-}
-
-enum FeederMessage {
-	Message(tungstenite::Result<tungstenite::Message>),
-	ConnectionClosed,
-	DropConnectionRequest,
-}
-
-impl<H: WsHandler> WsConnection<H> {
-	/// Starts a new `WsConnection` to the given url using the given [handler][WsHandler].
-	pub async fn new(url: &str, handler: H) -> Result<Self, TungsteniteError> {
-		let config = handler.websocket_config();
-		let handler = Arc::new(SyncMutex::new(handler));
-		let url = config.url_prefix.clone() + url;
-
-		let (message_tx, message_rx) = tokio_mpsc::unbounded_channel();
-		let reconnect_manager = ReconnectState::new();
-
-		let connection = Arc::new(ConnectionInner {
-			url,
-			handler: Arc::clone(&handler),
-			message_tx,
-			next_connection_id: AtomicBool::new(false),
-		});
-
-		async fn feed_handler(
-			connection: Arc<ConnectionInner<impl WsHandler>>,
-			mut message_rx: tokio_mpsc::UnboundedReceiver<(bool, FeederMessage)>,
-			reconnect_manager: ReconnectState,
-			config: WsConfig,
-			sink: Arc<AsyncMutex<WsSplitSink>>,
-		) {
-			let mut messages: HashMap<WsMessage, isize> = HashMap::new();
-
-			let timeout_duration = if config.message_timeout.is_zero() { Duration::MAX } else { config.message_timeout };
-
-			loop {
-				match timeout(timeout_duration, message_rx.recv()).await {
-					// message successfully received
-					Ok(Some((id, FeederMessage::Message(Ok(message))))) => {
-						// message successfully received
-						if let Some(message) = WsMessage::from_message(message) {
-							if reconnect_manager.is_reconnecting() {
-								// reconnecting
-								let id_sign: isize = if id { 1 } else { -1 };
-								let entry = messages.entry(message.clone());
-								match entry {
-									Entry::Occupied(mut occupied) => {
-										if config.ignore_duplicate_during_reconnection {
-											tracing::debug!("Skipping duplicate message.");
-											continue;
-										}
-
-										*occupied.get_mut() += id_sign;
-										if id_sign != occupied.get().signum() {
-											// same message which comes from different connections, so we assume it's a duplicate.
-											tracing::debug!("Skipping duplicate message.");
-											continue;
-										}
-										// comes from the same connection, which means the message was sent twice.
-									}
-									Entry::Vacant(vacant) => {
-										// new message
-										vacant.insert(id_sign);
-									}
-								}
-							} else {
-								messages.clear();
-							}
-							let messages = connection.handler.lock().handle_message(message);
-							let mut sink_lock = sink.lock().await;
-							for message in messages {
-								if let Err(error) = sink_lock.send(message.into_message()).await {
-									tracing::error!("Failed to send message because of an error: {}", error);
-								};
-							}
-							if let Err(error) = sink_lock.flush().await {
-								tracing::error!("An error occurred while flushing Ws sink: {error:?}");
-							}
-						}
-					}
-					// failed to receive message
-					Ok(Some((_, FeederMessage::Message(Err(error))))) => {
-						tracing::error!("Failed to receive message because of an error: {error:?}");
-						if reconnect_manager.request_reconnect() {
-							tracing::info!("Reconnecting Ws because there was an error while receiving a message");
-						}
-					}
-					// timeout
-					Err(_) => {
-						tracing::debug!("Ws message timeout");
-						if reconnect_manager.request_reconnect() {
-							tracing::info!("Reconnecting Ws because of timeout");
-						}
-					}
-					// connection was closed
-					Ok(Some((id, FeederMessage::ConnectionClosed))) => {
-						let current_id = !connection.next_connection_id.load(Ordering::SeqCst);
-						if id != current_id {
-							// old connection, ignore
-							continue;
-						}
-						tracing::debug!("Ws connection closed by server");
-						if reconnect_manager.request_reconnect() {
-							tracing::info!("Reconnecting Ws because it was disconnected by the server");
-						}
-					}
-					// the connection is no longer needed because WsConnection was dropped
-					Ok(Some((_, FeederMessage::DropConnectionRequest))) => {
-						if let Err(error) = sink.lock().await.close().await {
-							tracing::debug!("Failed to close Ws connection: {error:?}");
-						}
-						break;
-					}
-					// message_tx has been dropped, which should never happen because it's always accessible by connection.message_tx.
-					Ok(None) => unreachable!("message_rx should never be closed"),
-				}
-			}
-			connection.handler.lock().handle_close(false);
-		}
-
-		async fn reconnect<H: WsHandler>(
-			interval: Duration,
-			cooldown: Duration,
-			connection: Arc<ConnectionInner<H>>,
-			sink: Arc<AsyncMutex<WsSplitSink>>,
-			reconnect_manager: ReconnectState,
-			no_duplicate: bool,
-			wait: Duration,
-		) {
-			let mut cooldown = tokio::time::interval(cooldown);
-			cooldown.set_missed_tick_behavior(MissedTickBehavior::Delay);
-			loop {
-				let timer = if interval.is_zero() {
-					// never completes
-					tokio::time::sleep(Duration::MAX)
-				} else {
-					tokio::time::sleep(interval)
-				};
-				tokio::select! {
-					_ = reconnect_manager.inner.reconnect_notify.notified() => {},
-					_ = timer => {},
-				}
-				tracing::debug!("Reconnection requested");
-				cooldown.tick().await;
-				reconnect_manager.inner.reconnecting.store(true, Ordering::SeqCst);
-
-				// reconnect_notify might have been notified while waiting the cooldown,
-				// so we consume any existing permits on reconnect_notify
-				reconnect_manager.inner.reconnect_notify.notify_one();
-				// this completes immediately because we just added a permit
-				reconnect_manager.inner.reconnect_notify.notified().await;
-
-				tracing::debug!("Starting reconnection process ...");
-				if no_duplicate {
-					tokio::time::sleep(wait).await;
-				}
-
-				// start a new connection
-				match WsConnection::<H>::start_connection(Arc::clone(&connection)).await {
-					Ok(new_sink) => {
-						// replace the sink with the new one
-						let mut old_sink = mem::replace(&mut *sink.lock().await, new_sink);
-						tracing::info!("New connection established");
-
-						if no_duplicate {
-							tokio::time::sleep(wait).await;
-						}
-
-						if let Err(error) = old_sink.close().await {
-							tracing::debug!("An error occurred while closing old connection: {}", error);
-						}
-						connection.handler.lock().handle_close(true);
-						tracing::debug!("Old connection closed");
-					}
-					Err(error) => {
-						// try reconnecting again
-						tracing::error!("Failed to reconnect: {error}. Trying again ...");
-						reconnect_manager.inner.reconnect_notify.notify_one();
-					}
-				}
-
-				if no_duplicate {
-					tokio::time::sleep(wait).await;
-				}
-
-				reconnect_manager.inner.reconnecting.store(false, Ordering::SeqCst);
-				tracing::debug!("Reconnection process complete");
-			}
-		}
-
-		let sink_inner = Self::start_connection(Arc::clone(&connection)).await?;
-		let sink = Arc::new(AsyncMutex::new(sink_inner));
-
-		tokio::spawn(feed_handler(Arc::clone(&connection), message_rx, reconnect_manager.clone(), config.clone(), Arc::clone(&sink)));
-
-		let task_reconnect = tokio::spawn(reconnect(
-			config.refresh_after,
-			config.connect_cooldown,
-			Arc::clone(&connection),
-			Arc::clone(&sink),
-			reconnect_manager.clone(),
-			config.ignore_duplicate_during_reconnection,
-			config.reconnection_wait,
-		));
-
-		Ok(Self {
-			task_reconnect,
-			sink,
-			inner: connection,
-			reconnect_state: reconnect_manager,
-		})
-	}
-
-	//TODO!!!: get rid of unbounded `spawn`
-	async fn start_connection(connection: Arc<ConnectionInner<impl WsHandler>>) -> Result<WsSplitSink, TungsteniteError> {
-		let (websocket_stream, _) = tokio_tungstenite::connect_async(connection.url.clone()).await?;
-		let (mut sink, mut stream) = websocket_stream.split();
-
-		let messages = connection.handler.lock().handle_start();
-		for message in messages {
-			sink.send(message.into_message()).await?;
-		}
-		sink.flush().await?;
-
-		// fetch_not is unstable so we use fetch_xor
-		let id = connection.next_connection_id.fetch_xor(true, Ordering::SeqCst);
-
-		// pass messages to task_feed_handler
-		tokio::spawn(async move {
-			while let Some(message) = stream.next().await {
-				// send the received message to the task running feed_handler
-				if connection.message_tx.send((id, FeederMessage::Message(message))).is_err() {
-					// the channel is closed. we can't disconnect because we don't have the sink
-					tracing::debug!("Ws message receiver is closed; abandon connection");
-					return;
-				}
-			}
-			// the underlying Ws connection was closed
-
-			drop(connection.message_tx.send((id, FeederMessage::ConnectionClosed))); // this may be Err
-			tracing::info!("Ws stream closed");
-		});
-		Ok(sink)
-	}
-
-	async fn connection(connection: Arc<ConnectionInner<H>>) -> Result<(WsSplitSink, impl Future<Output = ()>), TungsteniteError> {
-		let (websocket_stream, _) = tokio_tungstenite::connect_async(connection.url.clone()).await?;
-		let (mut sink, mut stream) = websocket_stream.split();
-
-		let messages = connection.handler.lock().handle_start();
-		for message in messages {
-			sink.send(message.into_message()).await?;
-		}
-		sink.flush().await?;
-
-		// fetch_not is unstable so we use fetch_xor
-		let id = connection.next_connection_id.fetch_xor(true, Ordering::SeqCst);
-
-		// Create the future that will process the stream
-		let process_future = async move {
-			let connection = connection.clone();
-
-			while let Some(message) = stream.next().await {
-				// send the received message to the task running feed_handler
-				if connection.message_tx.send((id, FeederMessage::Message(message))).is_err() {
-					// the channel is closed. we can't disconnect because we don't have the sink
-					tracing::debug!("Ws message receiver is closed; abandon connection");
-					return;
-				}
-			}
-			// the underlying Ws connection was closed
-
-			drop(connection.message_tx.send((id, FeederMessage::ConnectionClosed))); // this may be Err
-			tracing::info!("Ws stream closed");
-		};
-
-		Ok((sink, process_future))
-	}
-
-	/// Sends a message to the connection.
-	pub async fn send_message(&self, message: WsMessage) -> Result<(), TungsteniteError> {
-		let mut sink_lock = self.sink.lock().await;
-		sink_lock.send(message.into_message()).await?;
-		sink_lock.flush().await
-	}
-
-	/// Returns a [ReconnectState] for this connection.
-	///
-	/// See [ReconnectState] for more information.
-	pub fn reconnect_state(&self) -> ReconnectState {
-		self.reconnect_state.clone()
-	}
-}
-
-impl<H: WsHandler> Drop for WsConnection<H> {
-	fn drop(&mut self) {
-		self.task_reconnect.abort();
-		// sending None tells the feeder to close
-		let current_id = !self.inner.next_connection_id.load(Ordering::SeqCst);
-		self.inner.message_tx.send((current_id, FeederMessage::DropConnectionRequest)).ok();
-	}
-}
-
-/// A `struct` to request the [WsConnection] to perform a reconnect.
-///
-/// This `struct` uses an [Arc] internally, so you can obtain multiple
-/// `ReconnectState`s for a single [WsConnection] by [cloning][Clone].
-#[derive(Debug, Clone)]
-pub struct ReconnectState {
-	inner: Arc<ReconnectMangerInner>,
-}
-
-#[derive(Debug)]
-struct ReconnectMangerInner {
-	reconnect_notify: Notify,
-	reconnecting: AtomicBool,
-}
-
-impl ReconnectState {
-	fn new() -> Self {
-		Self {
-			inner: Arc::new(ReconnectMangerInner {
-				reconnect_notify: Notify::new(),
-				reconnecting: AtomicBool::new(false),
-			}),
-		}
-	}
-
-	/// Returns `true` iff the [WsConnection] is undergoing a reconnection process.
-	pub fn is_reconnecting(&self) -> bool {
-		self.inner.reconnecting.load(Ordering::SeqCst)
-	}
-
-	/// Request the [WsConnection] to perform a reconnect.
-	///
-	/// Will return `false` if it is already in a reconnection process.
-	pub fn request_reconnect(&self) -> bool {
-		if self.is_reconnecting() {
-			false
-		} else {
-			self.inner.reconnect_notify.notify_one();
-			true
-		}
-	}
-}
-
-/// An enum that represents a websocket message.
-///
-/// Follows [tungstenite::Message], only missing the `Close` arm
-#[derive(Debug, Eq, PartialEq, Clone, Hash)]
-pub enum WsMessage {
-	Text(String),
-	Binary(Vec<u8>),
-	Ping(Vec<u8>),
-	Pong(Vec<u8>),
-}
-
-impl WsMessage {
-	fn from_message(message: tungstenite::Message) -> Option<Self> {
-		match message {
-			tungstenite::Message::Text(text) => Some(Self::Text(text.to_string())),
-			tungstenite::Message::Binary(data) => Some(Self::Binary(data.as_slice().to_owned())),
-			tungstenite::Message::Ping(data) => Some(Self::Ping(data.as_slice().to_owned())),
-			tungstenite::Message::Pong(data) => Some(Self::Pong(data.as_slice().to_owned())),
-			tungstenite::Message::Close(_) | tungstenite::Message::Frame(_) => None,
-		}
-	}
-
-	fn into_message(self) -> tungstenite::Message {
-		match self {
-			WsMessage::Text(text) => tungstenite::Message::Text(text.into()),
-			WsMessage::Binary(data) => tungstenite::Message::Binary(data.into()),
-			WsMessage::Ping(data) => tungstenite::Message::Ping(data.into()),
-			WsMessage::Pong(data) => tungstenite::Message::Pong(data.into()),
-		}
-	}
-}
-
-/// A `trait` which is used to handle events on the [WsConnection].
-///
-/// The `struct` implementing this `trait` is required to be [Send] and ['static] because it will be sent between threads.
-pub trait WsHandler: Send + 'static {
-	/// Returns a [WsConfig] that will be applied for all Ws connections handled by this handler.
-	fn websocket_config(&self) -> WsConfig {
-		WsConfig::default()
-	}
-
-	/// Called when a new connection has been started, and returns messages that should be sent to the server.
-	///
-	/// This could be called multiple times because the connection can be reconnected.
-	fn handle_start(&mut self) -> Vec<WsMessage> {
-		tracing::debug!("Ws connection started");
+pub trait WsHandler {
+	/// Return list of messages necessary to establish the connection.
+	fn handle_start(&mut self) -> Vec<tungstenite::Message> {
 		vec![]
 	}
-
-	/// Called when the [WsConnection] received a message, returns messages to be sent to the server.
-	fn handle_message(&mut self, message: WsMessage) -> Vec<WsMessage>;
-
-	/// Called when a websocket connection is closed.
-	///
-	/// If the parameter `reconnect` is:
-	/// - `true`, it means that the connection is being reconnected for some reason.
-	/// - `false`, it means that the connection will not be reconnected, because the [WsConnection] was dropped.
-	#[allow(unused_variables)]
-	fn handle_close(&mut self, reconnect: bool) {
-		tracing::debug!("Ws connection closed; reconnect: {reconnect}");
+	/// Determines if further communication is necessary. If the message received is the desired content, returns `None`.
+	fn handle_message(&mut self, message: &serde_json::Value) -> Option<Vec<tungstenite::Message>> {
+		None
 	}
 }
 
-/// Configuration for [WsHandler].
-///
-/// Should be returned by [WsHandler::websocket_config()].
-#[derive(Debug, Clone, Default)]
-pub struct WsConfig {
-	/// Duration that should elapse between each attempt to start a new connection.
-	///
-	/// This matters because the [WsConnection] reconnects on error. If the error
-	/// continues to happen, it could spam the server if `connect_cooldown` is too short.
-	pub connect_cooldown: Duration = Duration::from_millis(3000),
-	/// The [WsConnection] will automatically reconnect when `refresh_after` has elapsed since
-	/// the last connection started. If you don't want this feature, set it to [Duration::ZERO].
-	//TODO: switch to Option<Duration> instead of getting weird with special meanings.
-	pub refresh_after: Duration,
-	/// Prefix which will be used for connections that started using this `WsConfig`.
-	///
-	/// Ex: `"wss://example.com"`
-	pub url_prefix: String,
-	/// During reconnection, [WsHandler] might receive two identical messages
-	/// even though the server sent only one message. By setting this to `true`, [WsConnection]
-	/// will not send duplicate messages to the [WsHandler]. You should set this option to `true`
-	/// when messages contain some sort of ID and are distinguishable.
-	///
-	/// Note, that [WsConnection] will **not** check duplicate messages when it is not under reconnection
-	/// even this option is set to `true`.
-	pub ignore_duplicate_during_reconnection: bool,
-	/// When `ignore_duplicate_during_reconnection` is set to `true`, [WsConnection] will wait for a
-	/// certain amount of time to make sure no message is lost.
-	pub reconnection_wait: Duration = Duration::from_millis(300),
-	/// A reconnection will be triggered if no messages are received within this amount of time.
-	pub message_timeout: Duration,
+#[derive(Debug)]
+pub struct WsConnection<H: WsHandler> {
+	url: String,
+	handler: H,
+	inner: Option<WsStream>,
+}
+impl<H: WsHandler> WsConnection<H> {
+	pub fn new(url: String, handler: H) -> Self {
+		let inner = None;
+		Self { url, handler, inner }
+	}
+
+	/// The main interface. All ws operations are hidden, only thing getting through are the content messages or the lack thereof.
+	pub async fn next(&mut self) -> Result<String, tungstenite::Error> {
+		if self.inner.is_none() {
+			let stream = Self::connect(&self.url, &mut self.handler).await.expect("TODO: .");
+			self.inner = Some(stream);
+		}
+
+		while let Some(resp) = { self.inner.as_mut().unwrap().next().await } {
+			let resp: Result<tungstenite::Message, tungstenite::Error> = resp; //dbg: lsp can't infer type
+			match resp {
+				Ok(succ_resp) => match succ_resp {
+					tungstenite::Message::Text(text) => {
+						let value: serde_json::Value = serde_json::from_str(&text).expect("TODO: handle error");
+						if let Some(further_communication) = { self.handler.handle_message(&value) } {
+							//Q: check if it's actually more performant than default `send` (that effectively flushes on each)
+							let mut messages_stream = futures_util::stream::iter(further_communication).map(Ok);
+							{
+								let stream = self.inner.as_mut().unwrap();
+								stream.send_all(&mut messages_stream).await?; //HACK: probably can evade the clone()
+							}
+							continue; // only need to send responses when it's not yet the desired content.
+						}
+
+						//DO: interpret as target type
+						return Ok(text.to_string());
+					}
+					tungstenite::Message::Binary(_) => {
+						panic!("Received binary. But exchanges are not smart enough to send this, what is happening");
+					}
+					tungstenite::Message::Ping(_) => {
+						{
+							let stream = self.inner.as_mut().unwrap();
+							stream.send(tungstenite::Message::Pong(Bytes::default())).await?;
+						}
+						tracing::debug!("ponged");
+						continue;
+					}
+					//Q: Do I even need to send them? TODO: check if just replying to pings is sufficient
+					tungstenite::Message::Pong(_) => {
+						unimplemented!();
+					}
+					tungstenite::Message::Close(maybe_reason) => {
+						match maybe_reason {
+							Some(close_frame) => {
+								//Q: maybe need to expose def of this for ind exchanges (so we can interpret the codes)
+								tracing::info!("Server closed connection; reason: {close_frame:?}");
+							}
+							None => {
+								tracing::info!("Server closed connection; no reason specified.");
+							}
+						}
+						self.inner = None;
+						//TODO!!!!!: wait configured [Duration] before reconnect
+						Self::connect(&self.url, &mut self.handler).await?;
+						continue;
+					}
+					tungstenite::Message::Frame(_) => {
+						unreachable!("Can't get from reading");
+					}
+				},
+				Err(err) => {
+					panic!("Error: {:?}", err);
+				}
+			}
+		}
+		todo!("Handle stream exhaustion (My guess is this can happen due to connection issues)"); //TODO: check when exactly `stream.next()` can fail
+	}
+
+	async fn connect(url: &str, handler: &mut H) -> Result<WsStream, tungstenite::Error> {
+		let (mut stream, http_resp) = tokio_tungstenite::connect_async(url).await?;
+		tracing::debug!("Ws handshake with server: {http_resp:?}");
+
+		let messages = handler.handle_start();
+		let mut message_stream = futures_util::stream::iter(messages).map(Ok);
+		stream.send_all(&mut message_stream).await?;
+
+		Ok(stream)
+	}
+
+	#[doc(hidden)]
+	/// Returns on a message confirming the reconnection. All messages sent by the server before it accepting the first `Close` message are discarded.
+	pub async fn request_reconnect(&mut self) -> Result<(), tungstenite::Error> {
+		if self.inner.is_some() {
+			{
+				let stream = self.inner.as_mut().unwrap();
+				stream.send(tungstenite::Message::Close(None)).await?;
+
+				while let Some(resp) = stream.next().await {
+					match resp {
+						Ok(succ_resp) => match succ_resp {
+							tungstenite::Message::Close(maybe_reason) => {
+								tracing::debug!(?maybe_reason, "Server accepted close request");
+								break;
+							}
+							_ => {
+								// Ok to discard everything else, as this fn will only be triggered manually
+								continue;
+							}
+						},
+						Err(err) => {
+							panic!("Error: {:?}", err);
+						}
+					}
+				}
+				self.inner = None;
+			}
+		}
+		Ok(())
+	}
 }

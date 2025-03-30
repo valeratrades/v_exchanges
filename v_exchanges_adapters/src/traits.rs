@@ -32,9 +32,9 @@ pub trait WebSocketOption<H>: HandlerOption {
 	fn websocket_handler(handler: H, options: Self::Options) -> Self::WebSocketHandler;
 }
 
-/// A `trait` that shows the implementing type is able to create [websocket::WebSocketHandler]s
-pub trait WsOption<H>: HandlerOption {
+/// shows that the implementing type is able to create [websocket::WebSocketHandler]s
+pub trait WsOption: HandlerOption {
 	type WsHandler: ws::WsHandler;
 
-	fn ws_handler(handler: H, options: Self::Options) -> Self::WsHandler;
+	fn ws_handler(options: Self::Options) -> Self::WsHandler;
 }
