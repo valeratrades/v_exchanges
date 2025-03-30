@@ -1,33 +1,11 @@
 #![feature(try_blocks)]
 use std::{
-	borrow::Cow,
 	env,
-	marker::PhantomData,
-	time::{Duration, SystemTime},
 	vec,
 };
 
-use futures_util::{
-	SinkExt as _, StreamExt as _,
-	stream::{SplitSink, SplitStream},
-};
-use hmac::{Hmac, Mac};
-use secrecy::{ExposeSecret as _, SecretString};
-use serde_json::json;
-use sha2::Sha256;
-use tokio::net::TcpStream;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
-use tracing::log::LevelFilter;
-use tungstenite::{
-	Bytes,
-	client::IntoClientRequest as _,
-	http::{Method, Request},
-};
-use v_exchanges::AbsMarket;
-use v_exchanges_adapters::{
-	Client,
-	binance::{BinanceAuth, BinanceHttpUrl, BinanceOption, BinanceWsUrl},
-};
+use futures_util::StreamExt as _;
+use v_exchanges_adapters::binance::{BinanceAuth, BinanceOption};
 use v_utils::prelude::*;
 
 //#[derive(Clone, derive_more::Debug)]

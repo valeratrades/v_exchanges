@@ -3,7 +3,7 @@
 use std::{
 	marker::PhantomData,
 	str::FromStr,
-	time::{self, SystemTime},
+	time::SystemTime,
 };
 
 use chrono::{Duration, Utc};
@@ -327,7 +327,7 @@ pub struct BinanceOptions {
 impl Default for BinanceOptions {
 	fn default() -> Self {
 		let ws_config = WsConfig {
-			refresh_after: Some(std::time::Duration::from_hours(12)),
+			refresh_after: std::time::Duration::from_hours(12),
 			..Default::default()
 		};
 		Self {

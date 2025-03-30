@@ -25,12 +25,15 @@ ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
 
 [dependencies]
 async-trait = "^0.1.88"
+enum_dispatch = "0.3.13"
+env_logger = "0.11.7" #DEPRECATE
+v_exchanges_adapters = { version = "^0.6.5", path = "../v_exchanges_adapters/", optional = true }
+reqwest = { version = "^0.12.15", optional = true }
+
 chrono.workspace = true
 derive-new.workspace = true
 derive_more.workspace = true
-enum_dispatch = "0.3.13"
-env_logger = "0.11.7" #DEPRECATE
-eyre = "0.6.12"
+eyre.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_plain.workspace = true
@@ -40,12 +43,7 @@ tokio.workspace = true
 tracing.workspace = true
 v_utils.workspace = true 
 cfg-if.workspace = true
-
-v_exchanges_adapters = { version = "^0.6.5", path = "../v_exchanges_adapters/", optional = true }
-
-reqwest = { version = "^0.12.15", optional = true }
-
-insta.workspace = true #dbg (for some reason is not loading in dev-dependencies rn
+#insta.workspace = true #dbg (for some reason is not loading in dev-dependencies rn
 secrecy.workspace = true
 
 [dev-dependencies]

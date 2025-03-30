@@ -2804,6 +2804,7 @@ dependencies = [
  "bytes",
  "derive-new",
  "derive_more",
+ "eyre",
  "futures-util",
  "parking_lot",
  "reqwest",
