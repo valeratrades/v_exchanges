@@ -48,6 +48,16 @@ struct WsConnectionInner {
 	#[deref]
 	stream: WsStream,
 	connected_since: SystemTime,
+	last_unanswered_communication: Option<SystemTime>,
+}
+impl WsConnectionInner {
+	fn new(stream: WsStream, connected_since: SystemTime) -> Self {
+		Self {
+			stream,
+			connected_since,
+			last_unanswered_communication: None,
+		}
+	}
 }
 impl<H: WsHandler> WsConnection<H> {
 	#[allow(missing_docs)]
@@ -84,21 +94,37 @@ impl<H: WsHandler> WsConnection<H> {
 
 		let json_rpc_value = loop {
 			// force a response out of the server.
-			let timeout_handle = tokio::time::timeout(self.config.message_timeout, {
-				let stream = self.inner.as_mut().unwrap();
-				stream.next()
-			});
-			let resp = match timeout_handle.await {
-				Ok(Some(resp)) => resp,
-				Ok(None) => {
-					tracing::warn!("tungstenite couldn't read from the stream. Restarting.");
-					self.reconnect().await?;
-					continue;
+			let resp = {
+				let mut timeout = self.config.message_timeout;
+				if let Some(last_unanswered) = self.inner.as_ref().unwrap().last_unanswered_communication {
+					let now = SystemTime::now();
+					match last_unanswered + self.config.response_timeout < now {
+						true => {
+							timeout = timeout.min(now.duration_since(last_unanswered).expect("time went backwards") + self.config.response_timeout);
+						}
+						false => {
+							tracing::error!("Timeout for last unanswered communication ended before `.next()` was called. This likely indicates an implementation error on the clientside.");
+							self.reconnect().await?;
+							continue;
+						}
+					}
 				}
-				Err(timeout_error) => {
-					tracing::warn!("Message reception timed out after {:?} seconds. // {timeout_error}", self.config.message_timeout);
-					self.reconnect().await?;
-					continue;
+				let timeout_handle = tokio::time::timeout(timeout, {
+					let stream = self.inner.as_mut().unwrap();
+					stream.next()
+				});
+				match timeout_handle.await {
+					Ok(Some(resp)) => resp,
+					Ok(None) => {
+						tracing::warn!("tungstenite couldn't read from the stream. Restarting.");
+						self.reconnect().await?;
+						continue;
+					}
+					Err(timeout_error) => {
+						tracing::warn!("Message reception timed out after {:?} seconds. // {timeout_error}", self.config.message_timeout);
+						self.reconnect().await?;
+						continue;
+					}
 				}
 			};
 
@@ -155,15 +181,18 @@ impl<H: WsHandler> WsConnection<H> {
 
 	async fn send_all(&mut self, messages: Vec<tungstenite::Message>) -> Result<(), tungstenite::Error> {
 		if let Some(inner) = &mut self.inner {
-			let r = match messages.len() {
+			match messages.len() {
 				0 => return Ok(()),
-				1 => inner.send(messages.into_iter().next().unwrap()).await?,
+				1 => {
+					inner.send(messages.into_iter().next().unwrap()).await?;
+					inner.last_unanswered_communication = Some(SystemTime::now());
+				}
 				_ => {
 					let mut message_stream = futures_util::stream::iter(messages).map(Ok);
-					inner.send_all(&mut message_stream).await?
+					inner.send_all(&mut message_stream).await?;
+					inner.last_unanswered_communication = Some(SystemTime::now());
 				}
 			};
-			//TODO!!!!!!: update last_communication time on .inner, which starts a faster timeout for receiving next message. (it being faster is not guaranteed, so just .min() the two configured)
 			Ok(())
 		} else {
 			Err(tungstenite::Error::ConnectionClosed)
@@ -191,7 +220,7 @@ impl<H: WsHandler> WsConnection<H> {
 		tracing::debug!("Ws handshake with server: {http_resp:?}");
 
 		let now = SystemTime::now();
-		self.inner = Some(WsConnectionInner { stream, connected_since: now });
+		self.inner = Some(WsConnectionInner::new(stream, now));
 
 		let messages = self.handler.handle_start();
 		self.send_all(messages).await
@@ -229,6 +258,10 @@ pub struct WsConfig {
 	pub refresh_after: Duration = Duration::from_hours(12),
 	/// A reconnection will be triggered if no messages are received within this amount of time.
 	pub message_timeout: Duration = Duration::from_mins(16), // assume all exchanges ping more frequently than this
+	/// Timeout for the response to a message sent to the server. Difference from the [message_timeout](Self::message_timeout) is that here we directly request communication.
+	///
+	/// My thinking is that this should be less than the general timeout limit, but this is not enforced.
+	pub response_timeout: Duration = Duration::from_mins(3),
 }
 impl WsConfig {
 	#[allow(missing_docs)]
