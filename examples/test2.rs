@@ -1,8 +1,5 @@
 #![feature(try_blocks)]
-use std::{
-	env,
-	vec,
-};
+use std::{env, vec};
 
 use futures_util::StreamExt as _;
 use v_exchanges_adapters::binance::{BinanceAuth, BinanceOption};
@@ -89,7 +86,7 @@ async fn main() {
 		}
 	}
 	println!("\ngonna request reeconnect\n");
-	ws_connection.request_reconnect().await.unwrap();
+	ws_connection.reconnect().await.unwrap();
 	println!("\nran request reconnect\n");
 
 	while let Ok(trade_event) = ws_connection.next().await {

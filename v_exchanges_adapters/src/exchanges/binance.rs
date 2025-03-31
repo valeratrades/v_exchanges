@@ -5,6 +5,7 @@ use std::{marker::PhantomData, str::FromStr, time::SystemTime};
 use chrono::{Duration, Utc};
 use generics::{
 	http::{ApiError, BuildError, HandleError, *},
+	reqwest::Url,
 	ws::{WsConfig, WsHandler},
 };
 use hmac::{Hmac, Mac};
@@ -124,7 +125,7 @@ impl WsHandler for BinanceWsHandler {
 	fn ws_config(&self) -> WsConfig {
 		let mut config = self.options.ws_config.clone();
 		if self.options.ws_url != BinanceWsUrl::None {
-			config.url_prefix = self.options.ws_url.as_str().to_owned();
+			config.base_url = Some(self.options.ws_url.to_owned());
 		}
 		config
 	}
@@ -225,7 +226,7 @@ impl BinanceHttpUrl {
 }
 
 /// A `enum` that represents the base url of the Binance WebSocket API
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, Default)]
 #[non_exhaustive]
 pub enum BinanceWsUrl {
 	/// `wss://stream.binance.com:9443`
@@ -257,23 +258,22 @@ pub enum BinanceWsUrl {
 	None,
 }
 impl BinanceWsUrl {
-	/// The URL that this variant represents.
-	#[inline(always)]
-	pub fn as_str(&self) -> &'static str {
+	// Can't impl [ToOwned], as there is a blanket impl of it on everything with [Clone]
+	fn to_owned(&self) -> Url {
 		match self {
-			Self::Spot9443 => "wss://stream.binance.com:9443",
-			Self::Spot443 => "wss://stream.binance.com:443",
-			Self::SpotTest => "wss://testnet.binance.vision",
-			Self::SpotData => "wss://data-stream.binance.com",
-			Self::WebSocket443 => "wss://ws-api.binance.com:443",
-			Self::WebSocket9443 => "wss://ws-api.binance.com:9443",
-			Self::FuturesUsdM => "wss://fstream.binance.com",
-			Self::FuturesUsdMAuth => "wss://fstream-auth.binance.com",
-			Self::FuturesCoinM => "wss://dstream.binance.com",
-			Self::FuturesUsdMTest => "wss://stream.binancefuture.com",
-			Self::FuturesCoinMTest => "wss://dstream.binancefuture.com",
-			Self::EuropeanOptions => "wss://nbstream.binance.com",
-			Self::None => "",
+			Self::Spot9443 => Url::parse("wss://stream.binance.com:9443").unwrap(),
+			Self::Spot443 => Url::parse("wss://stream.binance.com:443").unwrap(),
+			Self::SpotTest => Url::parse("wss://testnet.binance.vision").unwrap(),
+			Self::SpotData => Url::parse("wss://data-stream.binance.com").unwrap(),
+			Self::WebSocket443 => Url::parse("wss://ws-api.binance.com:443").unwrap(),
+			Self::WebSocket9443 => Url::parse("wss://ws-api.binance.com:9443").unwrap(),
+			Self::FuturesUsdM => Url::parse("wss://fstream.binance.com").unwrap(),
+			Self::FuturesUsdMAuth => Url::parse("wss://fstream-auth.binance.com").unwrap(),
+			Self::FuturesCoinM => Url::parse("wss://dstream.binance.com").unwrap(),
+			Self::FuturesUsdMTest => Url::parse("wss://stream.binancefuture.com").unwrap(),
+			Self::FuturesCoinMTest => Url::parse("wss://dstream.binancefuture.com").unwrap(),
+			Self::EuropeanOptions => Url::parse("wss://nbstream.binance.com").unwrap(),
+			Self::None => panic!("calling .to_owned() on BinanceWsUrl::None is invalid"),
 		}
 	}
 }

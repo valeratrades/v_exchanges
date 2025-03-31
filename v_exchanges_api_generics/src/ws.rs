@@ -3,14 +3,13 @@ use std::{
 	vec,
 };
 
+use eyre::{Result, bail};
 use futures_util::{SinkExt as _, StreamExt as _};
+use reqwest::Url;
 use tokio::net::TcpStream;
-use eyre::{bail, Result};
 use tokio_tungstenite::{
 	MaybeTlsStream, WebSocketStream,
-	tungstenite::{
-		self, Bytes,
-	},
+	tungstenite::{self, Bytes},
 };
 
 type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
@@ -37,11 +36,11 @@ pub trait WsHandler {
 #[derive(Debug)]
 /// Main way to interact with the WebSocket APIs.
 pub struct WsConnection<H: WsHandler> {
-	url: String,
+	url: Url,
 	config: WsConfig,
 	handler: H,
 	inner: Option<WsConnectionInner>,
-	last_reconnect_attempt: SystemTime, // will not escape application boundary, so no need to be Tz-aware
+	last_reconnect_attempt: SystemTime, // not Tz-aware, as it will not escape the application boundary
 }
 #[derive(Debug, derive_more::Deref, derive_more::DerefMut)]
 struct WsConnectionInner {
@@ -53,14 +52,20 @@ struct WsConnectionInner {
 impl<H: WsHandler> WsConnection<H> {
 	#[allow(missing_docs)]
 	pub fn new(url: &str, handler: H) -> Self {
+		// expects here are not expected to be seen by the user. Correctness should theoretically be checked at the moment of merging provided options; before this is ever constructed.
 		let config = handler.ws_config();
-		config.validate().expect("ws config is invalid"); // not expected to be seen by the user. Correctness should theoretically be checked at the moment of merging provided options; before this is ever constructed.
+		config.validate().expect("ws config is invalid");
+		let url = match &config.base_url {
+			Some(base_url) => base_url.join(url).expect("url is invalid"),
+			None => Url::parse(url).expect("url is invalid"),
+		};
+
 		Self {
-			url: config.url_prefix.clone() + url,
+			url,
 			config,
 			handler,
 			inner: None,
-			last_reconnect_attempt: SystemTime::UNIX_EPOCH,	
+			last_reconnect_attempt: SystemTime::UNIX_EPOCH,
 		}
 	}
 
@@ -68,8 +73,8 @@ impl<H: WsHandler> WsConnection<H> {
 	pub async fn next(&mut self) -> Result<serde_json::Value, tungstenite::Error> {
 		if let Some(inner) = &self.inner {
 			if inner.connected_since + self.config.refresh_after < SystemTime::now() {
-				tracing::info!("Refreshing connection, as `refresh_after` specified in WsConfig has elapsed ({})", self.config.refresh_after);
-				self.request_reconnect().await?;
+				tracing::info!("Refreshing connection, as `refresh_after` specified in WsConfig has elapsed ({:?})", self.config.refresh_after);
+				self.reconnect().await?;
 			}
 		}
 		if self.inner.is_none() {
@@ -77,30 +82,43 @@ impl<H: WsHandler> WsConnection<H> {
 		}
 		//- at this point self.inner is Some
 
-		while let Some(resp) = { self.inner.as_mut().unwrap().next().await } {
-			let resp: Result<tungstenite::Message, tungstenite::Error> = resp; //dbg: lsp can't infer type
+		let json_rpc_value = loop {
+			// force a response out of the server.
+			let timeout_handle = tokio::time::timeout(self.config.message_timeout, {
+				let stream = self.inner.as_mut().unwrap();
+				stream.next()
+			});
+			let resp = match timeout_handle.await {
+				Ok(Some(resp)) => resp,
+				Ok(None) => {
+					tracing::warn!("tungstenite couldn't read from the stream. Restarting.");
+					self.reconnect().await?;
+					continue;
+				}
+				Err(timeout_error) => {
+					tracing::warn!("Message reception timed out after {:?} seconds. // {timeout_error}", self.config.message_timeout);
+					self.reconnect().await?;
+					continue;
+				}
+			};
+
+			// some response received, handle it
 			match resp {
 				Ok(succ_resp) => match succ_resp {
 					tungstenite::Message::Text(text) => {
-						let value: serde_json::Value = serde_json::from_str(&text).expect("API sent invalid JSON, which is completely unexpected. Disappointment is immeasurable and the day is ruined.");
+						let value: serde_json::Value =
+							serde_json::from_str(&text).expect("API sent invalid JSON, which is completely unexpected. Disappointment is immeasurable and the day is ruined.");
 						if let Some(further_communication) = { self.handler.handle_message(&value) } {
-							let mut messages_stream = futures_util::stream::iter(further_communication).map(Ok);
-							{
-								let stream = self.inner.as_mut().unwrap();
-								stream.send_all(&mut messages_stream).await?;
-							}
+							self.send_all(further_communication).await?;
 							continue; // only need to send responses when it's not yet the desired content.
 						}
-						return Ok(value);
+						break value;
 					}
 					tungstenite::Message::Binary(_) => {
 						panic!("Received binary. But exchanges are not smart enough to send this, what is happening");
 					}
 					tungstenite::Message::Ping(_) => {
-						{
-							let stream = self.inner.as_mut().unwrap();
-							stream.send(tungstenite::Message::Pong(Bytes::default())).await?;
-						}
+						self.send(tungstenite::Message::Pong(Bytes::default())).await?;
 						tracing::debug!("ponged");
 						continue;
 					}
@@ -131,11 +149,33 @@ impl<H: WsHandler> WsConnection<H> {
 					panic!("Error: {:?}", err);
 				}
 			}
+		};
+		Ok(json_rpc_value)
+	}
+
+	async fn send_all(&mut self, messages: Vec<tungstenite::Message>) -> Result<(), tungstenite::Error> {
+		if let Some(inner) = &mut self.inner {
+			let r = match messages.len() {
+				0 => return Ok(()),
+				1 => inner.send(messages.into_iter().next().unwrap()).await?,
+				_ => {
+					let mut message_stream = futures_util::stream::iter(messages).map(Ok);
+					inner.send_all(&mut message_stream).await?
+				}
+			};
+			//TODO!!!!!!: update last_communication time on .inner, which starts a faster timeout for receiving next message. (it being faster is not guaranteed, so just .min() the two configured)
+			Ok(())
+		} else {
+			Err(tungstenite::Error::ConnectionClosed)
 		}
-		todo!("Handle stream exhaustion (My guess is this can happen due to connection issues)"); //TODO: check when exactly `stream.next()` can fail
+	}
+
+	async fn send(&mut self, message: tungstenite::Message) -> Result<(), tungstenite::Error> {
+		self.send_all(vec![message]).await // vec cost is negligible
 	}
 
 	async fn connect(&mut self) -> Result<(), tungstenite::Error> {
+		tracing::info!("Connecting to {}...", self.url);
 		{
 			let now = SystemTime::now();
 			let timeout = self.config.connect_cooldown;
@@ -147,45 +187,27 @@ impl<H: WsHandler> WsConnection<H> {
 		}
 		self.last_reconnect_attempt = SystemTime::now();
 
-		let (mut stream, http_resp) = tokio_tungstenite::connect_async(&self.url).await?;
+		let (stream, http_resp) = tokio_tungstenite::connect_async(self.url.as_str()).await?;
 		tracing::debug!("Ws handshake with server: {http_resp:?}");
 
-		let messages = self.handler.handle_start();
-		let mut message_stream = futures_util::stream::iter(messages).map(Ok);
-		stream.send_all(&mut message_stream).await?;
+		let now = SystemTime::now();
+		self.inner = Some(WsConnectionInner { stream, connected_since: now });
 
-		self.inner = Some(WsConnectionInner {stream, connected_since: SystemTime::now()} );
-		Ok(())
+		let messages = self.handler.handle_start();
+		self.send_all(messages).await
 	}
 
-	/// Returns on a message confirming the reconnection. All messages sent by the server before it accepting our `Close` message are discarded.
-	pub async fn request_reconnect(&mut self) -> Result<(), tungstenite::Error> {
+	/// Sends the existing connection (if any) a `Close` message, and then simply drops it, opening a new one.
+	pub async fn reconnect(&mut self) -> Result<(), tungstenite::Error> {
+		tracing::info!("Dropping old connection before reconnecting...");
 		if self.inner.is_some() {
 			{
 				let stream = self.inner.as_mut().unwrap();
 				stream.send(tungstenite::Message::Close(None)).await?;
-
-				while let Some(resp) = stream.next().await {
-					match resp {
-						Ok(succ_resp) => match succ_resp {
-							tungstenite::Message::Close(maybe_reason) => {
-								tracing::debug!(?maybe_reason, "Server accepted close request");
-								break;
-							}
-							_ => {
-								// Ok to discard everything else, as this fn will only be triggered manually
-								continue;
-							}
-						},
-						Err(err) => {
-							panic!("Error: {:?}", err);
-						}
-					}
-				}
 				self.inner = None;
 			}
 		}
-		Ok(())
+		self.connect().await
 	}
 }
 
@@ -197,7 +219,7 @@ pub struct WsConfig {
 	/// Prefix which will be used for connections that started using this `WebSocketConfig`.
 	///
 	/// Ex: `"wss://example.com"`
-	pub url_prefix: String,
+	pub base_url: Option<Url>,
 	/// Duration that should elapse between each attempt to start a new connection.
 	///
 	/// This matters because the [WebSocketConnection] reconnects on error. If the error
