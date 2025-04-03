@@ -45,6 +45,7 @@ v_utils.workspace = true
 cfg-if.workspace = true
 #insta.workspace = true #dbg (for some reason is not loading in dev-dependencies rn
 secrecy.workspace = true
+tokio-tungstenite.workspace = true
 
 [dev-dependencies]
 color-eyre = "^0.6.3"
@@ -52,8 +53,6 @@ insta.workspace = true
 
 
 #dbg: ws dev {{{
-tokio-tungstenite = "*"
-tungstenite = "*"
 futures-util = "*"
 sha2 = "*"
 hmac = "*"

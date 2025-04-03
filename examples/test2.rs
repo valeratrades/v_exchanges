@@ -77,23 +77,10 @@ async fn main() {
 	//let bn_url = "wss://strbinance.com:443/ws/btcusiaednt@trade"; //connection error
 	let client = v_exchanges_adapters::Client::default();
 	let mut ws_connection = client.ws_connection(bn_url, vec![BinanceOption::HttpAuth(BinanceAuth::None)]);
-	let mut i = 0;
 	while let Ok(trade_event) = ws_connection.next().await {
 		println!("{trade_event:?}");
-		i += 1;
-		if i > 10 {
-			break;
-		}
-	}
-	println!("\ngonna request reeconnect\n");
-	ws_connection.reconnect().await.unwrap();
-	println!("\nran request reconnect\n");
-
-	while let Ok(trade_event) = ws_connection.next().await {
-		println!("{trade_event:?}");
-		i += 1;
-		if i > 20 {
-			break;
+		if trade_event["M"] == serde_json::Value::Bool(false) {
+			unreachable!();
 		}
 	}
 
@@ -107,3 +94,25 @@ async fn main() {
 	//	auth: true,
 	//};
 }
+
+//async fn test_reconnect(mut ws_connection: v_exchanges_adapters::WsConnection) {
+//	let mut i = 0;
+//	while let Ok(trade_event) = ws_connection.next().await {
+//		println!("{trade_event:?}");
+//		i += 1;
+//		if i > 10 {
+//			break;
+//		}
+//	}
+//	println!("\ngonna request reeconnect\n");
+//	ws_connection.reconnect().await.unwrap();
+//	println!("\nran request reconnect\n");
+//
+//	while let Ok(trade_event) = ws_connection.next().await {
+//		println!("{trade_event:?}");
+//		i += 1;
+//		if i > 20 {
+//			break;
+//		}
+//	}
+//}

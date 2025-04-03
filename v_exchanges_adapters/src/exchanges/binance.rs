@@ -149,6 +149,7 @@ pub enum BinanceOption {
 	Pubkey(String),
 	/// Api secret
 	Secret(SecretString),
+
 	/// Number of milliseconds the request is valid for. Only applicable for signed requests.
 	RecvWindow(u16),
 	/// Base url for HTTP requests
@@ -157,10 +158,10 @@ pub enum BinanceOption {
 	HttpAuth(BinanceAuth),
 
 	/// Base url for WebSocket connections
-	WebSocketUrl(BinanceWsUrl),
+	WsUrl(BinanceWsUrl),
 	/// [WebSocketConfig] used for creating [WebSocketConnection]s
 	/// `url_prefix` will be overridden by [WebSocketUrl](Self::WebSocketUrl) unless `WebSocketUrl` is [BinanceWebSocketUrl::None].
-	WebSocketConfig(WsConfig),
+	WsConfig(WsConfig),
 }
 
 /// A `enum` that represents the base url of the Binance REST API.
@@ -313,9 +314,9 @@ pub struct BinanceOptions {
 	pub http_url: BinanceHttpUrl,
 	/// see [BinanceOption::HttpAuth]
 	pub http_auth: BinanceAuth,
-	/// see [BinanceOption::WebSocketUrl]
+	/// see [BinanceOption::WsUrl]
 	pub ws_url: BinanceWsUrl,
-	/// see [BinanceOption::WebSocketConfig]
+	/// see [BinanceOption::WsConfig]
 	pub ws_config: WsConfig,
 	/// see [BinanceOption::Test]
 	pub test: bool,
@@ -349,8 +350,8 @@ impl HandlerOptions for BinanceOptions {
 			Self::OptionItem::Secret(v) => self.secret = Some(v),
 			Self::OptionItem::HttpUrl(v) => self.http_url = v,
 			Self::OptionItem::HttpAuth(v) => self.http_auth = v,
-			Self::OptionItem::WebSocketUrl(v) => self.ws_url = v,
-			Self::OptionItem::WebSocketConfig(v) => self.ws_config = v,
+			Self::OptionItem::WsUrl(v) => self.ws_url = v,
+			Self::OptionItem::WsConfig(v) => self.ws_config = v,
 		}
 	}
 

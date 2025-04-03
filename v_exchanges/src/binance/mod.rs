@@ -23,6 +23,8 @@ pub struct Binance {
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
 #[async_trait::async_trait]
 impl Exchange for Binance {
+	//TODO!!!!!!!!!!!: \
+	//XXX: really should not be done in such a way. With overhaul to expected use patterns (making direct specific Exchange creation prominent), having this footgun is unacceptable.
 	fn source_market(&self) -> AbsMarket {
 		self.source_market.unwrap()
 	}
@@ -105,10 +107,6 @@ impl Exchange for Binance {
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
 		}
 	}
-
-	//TODO!!!!!!!!!!!!!: \
-	//async fn websocket_agg_trades(&self, pair: Pair, am: AbsMarket) -> ExchangeResult<tokio::sync::mpsc::Receiver<
-	//Q: what should it be returning?
 }
 
 #[derive(Debug, Clone, Default, Copy, derive_more::Display, derive_more::FromStr)]

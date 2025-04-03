@@ -36,7 +36,7 @@ pub trait WsHandler {
 #[derive(Debug)]
 /// Main way to interact with the WebSocket APIs.
 pub struct WsConnection<H: WsHandler> {
-	url: Url,
+	pub url: Url, //dbg
 	config: WsConfig,
 	handler: H,
 	inner: Option<WsConnectionInner>,
@@ -227,6 +227,8 @@ impl<H: WsHandler> WsConnection<H> {
 	}
 
 	/// Sends the existing connection (if any) a `Close` message, and then simply drops it, opening a new one.
+	///
+	/// `pub` for testing only, does not {have to || is expected to} be exposed in any wrappers.
 	pub async fn reconnect(&mut self) -> Result<(), tungstenite::Error> {
 		tracing::info!("Dropping old connection before reconnecting...");
 		if self.inner.is_some() {
