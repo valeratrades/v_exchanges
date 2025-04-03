@@ -82,6 +82,10 @@ name = "test2"
 path = "../examples/test2.rs"
 
 [[example]]
+name = "ws"
+path = "../examples/ws.rs"
+
+[[example]]
 name = "specify_exchange_from_cli"
 path = "../examples/specify_exchange_from_cli.rs"
 
