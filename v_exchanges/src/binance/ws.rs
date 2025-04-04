@@ -1,15 +1,15 @@
 use adapters::{
 	Client,
 	binance::{BinanceOption, BinanceWsUrl},
-	generics::{tokio_tungstenite::tungstenite, ws::WsConnection},
+	generics::tokio_tungstenite::tungstenite,
 };
-use chrono::{DateTime, Utc};
-use serde_with::{DisplayFromStr, TimestampSeconds, serde_as};
+use chrono::DateTime;
+use serde_with::{DisplayFromStr, serde_as};
 use tokio::sync::mpsc;
-use v_utils::trades::{Pair, Side};
+use v_utils::trades::Pair;
 
-use super::{Binance, Market};
-use crate::{AbsMarket, Exchange, ExchangeResult, WrongExchangeError, ws_types::TradeEvent};
+use super::Market;
+use crate::{Exchange, ExchangeResult, ws_types::TradeEvent};
 
 // trades {{{
 pub(crate) async fn trades(client: &Client, pair: Pair, m: Market) -> ExchangeResult<mpsc::Receiver<Result<TradeEvent, tungstenite::Error>>> {
@@ -27,8 +27,6 @@ pub(crate) async fn trades(client: &Client, pair: Pair, m: Market) -> ExchangeRe
 		loop {
 			let resp = connection.next().await;
 			static EXPECT_REASON: &str = "Fails if either a) exchange changed trade_event's serialization (unrecoverable), either b) exchange-communication layer failed to pick out an error response, which means we probably shouldn't run in production yet.\n";
-
-			dbg!(&resp);
 
 			let result_trade_event = resp.map(|msg| {
 				assert_eq!(msg["e"], "trade", "{EXPECT_REASON}");

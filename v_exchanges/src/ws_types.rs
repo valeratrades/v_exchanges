@@ -1,4 +1,3 @@
-use adapters::generics::ws::WsConnection;
 use chrono::{DateTime, Utc};
 
 #[derive(Clone, Debug, Default)]
