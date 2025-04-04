@@ -230,6 +230,8 @@ impl BinanceHttpUrl {
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Default)]
 #[non_exhaustive]
 pub enum BinanceWsUrl {
+	/// Evaluated to whatever spot url is estimated to be currently preferrable.
+	Spot,
 	/// `wss://stream.binance.com:9443`
 	Spot9443,
 	/// `wss://stream.binance.com:443`
@@ -262,6 +264,7 @@ impl BinanceWsUrl {
 	// Can't impl [ToOwned], as there is a blanket impl of it on everything with [Clone]
 	fn to_owned(&self) -> Url {
 		match self {
+			Self::Spot => Url::parse("wss://stream.binance.com:9443").unwrap(), //TODO: actually have some metric to select the best url here
 			Self::Spot9443 => Url::parse("wss://stream.binance.com:9443").unwrap(),
 			Self::Spot443 => Url::parse("wss://stream.binance.com:443").unwrap(),
 			Self::SpotTest => Url::parse("wss://testnet.binance.vision").unwrap(),

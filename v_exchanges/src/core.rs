@@ -1,10 +1,14 @@
 use std::collections::{BTreeMap, VecDeque};
 
-use adapters::{Client, generics::http::RequestError};
+use adapters::{
+	Client,
+	generics::{http::RequestError, tokio_tungstenite::tungstenite},
+};
 use chrono::{DateTime, TimeDelta, Utc};
 use derive_more::{Deref, DerefMut};
 use secrecy::SecretString;
 use serde_json::json;
+use tokio::sync::mpsc;
 use v_utils::{
 	prelude::*,
 	trades::{Asset, Kline, Pair, Timeframe, Usd},
@@ -61,9 +65,6 @@ pub trait Exchange: std::fmt::Debug + Send + Sync {
 	async fn prices(&self, pairs: Option<Vec<Pair>>, m: AbsMarket) -> ExchangeResult<BTreeMap<Pair, f64>>;
 	async fn price(&self, pair: Pair, m: AbsMarket) -> ExchangeResult<f64>;
 
-	// Defined in terms of actors
-	//TODO!!!: async fn spawn_klines_listener(&self, symbol: Pair, tf: Timeframe) -> mpsc::Receiver<Kline>;
-
 	/// balance of a specific asset. Does not guarantee provision of USD values.
 	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, m: AbsMarket) -> ExchangeResult<AssetBalance>;
 	/// vec of _non-zero_ balances exclusively. Provides USD values.
@@ -73,6 +74,8 @@ pub trait Exchange: std::fmt::Debug + Send + Sync {
 	// to negate confusion could add a `total_balance` endpoint
 
 	//? could implement many things that are _explicitly_ combinatorial. I can imagine several cases, where knowing that say the specified limit for the klines is wayyy over the max and that you may be opting into a long wait by calling it, could be useful.
+
+	async fn ws_trades(&self, pair: Pair, m: AbsMarket) -> ExchangeResult<mpsc::Receiver<Result<crate::ws_types::TradeEvent, tungstenite::Error>>>;
 }
 impl std::fmt::Display for dyn Exchange {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

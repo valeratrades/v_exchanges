@@ -1,4 +1,4 @@
-#![warn(future_incompatible, let_underscore, nonstandard_style, missing_docs)]
+#![warn(future_incompatible, let_underscore, nonstandard_style)] //, missing_docs)]
 #![feature(slice_pattern)]
 #![feature(default_field_values)]
 #![feature(try_blocks)]
@@ -21,3 +21,4 @@
 pub mod http;
 pub mod ws;
 pub extern crate reqwest;
+pub extern crate tokio_tungstenite;
