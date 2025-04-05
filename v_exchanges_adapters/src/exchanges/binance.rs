@@ -4,9 +4,11 @@ use std::{marker::PhantomData, str::FromStr, time::SystemTime};
 
 use chrono::{Duration, Utc};
 use generics::{
+	AuthError,
 	http::{ApiError, BuildError, HandleError, *},
 	reqwest::Url,
-	ws::{WsConfig, WsHandler},
+	tokio_tungstenite::tungstenite,
+	ws::{WsConfig, WsError, WsHandler},
 };
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
@@ -40,7 +42,7 @@ where
 
 		if self.options.http_auth != BinanceAuth::None {
 			// https://binance-docs.github.io/apidocs/spot/en/#signed-trade-user_data-and-margin-endpoint-security
-			let pubkey = self.options.pubkey.as_deref().ok_or(AuthError::MissingApiKey)?;
+			let pubkey = self.options.pubkey.as_deref().ok_or(AuthError::MissingPubkey)?;
 			builder = builder.header("X-MBX-APIKEY", pubkey);
 
 			if self.options.http_auth == BinanceAuth::Sign {
@@ -116,6 +118,55 @@ where
 }
 
 // Ws {{{
+//dbg
+fn sign_binance_request(pubkey: &str, secret: &SecretString, params: &mut serde_json::Map<String, serde_json::Value>) -> Result<String, WsError> {
+	if !params.contains_key("timestamp") {
+		let timestamp = std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.map_err(|e| WsError::Other(Report::new(e)))?
+			.as_millis() as u64;
+		params.insert("timestamp".to_string(), serde_json::Value::Number(serde_json::Number::from(timestamp)));
+	}
+
+	if !params.contains_key("apiKey") {
+		params.insert("apiKey".to_string(), serde_json::Value::String(pubkey.to_string()));
+	}
+
+	let mut sorted_params: Vec<(String, String)> = params
+		.iter()
+		.map(|(k, v)| {
+			let value_str = match v {
+				serde_json::Value::String(s) => s.clone(),
+				serde_json::Value::Number(n) => n.to_string(),
+				serde_json::Value::Bool(b) => b.to_string(),
+				_ => v.to_string(),
+			};
+			(k.clone(), value_str)
+		})
+		.collect();
+	sorted_params.sort_by(|a, b| a.0.cmp(&b.0));
+
+	let payload = sorted_params.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<String>>().join("&");
+
+	let signature = {
+		use hmac::{Hmac, Mac};
+		use sha2::Sha256;
+
+		type HmacSha256 = Hmac<Sha256>;
+
+		let mut mac = HmacSha256::new_from_slice(secret.expose_secret().as_bytes()).map_err(|e| WsError::Other(Report::msg(e.to_string())))?;
+
+		mac.update(payload.as_bytes());
+
+		let result = mac.finalize();
+		let bytes = result.into_bytes();
+
+		hex::encode(bytes)
+	};
+
+	Ok(signature)
+}
+
 #[derive(Clone, Debug, derive_new::new)]
 pub struct BinanceWsHandler {
 	options: BinanceOptions,
@@ -128,6 +179,57 @@ impl WsHandler for BinanceWsHandler {
 			config.base_url = Some(self.options.ws_url.to_owned());
 		}
 		config
+	}
+
+	//fn handle_start(&mut self, params: Option<serde_json::Value>) -> Result<Vec<tungstenite::Message>, WsError> {
+	//	if self.options.ws_config.auth {
+	//		let pubkey = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
+	//		let secret = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
+	//
+	//		//DO: send a listen-key request
+	//
+	//		todo!();
+	//	}
+	//	Ok(std::vec![])
+	//}
+	fn handle_start(&mut self, params: Option<serde_json::Value>) -> Result<Vec<tungstenite::Message>, WsError> {
+		if self.options.ws_config.auth {
+			let api_key = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
+			let private_key = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
+
+			let mut request_params = match params {
+				Some(serde_json::Value::Object(map)) => map,
+				Some(_) => return Err(WsError::Other(Report::msg("Parameters must be an object"))),
+				None => serde_json::Map::new(),
+			};
+
+			let signature = sign_binance_request(api_key, private_key, &mut request_params)?;
+
+			request_params.insert("signature".to_string(), serde_json::Value::String(signature));
+
+			let request = serde_json::json!({
+				"id": format!("auth_{}", request_params.get("timestamp").unwrap_or(&serde_json::Value::Null)),
+				"method": "auth",
+				"params": request_params
+			});
+
+			let message = tungstenite::Message::Text(request.to_string().into());
+			return Ok(vec![message]);
+		}
+
+		if let Some(params_value) = params {
+			let message = tungstenite::Message::Text(params_value.to_string().into());
+			return Ok(vec![message]);
+		}
+
+		Ok(vec![])
+	}
+
+	fn handle_message(&mut self, message: &serde_json::Value) -> Option<Vec<tungstenite::Message>> {
+		//TODO send `PUT /api/v3/userDataStream` every 30m to keep alive the listen key when subscribed to UserDataStream
+		//Q: or should I just switch to [FIX api](https://developers.binance.com/docs/binance-spot-api-docs/fix-api)?
+		//A: will do if the thing with PUTs for listen-key renewal is specific to spot, same as currently the fix api. Otherwise it would be to narrow of a usecase to do extra work.
+		None
 	}
 }
 impl WsOption for BinanceOption {
@@ -262,7 +364,7 @@ pub enum BinanceWsUrl {
 }
 impl BinanceWsUrl {
 	// Can't impl [ToOwned], as there is a blanket impl of it on everything with [Clone]
-	fn to_owned(&self) -> Url {
+	fn to_owned(self) -> Url {
 		match self {
 			Self::Spot => Url::parse("wss://stream.binance.com:9443").unwrap(), //TODO: actually have some metric to select the best url here
 			Self::Spot9443 => Url::parse("wss://stream.binance.com:9443").unwrap(),

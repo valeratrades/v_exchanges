@@ -4,12 +4,14 @@ use std::collections::BTreeMap;
 mod market;
 mod spot;
 mod ws;
-use adapters::binance::BinanceOption;
+use adapters::{
+	binance::BinanceOption,
+	generics::{tokio_tungstenite::tungstenite, ws::WsError},
+};
 use derive_more::{Deref, DerefMut};
-use adapters::generics::tokio_tungstenite::tungstenite;
 use secrecy::SecretString;
-use v_exchanges_adapters::Client;
 use tokio::sync::mpsc;
+use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::{AbsMarket, AssetBalance, Balances, Exchange, ExchangeInfo, ExchangeResult, Klines, RequestRange, WrongExchangeError};
@@ -110,11 +112,11 @@ impl Exchange for Binance {
 		}
 	}
 
-	async fn ws_trades(&self, pair: Pair, am: AbsMarket) -> ExchangeResult<mpsc::Receiver<Result<crate::ws_types::TradeEvent, tungstenite::Error>>> {
+	async fn ws_trades(&self, pair: Pair, am: AbsMarket) -> ExchangeResult<mpsc::Receiver<Result<crate::ws_types::TradeEvent, WsError>>> {
 		match am {
 			AbsMarket::Binance(m) => match m {
-				Market::Perp => ws::trades(&self.client, pair, Market::Perp).await,
-				Market::Spot | Market::Marg => ws::trades(&self.client, pair, Market::Spot).await,
+				Market::Perp => Ok(ws::trades(&self.client, pair, Market::Perp).await),
+				Market::Spot | Market::Marg => Ok(ws::trades(&self.client, pair, Market::Spot).await),
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -123,8 +125,8 @@ impl Exchange for Binance {
 }
 
 //TODO: add `Futures`, `Perpetual`, `Perp`, `Perps`, etc options as possible source deff strings.
-#[non_exhaustive]
 #[derive(Debug, Clone, Default, Copy, derive_more::Display, derive_more::FromStr)]
+#[non_exhaustive]
 pub enum Market {
 	#[default]
 	Perp,

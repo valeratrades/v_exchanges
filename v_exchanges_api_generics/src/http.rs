@@ -7,6 +7,8 @@ pub use reqwest::{
 };
 use v_utils::{prelude::*, xdg_cache};
 
+use crate::AuthError;
+
 /// The User Agent string
 pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_PKG_VERSION"));
 
@@ -321,14 +323,6 @@ pub enum BuildError {
 	//Reqwest(reqwest::Error),
 	#[allow(missing_docs)]
 	Other(Report),
-}
-
-#[allow(missing_docs)]
-#[derive(Error, Debug, derive_more::Display, derive_more::From)]
-pub enum AuthError {
-	MissingApiKey,
-	MissingSecret,
-	InvalidCharacterInApiKey(String),
 }
 
 static TEST_CALLS_PATH: OnceLock<PathBuf> = OnceLock::new();

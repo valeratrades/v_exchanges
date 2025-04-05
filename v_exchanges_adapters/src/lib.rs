@@ -1,6 +1,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![feature(default_field_values)]
 #![feature(duration_constructors)]
+#![feature(try_blocks)]
 pub extern crate v_exchanges_api_generics as generics;
 pub use exchanges::*;
 use serde::Serialize;

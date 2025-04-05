@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, VecDeque};
 
 use adapters::{
 	Client,
-	generics::{http::RequestError, tokio_tungstenite::tungstenite},
+	generics::{http::RequestError, tokio_tungstenite::tungstenite, ws::WsError},
 };
 use chrono::{DateTime, TimeDelta, Utc};
 use derive_more::{Deref, DerefMut};
@@ -75,7 +75,19 @@ pub trait Exchange: std::fmt::Debug + Send + Sync {
 
 	//? could implement many things that are _explicitly_ combinatorial. I can imagine several cases, where knowing that say the specified limit for the klines is wayyy over the max and that you may be opting into a long wait by calling it, could be useful.
 
-	async fn ws_trades(&self, pair: Pair, m: AbsMarket) -> ExchangeResult<mpsc::Receiver<Result<crate::ws_types::TradeEvent, tungstenite::Error>>>;
+	// Start a websocket connection for individual trades
+	async fn ws_trades(
+		&self,
+		pair: Pair,
+		m: AbsMarket,
+	) -> ExchangeResult<
+		mpsc::Receiver<
+			Result<
+				crate::ws_types::TradeEvent,
+				WsError, /*The key could get out of the date while the connection is ongoing, and then the next attempt to reconnect will fail. Thus must encapsulate received type in WsError.*/
+			>,
+		>,
+	>;
 }
 impl std::fmt::Display for dyn Exchange {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -128,6 +140,7 @@ pub trait MarketTrait {
 }
 
 //Q: potentially rename to `ExchangeMarket` for 1:1 meaning mapping to the contents?
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy)]
 pub enum AbsMarket {
 	#[cfg(feature = "binance")]

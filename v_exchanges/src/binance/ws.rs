@@ -1,7 +1,7 @@
 use adapters::{
 	Client,
 	binance::{BinanceOption, BinanceWsUrl},
-	generics::tokio_tungstenite::tungstenite,
+	generics::{tokio_tungstenite::tungstenite, ws::WsError},
 };
 use chrono::DateTime;
 use serde_with::{DisplayFromStr, serde_as};
@@ -9,10 +9,10 @@ use tokio::sync::mpsc;
 use v_utils::trades::Pair;
 
 use super::Market;
-use crate::{Exchange, ExchangeResult, ws_types::TradeEvent};
+use crate::ws_types::TradeEvent;
 
 // trades {{{
-pub(crate) async fn trades(client: &Client, pair: Pair, m: Market) -> ExchangeResult<mpsc::Receiver<Result<TradeEvent, tungstenite::Error>>> {
+pub(crate) async fn trades(client: &Client, pair: Pair, m: Market) -> mpsc::Receiver<Result<TradeEvent, WsError>> {
 	let topic = format!("ws/{}@trade", pair.fmt_binance().to_lowercase());
 	let base_url = match m {
 		Market::Perp => BinanceWsUrl::FuturesUsdM,
@@ -20,7 +20,7 @@ pub(crate) async fn trades(client: &Client, pair: Pair, m: Market) -> ExchangeRe
 		_ => unimplemented!(),
 	};
 	let mut connection = client.ws_connection(&topic, vec![BinanceOption::WsUrl(base_url)]);
-	let (tx, rx) = mpsc::channel::<Result<TradeEvent, tungstenite::Error>>(256);
+	let (tx, rx) = mpsc::channel::<Result<TradeEvent, WsError>>(256);
 
 	//SPAWN: can go around it with proper impl of futures_core::Stream, but that would require "unwrapping" async into the underlying state-machine on Poll in every instance of its utilization there
 	tokio::spawn(async move {
@@ -50,7 +50,7 @@ pub(crate) async fn trades(client: &Client, pair: Pair, m: Market) -> ExchangeRe
 		}
 	});
 
-	Ok(rx)
+	rx
 }
 
 #[serde_as]

@@ -12,18 +12,21 @@ use tokio_tungstenite::{
 	tungstenite::{self, Bytes},
 };
 
+use crate::AuthError;
+
 type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 /// handle exchange-level events on the [WsConnection].
 pub trait WsHandler {
 	/// Returns a [WsConfig] that will be applied for all WebSocket connections handled by this handler.
-	fn ws_config(&self) -> WsConfig;
+	fn ws_config(&self) -> WsConfig {
+		WsConfig::default()
+	}
 
 	/// Called when a new connection has been started, and returns messages that should be sent to the server.
-	///
-	/// This could be called multiple times because the connection can be reconnected.
-	fn handle_start(&mut self) -> Vec<tungstenite::Message> {
-		vec![]
+	#[allow(unused_variables)]
+	fn handle_start(&mut self, params: Option<serde_json::Value>) -> Result<Vec<tungstenite::Message>, WsError> {
+		Ok(vec![])
 	}
 
 	/// Called when the [WsConnection] received a message, returns messages to be sent to the server. If the message received is the desired content, should just return `None`.
@@ -36,21 +39,23 @@ pub trait WsHandler {
 #[derive(Debug)]
 /// Main way to interact with the WebSocket APIs.
 pub struct WsConnection<H: WsHandler> {
-	pub url: Url, //dbg
+	url: Url,
+	params: Option<serde_json::Value>,
 	config: WsConfig,
 	handler: H,
-	inner: Option<WsConnectionInner>,
+	stream: Option<WsConnectionStream>,
+	id: Option<usize>,
 	last_reconnect_attempt: SystemTime, // not Tz-aware, as it will not escape the application boundary
 }
 #[derive(Debug, derive_more::Deref, derive_more::DerefMut)]
-struct WsConnectionInner {
+struct WsConnectionStream {
 	#[deref_mut]
 	#[deref]
 	stream: WsStream,
 	connected_since: SystemTime,
 	last_unanswered_communication: Option<SystemTime>,
 }
-impl WsConnectionInner {
+impl WsConnectionStream {
 	fn new(stream: WsStream, connected_since: SystemTime) -> Self {
 		Self {
 			stream,
@@ -61,7 +66,7 @@ impl WsConnectionInner {
 }
 impl<H: WsHandler> WsConnection<H> {
 	#[allow(missing_docs)]
-	pub fn new(url: &str, handler: H) -> Self {
+	pub fn new(url: &str, /*dbg: params: Option<serde_json::Value>,*/ handler: H) -> Self {
 		// expects here are not expected to be seen by the user. Correctness should theoretically be checked at the moment of merging provided options; before this is ever constructed.
 		let config = handler.ws_config();
 		config.validate().expect("ws config is invalid");
@@ -70,47 +75,57 @@ impl<H: WsHandler> WsConnection<H> {
 			None => Url::parse(url).expect("url is invalid"),
 		};
 
+		let params = None; //dbg
+
 		Self {
 			url,
+			params,
 			config,
 			handler,
-			inner: None,
+			stream: None,
+			id: None,
 			last_reconnect_attempt: SystemTime::UNIX_EPOCH,
 		}
 	}
 
 	/// The main interface. All ws operations are hidden, only thing getting through are the content messages or the lack thereof.
-	pub async fn next(&mut self) -> Result<serde_json::Value, tungstenite::Error> {
-		if let Some(inner) = &self.inner {
+	//XXX: reconnections to parametrized streams don't work properly currently: rn we resend everything on reconnection, so it would open a new one. FIX: should instead persist a connection id.
+	//Q: wtf do I do if we missed an updated there? Would you
+	pub async fn next(&mut self) -> Result<serde_json::Value, WsError> {
+		if let Some(inner) = &self.stream {
 			if inner.connected_since + self.config.refresh_after < SystemTime::now() {
 				tracing::info!("Refreshing connection, as `refresh_after` specified in WsConfig has elapsed ({:?})", self.config.refresh_after);
 				self.reconnect().await?;
 			}
 		}
-		if self.inner.is_none() {
+		if self.stream.is_none() {
 			self.connect().await?;
 		}
 		//- at this point self.inner is Some
 
+		// loop until we get actual content
 		let json_rpc_value = loop {
 			// force a response out of the server.
 			let resp = {
-				let mut timeout = self.config.message_timeout;
-				if let Some(last_unanswered) = self.inner.as_ref().unwrap().last_unanswered_communication {
-					let now = SystemTime::now();
-					match last_unanswered + self.config.response_timeout < now {
-						true => {
-							timeout = timeout.min(now.duration_since(last_unanswered).expect("time went backwards") + self.config.response_timeout);
-						}
-						false => {
-							tracing::error!("Timeout for last unanswered communication ended before `.next()` was called. This likely indicates an implementation error on the clientside.");
-							self.reconnect().await?;
-							continue;
+				let timeout = match self.stream.as_ref().unwrap().last_unanswered_communication {
+					Some(last_unanswered) => {
+						let now = SystemTime::now();
+						match last_unanswered + self.config.response_timeout < now {
+							true => self.config.response_timeout,
+							false => {
+								tracing::error!(
+									"Timeout for last unanswered communication ended before `.next()` was called. This likely indicates an implementation error on the clientside."
+								);
+								self.reconnect().await?;
+								continue;
+							}
 						}
 					}
-				}
+					None => self.config.message_timeout,
+				};
+
 				let timeout_handle = tokio::time::timeout(timeout, {
-					let stream = self.inner.as_mut().unwrap();
+					let stream = self.stream.as_mut().unwrap();
 					stream.next()
 				});
 				match timeout_handle.await {
@@ -121,8 +136,18 @@ impl<H: WsHandler> WsConnection<H> {
 						continue;
 					}
 					Err(timeout_error) => {
-						tracing::warn!("Message reception timed out after {:?} seconds. // {timeout_error}", self.config.message_timeout);
-						self.reconnect().await?;
+						tracing::warn!("Message reception timed out after {:?} seconds. // {timeout_error}", timeout);
+						{
+							let stream = self.stream.as_mut().unwrap();
+							match stream.last_unanswered_communication.is_some() {
+								true => self.reconnect().await?,
+								false => {
+									// Reached standard message_timeout (one for messages sent when we're not forcing communication). So let's force it.
+									self.send(tungstenite::Message::Ping(Bytes::default())).await?;
+									continue;
+								}
+							}
+						}
 						continue;
 					}
 				}
@@ -148,9 +173,10 @@ impl<H: WsHandler> WsConnection<H> {
 						tracing::debug!("ponged");
 						continue;
 					}
-					//Q: Do I even need to send them? TODO: check if just replying to pings is sufficient
+					// in most cases these are not seen, as it's sufficient to just answer to their [pings](tungstenite::Message::Ping). Our own pings are sent only when we haven't heard from the exchange for a while, in which case it's likely that it will not [pong](tungstenite::Message::Pong) back either.
 					tungstenite::Message::Pong(_) => {
-						unimplemented!();
+						tracing::info!("Received pong");
+						continue;
 					}
 					tungstenite::Message::Close(maybe_reason) => {
 						match maybe_reason {
@@ -162,8 +188,8 @@ impl<H: WsHandler> WsConnection<H> {
 								tracing::info!("Server closed connection; no reason specified.");
 							}
 						}
-						self.inner = None;
-						self.connect().await?;
+						self.stream = None;
+						self.reconnect().await?;
 						continue;
 					}
 					tungstenite::Message::Frame(_) => {
@@ -180,7 +206,7 @@ impl<H: WsHandler> WsConnection<H> {
 	}
 
 	async fn send_all(&mut self, messages: Vec<tungstenite::Message>) -> Result<(), tungstenite::Error> {
-		if let Some(inner) = &mut self.inner {
+		if let Some(inner) = &mut self.stream {
 			match messages.len() {
 				0 => return Ok(()),
 				1 => {
@@ -203,7 +229,7 @@ impl<H: WsHandler> WsConnection<H> {
 		self.send_all(vec![message]).await // vec cost is negligible
 	}
 
-	async fn connect(&mut self) -> Result<(), tungstenite::Error> {
+	async fn connect(&mut self) -> Result<(), WsError> {
 		tracing::info!("Connecting to {}...", self.url);
 		{
 			let now = SystemTime::now();
@@ -220,22 +246,22 @@ impl<H: WsHandler> WsConnection<H> {
 		tracing::debug!("Ws handshake with server: {http_resp:?}");
 
 		let now = SystemTime::now();
-		self.inner = Some(WsConnectionInner::new(stream, now));
+		self.stream = Some(WsConnectionStream::new(stream, now));
 
-		let messages = self.handler.handle_start();
-		self.send_all(messages).await
+		let messages = self.handler.handle_start(self.params.take() /*dbg: should decidedly takes the params, not just try to*/)?;
+		Ok(self.send_all(messages).await?)
 	}
 
 	/// Sends the existing connection (if any) a `Close` message, and then simply drops it, opening a new one.
 	///
 	/// `pub` for testing only, does not {have to || is expected to} be exposed in any wrappers.
-	pub async fn reconnect(&mut self) -> Result<(), tungstenite::Error> {
-		tracing::info!("Dropping old connection before reconnecting...");
-		if self.inner.is_some() {
+	pub async fn reconnect(&mut self) -> Result<(), WsError> {
+		if self.stream.is_some() {
+			tracing::info!("Dropping old connection before reconnecting...");
 			{
-				let stream = self.inner.as_mut().unwrap();
+				let stream = self.stream.as_mut().unwrap();
 				stream.send(tungstenite::Message::Close(None)).await?;
-				self.inner = None;
+				self.stream = None;
 			}
 		}
 		self.connect().await
@@ -247,6 +273,8 @@ impl<H: WsHandler> WsConnection<H> {
 /// Should be returned by [WsHandler::ws_config()].
 #[derive(Clone, Debug, Default)]
 pub struct WsConfig {
+	/// Whether the connection should be authenticated. Normally implemented through a "listen key"
+	pub auth: bool,
 	/// Prefix which will be used for connections that started using this `WebSocketConfig`.
 	///
 	/// Ex: `"wss://example.com"`
@@ -279,4 +307,11 @@ impl WsConfig {
 		}
 		Ok(())
 	}
+}
+
+#[derive(Debug, thiserror::Error, derive_more::From, derive_more::Display)]
+pub enum WsError {
+	Tungstenite(tungstenite::Error),
+	Auth(AuthError),
+	Other(eyre::Report),
 }
