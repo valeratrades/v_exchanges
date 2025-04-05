@@ -24,6 +24,8 @@ pub trait WsHandler {
 	}
 
 	/// Called when a new connection has been started, and returns messages that should be sent to the server.
+	///
+	/// Can be ran multiple times (on every reconnect). Thus this inherently cannot be used to initiate connectionions based on eg order creation.
 	#[allow(unused_variables)]
 	fn handle_start(&mut self, params: Option<serde_json::Value>) -> Result<Vec<tungstenite::Message>, WsError> {
 		Ok(vec![])
