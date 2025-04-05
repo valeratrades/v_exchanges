@@ -16,7 +16,7 @@ pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_P
 ///
 /// When making a HTTP request or starting a websocket connection with this client,
 /// a handler that implements [RequestHandler] is required.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Client {
 	client: reqwest::Client,
 	pub config: RequestConfig,
@@ -234,7 +234,7 @@ pub trait RequestHandler<B> {
 /// Configuration when sending a request using [Client].
 ///
 /// Modified in-place later if necessary.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct RequestConfig {
 	/// [Client] will retry sending a request if it failed to send. `max_try` can be used limit the number of attempts.
 	///
@@ -263,7 +263,7 @@ impl RequestConfig {
 }
 
 /// Error type encompassing all the failure modes of [RequestHandler::handle_response()].
-#[derive(Error, Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, derive_more::Display, Error, derive_more::From)]
 pub enum HandleError {
 	/// Refer to [ApiError]
 	Api(ApiError),
@@ -273,7 +273,7 @@ pub enum HandleError {
 	Other(Report),
 }
 /// Errors that exchanges purposefully transmit.
-#[derive(Error, Debug, derive_more::From)]
+#[derive(Debug, Error, derive_more::From)]
 pub enum ApiError {
 	/// Ip has been timed out or banned
 	#[error("IP has been timed out or banned until {until:?}")]
@@ -287,7 +287,7 @@ pub enum ApiError {
 }
 
 /// An `enum` that represents errors that could be returned by [Client::request()]
-#[derive(Error, Debug)]
+#[derive(Debug, Error)]
 pub enum RequestError {
 	/// from sending a HTTP request.
 	#[error("failed to send HTTP request: {0}")]
@@ -310,7 +310,7 @@ pub enum RequestError {
 }
 
 /// Errors that can occur during exchange's implementation of the build-request process.
-#[derive(Error, Debug, derive_more::From, derive_more::Display)]
+#[derive(Debug, derive_more::Display, Error, derive_more::From)]
 pub enum BuildError {
 	/// Signed request attempted, while lacking one of the necessary auth fields
 	Auth(AuthError),

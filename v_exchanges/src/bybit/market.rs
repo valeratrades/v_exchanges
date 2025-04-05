@@ -53,7 +53,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Bybit
 	Ok(Klines::new(klines, *tf, Vec::new()))
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KlineResponse {
 	pub result: ResponseResult,
@@ -63,7 +63,7 @@ pub struct KlineResponse {
 	pub time: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResponseResult {
 	pub category: String,
@@ -72,7 +72,7 @@ pub struct ResponseResult {
 }
 
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct KlineData(
 	#[serde_as(as = "DisplayFromStr")] pub i64,
 	#[serde_as(as = "DisplayFromStr")] pub f64,
@@ -94,7 +94,7 @@ pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> Exchang
 	Ok(response.result.list[0].last_price)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketTickerResponse {
 	pub ret_code: i32,
@@ -104,7 +104,7 @@ pub struct MarketTickerResponse {
 	pub time: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketTickerResult {
 	pub category: String,
@@ -112,7 +112,7 @@ pub struct MarketTickerResult {
 }
 
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketTickerData {
 	pub symbol: String,

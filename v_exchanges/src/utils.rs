@@ -26,7 +26,7 @@ pub fn usd_value(underlying: f64, asset: Asset, prices: &BTreeMap<Pair, f64>) ->
 #[macro_export]
 macro_rules! define_provider_timeframe {
 	($struct_name:ident, $timeframes:expr, $provider_name:expr) => {
-		#[derive(Debug, Clone, Default, Copy, derive_more::Deref, derive_more::DerefMut, derive_more::AsRef)]
+		#[derive(derive_more::AsRef, Clone, Copy, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
 		pub struct $struct_name(v_utils::trades::Timeframe);
 
 		impl std::fmt::Display for $struct_name {

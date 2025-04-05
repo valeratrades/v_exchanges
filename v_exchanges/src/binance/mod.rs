@@ -4,14 +4,10 @@ use std::collections::BTreeMap;
 mod market;
 mod spot;
 mod ws;
-use adapters::{
-	binance::BinanceOption,
-	generics::{tokio_tungstenite::tungstenite, ws::WsError},
-};
+use adapters::{Client, binance::BinanceOption, generics::ws::WsError};
 use derive_more::{Deref, DerefMut};
 use secrecy::SecretString;
 use tokio::sync::mpsc;
-use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::{AbsMarket, AssetBalance, Balances, Exchange, ExchangeInfo, ExchangeResult, Klines, RequestRange, WrongExchangeError};
@@ -125,7 +121,7 @@ impl Exchange for Binance {
 }
 
 //TODO: add `Futures`, `Perpetual`, `Perp`, `Perps`, etc options as possible source deff strings.
-#[derive(Debug, Clone, Default, Copy, derive_more::Display, derive_more::FromStr)]
+#[derive(Clone, Copy, Debug, Default, derive_more::Display, derive_more::FromStr)]
 #[non_exhaustive]
 pub enum Market {
 	#[default]

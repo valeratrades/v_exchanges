@@ -1,7 +1,7 @@
 use adapters::{
 	Client,
 	binance::{BinanceOption, BinanceWsUrl},
-	generics::{tokio_tungstenite::tungstenite, ws::WsError},
+	generics::ws::WsError,
 };
 use chrono::DateTime;
 use serde_with::{DisplayFromStr, serde_as};
@@ -54,7 +54,7 @@ pub(crate) async fn trades(client: &Client, pair: Pair, m: Market) -> mpsc::Rece
 }
 
 #[serde_as]
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
 pub struct TradeEventFuts {
 	#[serde(rename = "T")]
 	timestamp: i64,
@@ -84,7 +84,7 @@ impl From<TradeEventFuts> for TradeEvent {
 }
 
 #[serde_as]
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
 pub struct TradeEventSpot {
 	#[serde(rename = "T")]
 	timestamp: i64,

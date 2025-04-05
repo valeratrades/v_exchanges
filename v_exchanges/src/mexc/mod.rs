@@ -101,7 +101,7 @@ impl Exchange for Mexc {
 	}
 }
 
-#[derive(Debug, Clone, Default, Copy, Display, FromStr)]
+#[derive(Clone, Copy, Debug, Default, Display, FromStr)]
 pub enum Market {
 	#[default]
 	Futures,
@@ -121,7 +121,7 @@ impl crate::core::MarketTrait for Market {
 }
 
 static TFS_MEXC: [&str; 9] = ["1m", "5m", "15m", "30m", "60m", "4h", "1d", "1W", "1M"];
-#[derive(Debug, Clone, Default, Copy, derive_more::Deref, derive_more::DerefMut)]
+#[derive(Clone, Copy, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
 pub struct MexcTimeframe(Timeframe);
 impl std::fmt::Display for MexcTimeframe {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

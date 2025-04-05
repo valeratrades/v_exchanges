@@ -6,10 +6,9 @@ use secrecy::{ExposeSecret as _, SecretString};
 use sha2::Sha256;
 use tracing::instrument;
 use v_exchanges_adapters::generics::{
-	http::{header::{HeaderValue, CONTENT_TYPE}, HeaderMap}, reqwest::{self, Url}, tokio_tungstenite::tungstenite, ws::{WsConfig, WsConnection, WsError, WsHandler}
+	http::{header::HeaderValue, HeaderMap}, reqwest::{self, Url}, tokio_tungstenite::tungstenite, ws::{WsConfig, WsConnection, WsError, WsHandler}
 };
 use std::time::UNIX_EPOCH;
-use v_exchanges_adapters::generics::http::{Client, Method};
 use serde_json::json;
 use eyre::Result;
 

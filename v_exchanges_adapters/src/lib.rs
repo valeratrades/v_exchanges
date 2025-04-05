@@ -25,7 +25,7 @@ macro_rules! request_ret {
     };
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Clone, Debug, Default)]
 pub struct Client {
 	pub client: http::Client,
 	#[cfg(feature = "binance")]

@@ -3,6 +3,7 @@
 
 use std::{borrow::Cow, marker::PhantomData, time::SystemTime, vec};
 
+use generics::{reqwest::Url, tokio_tungstenite::tungstenite, AuthError};
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Serialize, de::DeserializeOwned};
@@ -10,7 +11,7 @@ use serde_json::json;
 use sha2::Sha256;
 use v_exchanges_api_generics::{
 	http::{header::HeaderValue, *},
-	websocket::*,
+	ws::*,
 };
 use v_utils::prelude::*;
 
@@ -31,20 +32,20 @@ pub enum BybitOption {
 	HttpAuth(BybitHttpAuth),
 	/// receive window parameter used for requests
 	RecvWindow(u16),
-	/// Base url for WebSocket connections
-	WebSocketUrl(BybitWebSocketUrl),
-	/// Whether [BybitWebSocketHandler] should perform authentication
-	WebSocketAuth(bool),
+	/// Base url for Ws connections
+	WsUrl(BybitWsUrl),
+	/// Whether [BybitWsHandler] should perform authentication
+	WsAuth(bool),
 	/// The topics to subscribe to.
-	WebSocketTopics(Vec<String>),
-	/// [WebSocketConfig] used for creating [WebSocketConnection]s
-	/// `url_prefix` will be overridden by [WebSocketUrl](Self::WebSocketUrl) unless `WebSocketUrl` is [BybitWebSocketUrl::None].
+	WsTopics(Vec<String>),
+	/// [WsConfig] used for creating [WsConnection]s
+	/// `url_prefix` will be overridden by [WsUrl](Self::WsUrl) unless `WsUrl` is [BybitWsUrl::None].
 	/// By default, `ignore_duplicate_during_reconnection` is set to `true`.
-	WebSocketConfig(WebSocketConfig),
+	WsConfig(WsConfig),
 }
 
 /// A `struct` that represents a set of [BybitOption] s.
-#[derive(Clone, derive_more::Debug)]
+#[derive(Clone, derive_more::Debug, Default)]
 pub struct BybitOptions {
 	/// see [BybitOption::Key]
 	pub pubkey: Option<String>,
@@ -57,18 +58,18 @@ pub struct BybitOptions {
 	pub http_auth: BybitHttpAuth,
 	/// see [BybitOption::RecvWindow]
 	pub recv_window: Option<u16>,
-	/// see [BybitOption::WebSocketUrl]
-	pub websocket_url: BybitWebSocketUrl,
-	/// see [BybitOption::WebSocketAuth]
-	pub websocket_auth: bool,
-	/// see [BybitOption::WebSocketTopics]
-	pub websocket_topics: Vec<String>,
-	/// see [BybitOption::WebSocketConfig]
-	pub websocket_config: WebSocketConfig,
+	/// see [BybitOption::WsUrl]
+	pub ws_url: BybitWsUrl,
+	/// see [BybitOption::WsAuth]
+	pub ws_auth: bool,
+	/// see [BybitOption::WsTopics]
+	pub ws_topics: Vec<String>,
+	/// see [BybitOption::WsConfig]
+	pub ws_config: WsConfig,
 }
 
 /// A `enum` that represents the base url of the Bybit REST API.
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum BybitHttpUrl {
 	/// `https://api.bybit.com`
 	#[default]
@@ -82,7 +83,7 @@ pub enum BybitHttpUrl {
 }
 
 /// Represents the auth type.
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum BybitHttpAuth {
 	/// [Spot V1](https://bybit-exchange.github.io/docs-legacy/spot/v1/#t-introduction)
 	SpotV1,
@@ -125,11 +126,6 @@ pub struct BybitRequestHandler<'a, R: DeserializeOwned> {
 	_phantom: PhantomData<&'a R>,
 }
 
-pub struct BybitWebSocketHandler {
-	message_handler: Box<dyn FnMut(serde_json::Value) + Send>,
-	options: BybitOptions,
-}
-
 impl<B, R> RequestHandler<B> for BybitRequestHandler<'_, R>
 where
 	B: Serialize,
@@ -153,7 +149,7 @@ where
 			return Ok(builder.build().expect("My understanding is client can't trigger this. So fail fast for dev"));
 		}
 
-		let pubkey = self.options.pubkey.as_deref().ok_or(AuthError::MissingApiKey)?;
+		let pubkey = self.options.pubkey.as_deref().ok_or(AuthError::MissingPubkey)?;
 		let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(AuthError::MissingSecret)?;
 
 		let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
@@ -343,99 +339,30 @@ where
 	}
 }
 
-impl WebSocketHandler for BybitWebSocketHandler {
-	fn websocket_config(&self) -> WebSocketConfig {
-		let mut config = self.options.websocket_config.clone();
-		if self.options.websocket_url != BybitWebSocketUrl::None {
-			config.url_prefix = self.options.websocket_url.as_str().to_owned();
-		}
-		config
-	}
-
-	fn handle_start(&mut self) -> Vec<WebSocketMessage> {
-		if self.options.websocket_auth {
-			if let Some(pubkey) = self.options.pubkey.as_deref() {
-				if let Some(secret) = self.options.secret.as_ref().map(|s| s.expose_secret()) {
-					let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
-					let expires = time.as_millis() as u64 + 1000;
-
-					let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap(); // hmac accepts key of any length
-
-					hmac.update(format!("GET/realtime{expires}").as_bytes());
-					let signature = hex::encode(hmac.finalize().into_bytes());
-
-					return vec![WebSocketMessage::Text(
-						json!({
-							"op": "auth",
-							"args": [pubkey, expires, signature],
-						})
-						.to_string(),
-					)];
-				} else {
-					//Q: why does this not panic?
-					tracing::error!("API secret not set.");
-				};
-			} else {
-				tracing::error!("API pubkey not set.");
-			};
-		}
-		self.message_subscribe()
-	}
-
-	fn handle_message(&mut self, message: WebSocketMessage) -> Vec<WebSocketMessage> {
-		match message {
-			WebSocketMessage::Text(message) => {
-				let message: serde_json::Value = match serde_json::from_str(&message) {
-					Ok(message) => message,
-					Err(_) => {
-						tracing::error!("Invalid JSON received");
-						return vec![];
-					}
-				};
-				match message["op"].as_str() {
-					Some("auth") => {
-						if message["success"].as_bool() == Some(true) {
-							tracing::debug!("WebSocket authentication successful");
-						} else {
-							tracing::debug!("WebSocket authentication unsuccessful; message: {}", message["ret_msg"]);
-						}
-						return self.message_subscribe();
-					}
-					Some("subscribe") =>
-						if message["success"].as_bool() == Some(true) {
-							tracing::debug!("WebSocket topics subscription successful");
-						} else {
-							tracing::debug!("WebSocket topics subscription unsuccessful; message: {}", message["ret_msg"]);
-						},
-					_ => (self.message_handler)(message),
-				}
-			}
-			WebSocketMessage::Binary(_) => tracing::debug!("Unexpected binary message received"),
-			WebSocketMessage::Ping(_) | WebSocketMessage::Pong(_) => (),
-		}
-		vec![]
-	}
+// Ws stuff {{{
+#[derive(Debug, derive_new::new)]
+pub struct BybitWsHandler {
+	options: BybitOptions,
 }
-
-// WebSocket stuff {{{
 impl BybitWsHandler {
 	#[inline(always)]
 	fn subscribe_messages(&self) -> Vec<tungstenite::Message> {
-		vec![tungstenite::Message::Text(json!({ "op": "subscribe", "args": self.topics }).to_string().into())]
+		vec![tungstenite::Message::Text(json!({ "op": "subscribe", "args": self.options.ws_topics }).to_string().into())]
 	}
 }
 impl WsHandler for BybitWsHandler {
 	fn config(&self) -> WsConfig {
-		WsConfig {
-			base_url: Some(Url::parse("wss://stream.bybit.com/v5/private").unwrap()), //dbg: private base
-			..Default::default()
+		let mut config = self.options.ws_config.clone();
+		if self.options.ws_url != BybitWsUrl::None {
+			config.base_url = Some(Url::parse(self.options.ws_url.as_str()).expect("Invalid url base"));
 		}
+		config
 	}
 
 	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
-		if self.auth {
-			let pubkey = self.pubkey.clone();
-			let secret = self.secret.clone();
+		if self.options.ws_auth {
+			let pubkey = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
+			let secret = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
 			let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("always after the epoch");
 			//XXX: expiration time here is hardcoded to 1s, which would override any specifications of a longer recv_window on top.
 			let expires = time.as_millis() as u64 + 1000; //TODO: figure out how large can I make this
@@ -462,17 +389,17 @@ impl WsHandler for BybitWsHandler {
 		match jrpc["op"].as_str() {
 			Some("auth") => {
 				if jrpc["success"].as_bool() == Some(true) {
-					tracing::info!("WebSocket authentication successful");
+					tracing::info!("Ws authentication successful");
 				} else {
-					tracing::warn!("WebSocket authentication unsuccessful");
+					tracing::warn!("Ws authentication unsuccessful");
 				}
 				Some(self.subscribe_messages())
 			}
 			Some("subscribe") => {
 				if jrpc["success"].as_bool() == Some(true) {
-					tracing::info!("WebSocket topics subscription successful");
+					tracing::info!("Ws topics subscription successful");
 				} else {
-					tracing::warn!("WebSocket topics subscription unsuccessful");
+					tracing::warn!("Ws topics subscription unsuccessful");
 				}
 				Some(vec![]) // otherwise, if we return None here, with current implementanion (2025/04/04) we'd be accepting the message as containing desired content.
 			}
@@ -480,9 +407,9 @@ impl WsHandler for BybitWsHandler {
 		}
 	}
 }
-/// A `enum` that represents the base url of the Bybit WebSocket API.
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
-pub enum BybitWebSocketUrl {
+/// A `enum` that represents the base url of the Bybit Ws API.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum BybitWsUrl {
 	/// `wss://stream.bybit.com`
 	#[default]
 	Bybit,
@@ -490,10 +417,10 @@ pub enum BybitWebSocketUrl {
 	Bytick,
 	/// `wss://stream-testnet.bybit.com`
 	Test,
-	/// The url will not be modified by [BybitWebSocketHandler]
+	/// The url will not be modified by [BybitWsHandler]
 	None,
 }
-impl BybitWebSocketUrl {
+impl BybitWsUrl {
 	/// The URL that this variant represents.
 	#[inline(always)]
 	pub fn as_str(&self) -> &'static str {
@@ -528,25 +455,6 @@ impl BybitHttpUrl {
 	}
 }
 
-impl Default for BybitOptions {
-	fn default() -> Self {
-		let mut websocket_config = WebSocketConfig::default();
-		websocket_config.ignore_duplicate_during_reconnection = true;
-
-		Self {
-			websocket_config,
-			pubkey: None,
-			secret: None,
-			http_url: BybitHttpUrl::default(),
-			http_auth: BybitHttpAuth::default(),
-			recv_window: None,
-			websocket_url: BybitWebSocketUrl::default(),
-			websocket_auth: false,
-			websocket_topics: Vec::new(),
-		}
-	}
-}
-
 impl HandlerOptions for BybitOptions {
 	type OptionItem = BybitOption;
 
@@ -558,10 +466,10 @@ impl HandlerOptions for BybitOptions {
 			BybitOption::HttpUrl(v) => self.http_url = v,
 			BybitOption::HttpAuth(v) => self.http_auth = v,
 			BybitOption::RecvWindow(v) => self.recv_window = Some(v),
-			BybitOption::WebSocketUrl(v) => self.websocket_url = v,
-			BybitOption::WebSocketAuth(v) => self.websocket_auth = v,
-			BybitOption::WebSocketTopics(v) => self.websocket_topics = v,
-			BybitOption::WebSocketConfig(v) => self.websocket_config = v,
+			BybitOption::WsUrl(v) => self.ws_url = v,
+			BybitOption::WsAuth(v) => self.ws_auth = v,
+			BybitOption::WsTopics(v) => self.ws_topics = v,
+			BybitOption::WsConfig(v) => self.ws_config = v,
 		}
 	}
 

@@ -61,7 +61,7 @@ pub struct MexcOptions {
 }
 
 /// Enum that represents the base url of the MEXC REST API
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum MexcHttpUrl {
 	Spot,
@@ -84,7 +84,7 @@ impl MexcHttpUrl {
 }
 
 /// Enum that represents the base url of the MEXC WebSocket API
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum MexcWebSocketUrl {
 	Spot,
@@ -105,14 +105,14 @@ impl MexcWebSocketUrl {
 	}
 }
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MexcAuth {
 	Sign,
 	Key,
 	None,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct MexcError {
 	pub code: i32,
 	pub msg: String,

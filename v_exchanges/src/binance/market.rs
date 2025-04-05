@@ -70,7 +70,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Binan
 ```
 **/
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct KlineResponse {
 	pub open_time: i64,
 	#[serde_as(as = "DisplayFromStr")]

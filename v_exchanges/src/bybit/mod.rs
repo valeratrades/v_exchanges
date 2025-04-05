@@ -104,7 +104,7 @@ impl Exchange for Bybit {
 	}
 }
 
-#[derive(Debug, Clone, Default, Copy, Display, FromStr)]
+#[derive(Clone, Copy, Debug, Default, Display, FromStr)]
 pub enum Market {
 	#[default]
 	Linear,

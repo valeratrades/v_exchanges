@@ -43,7 +43,6 @@ pub trait WsHandler {
 /// Main way to interact with the WebSocket APIs.
 pub struct WsConnection<H: WsHandler> {
 	url: Url,
-	params: Option<serde_json::Value>,
 	config: WsConfig,
 	handler: H,
 	stream: Option<WsConnectionStream>,
@@ -77,11 +76,8 @@ impl<H: WsHandler> WsConnection<H> {
 			None => Url::parse(url_suffix).expect("url is invalid"),
 		};
 
-		let params = None; //dbg
-
 		Self {
 			url,
-			params,
 			config,
 			handler,
 			stream: None,
@@ -317,7 +313,7 @@ impl WsConfig {
 	}
 }
 
-#[derive(Debug, thiserror::Error, derive_more::From, derive_more::Display)]
+#[derive(Debug, derive_more::Display, thiserror::Error, derive_more::From)]
 pub enum WsError {
 	Tungstenite(tungstenite::Error),
 	Auth(AuthError),

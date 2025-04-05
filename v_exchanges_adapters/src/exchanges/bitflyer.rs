@@ -72,7 +72,7 @@ pub struct BitFlyerOptions {
 }
 
 /// A `enum` that represents the base url of the BitFlyer HTTP API.
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum BitFlyerHttpUrl {
 	/// `https://api.bitflyer.com`
 	Main,
@@ -82,7 +82,7 @@ pub enum BitFlyerHttpUrl {
 }
 
 /// A `enum` that represents the base url of the BitFlyer Realtime API
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum BitFlyerWebSocketUrl {
 	/// `wss://ws.lightstream.bitflyer.com`
@@ -91,7 +91,7 @@ pub enum BitFlyerWebSocketUrl {
 	None,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Deserialize)]
 pub struct BitFlyerChannelMessage {
 	pub channel: String,
 	pub message: serde_json::Value,

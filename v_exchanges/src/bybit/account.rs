@@ -42,7 +42,7 @@ pub async fn balances(client: &Client, recv_window: Option<u16>) -> ExchangeResu
 	Ok(balances)
 }
 
-#[derive(Debug, Clone, ScreamIt, Copy)]
+#[derive(Clone, Copy, Debug, ScreamIt)]
 pub enum AccountType {
 	Spot,
 	Contract,
@@ -51,7 +51,7 @@ pub enum AccountType {
 	Option,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountResponse {
 	pub result: AccountResult,
@@ -61,13 +61,13 @@ pub struct AccountResponse {
 	pub time: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct AccountResult {
 	pub list: Vec<AccountInfo>,
 }
 
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountInfo {
 	#[serde(rename = "accountIMRate")]
@@ -98,7 +98,7 @@ pub struct AccountInfo {
 
 //XXX: some fields are `String`s instead of `f64` because bybit can just send an empty string for some of them.
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CoinInfo {
 	#[serde_as(as = "DisplayFromStr")]
@@ -138,5 +138,5 @@ pub struct CoinInfo {
 	pub wallet_balance: f64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct RetExtInfo {}

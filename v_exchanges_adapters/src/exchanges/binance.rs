@@ -219,7 +219,7 @@ pub enum BinanceOption {
 }
 
 /// A `enum` that represents the base url of the Binance REST API.
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum BinanceHttpUrl {
 	/// `https://api.binance.com`
@@ -281,7 +281,7 @@ impl BinanceHttpUrl {
 }
 
 /// A `enum` that represents the base url of the Binance WebSocket API
-#[derive(Debug, Eq, PartialEq, Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum BinanceWsUrl {
 	/// Evaluated to whatever spot url is estimated to be currently preferrable.
@@ -336,7 +336,7 @@ impl BinanceWsUrl {
 	}
 }
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum BinanceAuth {
 	Sign,
 	Key, //Q: Not sure if anything uses it.
@@ -358,7 +358,7 @@ pub struct BinanceRequestHandler<'a, R: DeserializeOwned> {
 }
 
 /// A `struct` that represents a set of [BinanceOption] s.
-#[derive(Clone, derive_more::Debug)]
+#[derive(Clone, derive_more::Debug, Default)]
 pub struct BinanceOptions {
 	/// see [BinanceOption::Key]
 	pub pubkey: Option<String>,
@@ -377,24 +377,6 @@ pub struct BinanceOptions {
 	pub ws_config: WsConfig,
 	/// see [BinanceOption::Test]
 	pub test: bool,
-}
-impl Default for BinanceOptions {
-	fn default() -> Self {
-		let ws_config = WsConfig {
-			refresh_after: std::time::Duration::from_hours(12),
-			..Default::default()
-		};
-		Self {
-			pubkey: None,
-			secret: None,
-			recv_window: None,
-			http_url: Default::default(),
-			http_auth: Default::default(),
-			ws_url: Default::default(),
-			ws_config,
-			test: false,
-		}
-	}
 }
 impl HandlerOptions for BinanceOptions {
 	type OptionItem = BinanceOption;
@@ -447,7 +429,7 @@ impl From<BinanceError> for ApiError {
 	}
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(from = "i32")]
 pub enum BinanceErrorCode {
 	// 10xx - General Server/Network
