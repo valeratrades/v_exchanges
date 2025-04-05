@@ -13,6 +13,7 @@ use v_exchanges_api_generics::{
 
 mod exchanges;
 pub mod traits;
+pub(crate) mod utils;
 
 // very long type, make it a macro
 macro_rules! request_ret {

@@ -173,7 +173,7 @@ pub struct BinanceWsHandler {
 }
 impl WsHandler for BinanceWsHandler {
 	#[inline(always)]
-	fn ws_config(&self) -> WsConfig {
+	fn config(&self) -> WsConfig {
 		let mut config = self.options.ws_config.clone();
 		if self.options.ws_url != BinanceWsUrl::None {
 			config.base_url = Some(self.options.ws_url.to_owned());
@@ -192,35 +192,36 @@ impl WsHandler for BinanceWsHandler {
 	//	}
 	//	Ok(std::vec![])
 	//}
-	fn handle_start(&mut self, params: Option<serde_json::Value>) -> Result<Vec<tungstenite::Message>, WsError> {
-		if self.options.ws_config.auth {
-			let api_key = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
-			let private_key = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
-
-			let mut request_params = match params {
-				Some(serde_json::Value::Object(map)) => map,
-				Some(_) => return Err(WsError::Other(Report::msg("Parameters must be an object"))),
-				None => serde_json::Map::new(),
-			};
-
-			let signature = sign_binance_request(api_key, private_key, &mut request_params)?;
-
-			request_params.insert("signature".to_string(), serde_json::Value::String(signature));
-
-			let request = serde_json::json!({
-				"id": format!("auth_{}", request_params.get("timestamp").unwrap_or(&serde_json::Value::Null)),
-				"method": "auth",
-				"params": request_params
-			});
-
-			let message = tungstenite::Message::Text(request.to_string().into());
-			return Ok(vec![message]);
-		}
-
-		if let Some(params_value) = params {
-			let message = tungstenite::Message::Text(params_value.to_string().into());
-			return Ok(vec![message]);
-		}
+	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
+		//TODO!!!!!!: /
+		//if self.options.ws_config.auth {
+		//	let api_key = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
+		//	let private_key = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
+		//
+		//	let mut request_params = match params {
+		//		Some(serde_json::Value::Object(map)) => map,
+		//		Some(_) => return Err(WsError::Other(Report::msg("Parameters must be an object"))),
+		//		None => serde_json::Map::new(),
+		//	};
+		//
+		//	let signature = sign_binance_request(api_key, private_key, &mut request_params)?;
+		//
+		//	request_params.insert("signature".to_string(), serde_json::Value::String(signature));
+		//
+		//	let request = serde_json::json!({
+		//		"id": format!("auth_{}", request_params.get("timestamp").unwrap_or(&serde_json::Value::Null)),
+		//		"method": "auth",
+		//		"params": request_params
+		//	});
+		//
+		//	let message = tungstenite::Message::Text(request.to_string().into());
+		//	return Ok(vec![message]);
+		//}
+		//
+		//if let Some(params_value) = params {
+		//	let message = tungstenite::Message::Text(params_value.to_string().into());
+		//	return Ok(vec![message]);
+		//}
 
 		Ok(vec![])
 	}

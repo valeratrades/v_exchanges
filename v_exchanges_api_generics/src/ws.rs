@@ -19,21 +19,22 @@ type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 /// handle exchange-level events on the [WsConnection].
 pub trait WsHandler {
 	/// Returns a [WsConfig] that will be applied for all WebSocket connections handled by this handler.
-	fn ws_config(&self) -> WsConfig {
+	fn config(&self) -> WsConfig {
 		WsConfig::default()
 	}
 
-	/// Called when a new connection has been started, and returns messages that should be sent to the server.
+	/// Called when the [WsConnection] is created and on reconnection. Returned messages will be sent back to the server as-is.
 	///
-	/// Can be ran multiple times (on every reconnect). Thus this inherently cannot be used to initiate connectionions based on eg order creation.
+	/// Handling of `listen-key`s or any other authentication methods exchange demands should be done here. Although oftentimes handling the auth will spread into the [handle_message](Self::handle_message) too.
+	/// Can be ran multiple times (on every reconnect). Thus this inherently cannot be used to initiate connectionions based on a change of state (ie order creation).
 	#[allow(unused_variables)]
-	fn handle_start(&mut self, params: Option<serde_json::Value>) -> Result<Vec<tungstenite::Message>, WsError> {
+	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
 		Ok(vec![])
 	}
 
-	/// Called when the [WsConnection] received a message, returns messages to be sent to the server. If the message received is the desired content, should just return `None`.
+	/// Called when the [WsConnection] received a JSON-RPC value, returns messages to be sent to the server. If the message received is the desired content, should just return `None`.
 	#[allow(unused_variables)]
-	fn handle_message(&mut self, message: &serde_json::Value) -> Option<Vec<tungstenite::Message>> {
+	fn handle_message(&mut self, jrpc: &serde_json::Value) -> Option<Vec<tungstenite::Message>> {
 		None
 	}
 }
@@ -46,7 +47,6 @@ pub struct WsConnection<H: WsHandler> {
 	config: WsConfig,
 	handler: H,
 	stream: Option<WsConnectionStream>,
-	id: Option<usize>,
 	last_reconnect_attempt: SystemTime, // not Tz-aware, as it will not escape the application boundary
 }
 #[derive(Debug, derive_more::Deref, derive_more::DerefMut)]
@@ -68,13 +68,13 @@ impl WsConnectionStream {
 }
 impl<H: WsHandler> WsConnection<H> {
 	#[allow(missing_docs)]
-	pub fn new(url: &str, /*dbg: params: Option<serde_json::Value>,*/ handler: H) -> Self {
+	pub fn new(url_suffix: &str, /*dbg: params: Option<serde_json::Value>,*/ handler: H) -> Self {
 		// expects here are not expected to be seen by the user. Correctness should theoretically be checked at the moment of merging provided options; before this is ever constructed.
-		let config = handler.ws_config();
+		let config = handler.config();
 		config.validate().expect("ws config is invalid");
 		let url = match &config.base_url {
-			Some(base_url) => base_url.join(url).expect("url is invalid"),
-			None => Url::parse(url).expect("url is invalid"),
+			Some(base_url) => base_url.join(url_suffix).expect("url is invalid"),
+			None => Url::parse(url_suffix).expect("url is invalid"),
 		};
 
 		let params = None; //dbg
@@ -85,7 +85,6 @@ impl<H: WsHandler> WsConnection<H> {
 			config,
 			handler,
 			stream: None,
-			id: None,
 			last_reconnect_attempt: SystemTime::UNIX_EPOCH,
 		}
 	}
@@ -112,7 +111,7 @@ impl<H: WsHandler> WsConnection<H> {
 				let timeout = match self.stream.as_ref().unwrap().last_unanswered_communication {
 					Some(last_unanswered) => {
 						let now = SystemTime::now();
-						match last_unanswered + self.config.response_timeout < now {
+						match last_unanswered + self.config.response_timeout > now {
 							true => self.config.response_timeout,
 							false => {
 								tracing::error!(
@@ -131,7 +130,10 @@ impl<H: WsHandler> WsConnection<H> {
 					stream.next()
 				});
 				match timeout_handle.await {
-					Ok(Some(resp)) => resp,
+					Ok(Some(resp)) => {
+						self.stream.as_mut().unwrap().last_unanswered_communication = None;
+						resp
+					}
 					Ok(None) => {
 						tracing::warn!("tungstenite couldn't read from the stream. Restarting.");
 						self.reconnect().await?;
@@ -165,6 +167,7 @@ impl<H: WsHandler> WsConnection<H> {
 							self.send_all(further_communication).await?;
 							continue; // only need to send responses when it's not yet the desired content.
 						}
+						tracing::trace!("{value:#?}");
 						break value;
 					}
 					tungstenite::Message::Binary(_) => {
@@ -235,7 +238,7 @@ impl<H: WsHandler> WsConnection<H> {
 		tracing::info!("Connecting to {}...", self.url);
 		{
 			let now = SystemTime::now();
-			let timeout = self.config.connect_cooldown;
+			let timeout = self.config.reconnect_cooldown;
 			if self.last_reconnect_attempt + timeout > now {
 				tracing::warn!("Reconnect cooldown is triggered. Likely indicative of a bad connection.");
 				let duration = (self.last_reconnect_attempt + timeout).duration_since(now).unwrap();
@@ -245,12 +248,12 @@ impl<H: WsHandler> WsConnection<H> {
 		self.last_reconnect_attempt = SystemTime::now();
 
 		let (stream, http_resp) = tokio_tungstenite::connect_async(self.url.as_str()).await?;
-		tracing::debug!("Ws handshake with server: {http_resp:?}");
+		tracing::debug!("Ws handshake with server: {http_resp:#?}");
 
 		let now = SystemTime::now();
 		self.stream = Some(WsConnectionStream::new(stream, now));
 
-		let messages = self.handler.handle_start(self.params.take() /*dbg: should decidedly takes the params, not just try to*/)?;
+		let messages = self.handler.handle_auth()?;
 		Ok(self.send_all(messages).await?)
 	}
 
@@ -285,20 +288,20 @@ pub struct WsConfig {
 	///
 	/// This matters because the [WebSocketConnection] reconnects on error. If the error
 	/// continues to happen, it could spam the server if `connect_cooldown` is too short.
-	pub connect_cooldown: Duration = Duration::from_millis(3000),
+	pub reconnect_cooldown: Duration = Duration::from_secs(3),
 	/// The [WebSocketConnection] will automatically reconnect when `refresh_after` has elapsed since the last connection started.
 	pub refresh_after: Duration = Duration::from_hours(12),
 	/// A reconnection will be triggered if no messages are received within this amount of time.
 	pub message_timeout: Duration = Duration::from_mins(16), // assume all exchanges ping more frequently than this
-	/// Timeout for the response to a message sent to the server. Difference from the [message_timeout](Self::message_timeout) is that here we directly request communication.
+	/// Timeout for the response to a message sent to the server.
 	///
-	/// My thinking is that this should be less than the general timeout limit, but this is not enforced.
-	pub response_timeout: Duration = Duration::from_mins(3),
+	/// Difference from the [message_timeout](Self::message_timeout) is that here we directly request communication. Eg: sending a Ping or attempting to auth.
+	pub response_timeout: Duration = Duration::from_mins(2),
 }
 impl WsConfig {
 	#[allow(missing_docs)]
 	pub fn validate(&self) -> Result<()> {
-		if self.connect_cooldown.is_zero() {
+		if self.reconnect_cooldown.is_zero() {
 			bail!("connect_cooldown must be greater than 0");
 		}
 		if self.refresh_after.is_zero() {
@@ -306,6 +309,9 @@ impl WsConfig {
 		}
 		if self.message_timeout.is_zero() {
 			bail!("message_timeout must be greater than 0");
+		}
+		if self.response_timeout.is_zero() {
+			bail!("response_timeout must be greater than 0");
 		}
 		Ok(())
 	}
