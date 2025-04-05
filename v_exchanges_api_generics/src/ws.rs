@@ -167,7 +167,7 @@ impl<H: WsHandler> WsConnection<H> {
 							self.send_all(further_communication).await?;
 							continue; // only need to send responses when it's not yet the desired content.
 						}
-						tracing::trace!("{value:#?}");
+						tracing::trace!("{value:#?}"); // only log it after the `handle_message` has ran, as we're assuming that if it takes any actions, it will handle logging itself. (and that will likely be at a different level of important too)
 						break value;
 					}
 					tungstenite::Message::Binary(_) => {

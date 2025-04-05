@@ -117,56 +117,7 @@ where
 	}
 }
 
-// Ws {{{
-//dbg
-fn sign_binance_request(pubkey: &str, secret: &SecretString, params: &mut serde_json::Map<String, serde_json::Value>) -> Result<String, WsError> {
-	if !params.contains_key("timestamp") {
-		let timestamp = std::time::SystemTime::now()
-			.duration_since(std::time::UNIX_EPOCH)
-			.map_err(|e| WsError::Other(Report::new(e)))?
-			.as_millis() as u64;
-		params.insert("timestamp".to_string(), serde_json::Value::Number(serde_json::Number::from(timestamp)));
-	}
-
-	if !params.contains_key("apiKey") {
-		params.insert("apiKey".to_string(), serde_json::Value::String(pubkey.to_string()));
-	}
-
-	let mut sorted_params: Vec<(String, String)> = params
-		.iter()
-		.map(|(k, v)| {
-			let value_str = match v {
-				serde_json::Value::String(s) => s.clone(),
-				serde_json::Value::Number(n) => n.to_string(),
-				serde_json::Value::Bool(b) => b.to_string(),
-				_ => v.to_string(),
-			};
-			(k.clone(), value_str)
-		})
-		.collect();
-	sorted_params.sort_by(|a, b| a.0.cmp(&b.0));
-
-	let payload = sorted_params.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<String>>().join("&");
-
-	let signature = {
-		use hmac::{Hmac, Mac};
-		use sha2::Sha256;
-
-		type HmacSha256 = Hmac<Sha256>;
-
-		let mut mac = HmacSha256::new_from_slice(secret.expose_secret().as_bytes()).map_err(|e| WsError::Other(Report::msg(e.to_string())))?;
-
-		mac.update(payload.as_bytes());
-
-		let result = mac.finalize();
-		let bytes = result.into_bytes();
-
-		hex::encode(bytes)
-	};
-
-	Ok(signature)
-}
-
+// Ws stuff {{{
 #[derive(Clone, Debug, derive_new::new)]
 pub struct BinanceWsHandler {
 	options: BinanceOptions,

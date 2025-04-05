@@ -81,20 +81,6 @@ pub enum BybitHttpUrl {
 	None,
 }
 
-/// A `enum` that represents the base url of the Bybit WebSocket API.
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
-pub enum BybitWebSocketUrl {
-	/// `wss://stream.bybit.com`
-	#[default]
-	Bybit,
-	/// `wss://stream.bytick.com`
-	Bytick,
-	/// `wss://stream-testnet.bybit.com`
-	Test,
-	/// The url will not be modified by [BybitWebSocketHandler]
-	None,
-}
-
 /// Represents the auth type.
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
 pub enum BybitHttpAuth {
@@ -431,12 +417,103 @@ impl WebSocketHandler for BybitWebSocketHandler {
 	}
 }
 
-impl BybitWebSocketHandler {
+// WebSocket stuff {{{
+impl BybitWsHandler {
 	#[inline(always)]
-	fn message_subscribe(&self) -> Vec<WebSocketMessage> {
-		vec![WebSocketMessage::Text(json!({ "op": "subscribe", "args": self.options.websocket_topics }).to_string())]
+	fn subscribe_messages(&self) -> Vec<tungstenite::Message> {
+		vec![tungstenite::Message::Text(json!({ "op": "subscribe", "args": self.topics }).to_string().into())]
 	}
 }
+impl WsHandler for BybitWsHandler {
+	fn config(&self) -> WsConfig {
+		WsConfig {
+			base_url: Some(Url::parse("wss://stream.bybit.com/v5/private").unwrap()), //dbg: private base
+			..Default::default()
+		}
+	}
+
+	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
+		if self.auth {
+			let pubkey = self.pubkey.clone();
+			let secret = self.secret.clone();
+			let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("always after the epoch");
+			//XXX: expiration time here is hardcoded to 1s, which would override any specifications of a longer recv_window on top.
+			let expires = time.as_millis() as u64 + 1000; //TODO: figure out how large can I make this
+
+			// sign with HMAC-SHA256
+			let mut hmac = Hmac::<Sha256>::new_from_slice(secret.expose_secret().as_bytes()).expect("hmac accepts key of any length");
+			hmac.update(format!("GET/realtime{expires}").as_bytes());
+			let signature = hex::encode(hmac.finalize().into_bytes());
+
+			return Ok(vec![tungstenite::Message::Text(
+				json!({
+					"op": "auth",
+					"args": [pubkey, expires, signature],
+				})
+				.to_string()
+				.into(),
+			)]);
+		}
+		Ok(self.subscribe_messages())
+	}
+
+	#[instrument(skip_all, fields(jrpc = ?format_args!("{:#?}", jrpc)))]
+	fn handle_message(&mut self, jrpc: &serde_json::Value) -> Option<Vec<tungstenite::Message>> {
+		match jrpc["op"].as_str() {
+			Some("auth") => {
+				if jrpc["success"].as_bool() == Some(true) {
+					tracing::info!("WebSocket authentication successful");
+				} else {
+					tracing::warn!("WebSocket authentication unsuccessful");
+				}
+				Some(self.subscribe_messages())
+			}
+			Some("subscribe") => {
+				if jrpc["success"].as_bool() == Some(true) {
+					tracing::info!("WebSocket topics subscription successful");
+				} else {
+					tracing::warn!("WebSocket topics subscription unsuccessful");
+				}
+				Some(vec![]) // otherwise, if we return None here, with current implementanion (2025/04/04) we'd be accepting the message as containing desired content.
+			}
+			_ => None,
+		}
+	}
+}
+/// A `enum` that represents the base url of the Bybit WebSocket API.
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+pub enum BybitWebSocketUrl {
+	/// `wss://stream.bybit.com`
+	#[default]
+	Bybit,
+	/// `wss://stream.bytick.com`
+	Bytick,
+	/// `wss://stream-testnet.bybit.com`
+	Test,
+	/// The url will not be modified by [BybitWebSocketHandler]
+	None,
+}
+impl BybitWebSocketUrl {
+	/// The URL that this variant represents.
+	#[inline(always)]
+	pub fn as_str(&self) -> &'static str {
+		match self {
+			Self::Bybit => "wss://stream.bybit.com",
+			Self::Bytick => "wss://stream.bytick.com",
+			Self::Test => "wss://stream-testnet.bybit.com",
+			Self::None => "",
+		}
+	}
+}
+impl WsOption for BybitOption {
+	type WsHandler = BybitWsHandler;
+
+	#[inline(always)]
+	fn ws_handler(options: Self::Options) -> Self::WsHandler {
+		BybitWsHandler::new(options)
+	}
+}
+//,}}}
 
 impl BybitHttpUrl {
 	/// The URL that this variant represents.
@@ -446,19 +523,6 @@ impl BybitHttpUrl {
 			Self::Bybit => "https://api.bybit.com",
 			Self::Bytick => "https://api.bytick.com",
 			Self::Test => "https://api-testnet.bybit.com",
-			Self::None => "",
-		}
-	}
-}
-
-impl BybitWebSocketUrl {
-	/// The URL that this variant represents.
-	#[inline(always)]
-	pub fn as_str(&self) -> &'static str {
-		match self {
-			Self::Bybit => "wss://stream.bybit.com",
-			Self::Bytick => "wss://stream.bytick.com",
-			Self::Test => "wss://stream-testnet.bybit.com",
 			Self::None => "",
 		}
 	}
@@ -516,18 +580,6 @@ where
 	#[inline(always)]
 	fn request_handler(options: Self::Options) -> Self::RequestHandler {
 		BybitRequestHandler::<'a, R> { options, _phantom: PhantomData }
-	}
-}
-
-impl<H: FnMut(serde_json::Value) + Send + 'static> WebSocketOption<H> for BybitOption {
-	type WebSocketHandler = BybitWebSocketHandler;
-
-	#[inline(always)]
-	fn websocket_handler(handler: H, options: Self::Options) -> Self::WebSocketHandler {
-		BybitWebSocketHandler {
-			message_handler: Box::new(handler),
-			options,
-		}
 	}
 }
 
