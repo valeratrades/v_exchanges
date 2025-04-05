@@ -34,8 +34,8 @@ pub trait WsHandler {
 
 	/// Called when the [WsConnection] received a JSON-RPC value, returns messages to be sent to the server. If the message received is the desired content, should just return `None`.
 	#[allow(unused_variables)]
-	fn handle_message(&mut self, jrpc: &serde_json::Value) -> Option<Vec<tungstenite::Message>> {
-		None
+	fn handle_message(&mut self, jrpc: &serde_json::Value) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
+		Ok(None)
 	}
 }
 
@@ -67,7 +67,7 @@ impl WsConnectionStream {
 }
 impl<H: WsHandler> WsConnection<H> {
 	#[allow(missing_docs)]
-	pub fn new(url_suffix: &str, /*dbg: params: Option<serde_json::Value>,*/ handler: H) -> Self {
+	pub fn new(url_suffix: &str, handler: H) -> Self {
 		// expects here are not expected to be seen by the user. Correctness should theoretically be checked at the moment of merging provided options; before this is ever constructed.
 		let config = handler.config();
 		config.validate().expect("ws config is invalid");
@@ -159,7 +159,7 @@ impl<H: WsHandler> WsConnection<H> {
 					tungstenite::Message::Text(text) => {
 						let value: serde_json::Value =
 							serde_json::from_str(&text).expect("API sent invalid JSON, which is completely unexpected. Disappointment is immeasurable and the day is ruined.");
-						if let Some(further_communication) = { self.handler.handle_message(&value) } {
+						if let Some(further_communication) = { self.handler.handle_message(&value)? } {
 							self.send_all(further_communication).await?;
 							continue; // only need to send responses when it's not yet the desired content.
 						}

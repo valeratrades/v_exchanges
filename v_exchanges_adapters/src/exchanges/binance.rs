@@ -177,11 +177,11 @@ impl WsHandler for BinanceWsHandler {
 		Ok(vec![])
 	}
 
-	fn handle_message(&mut self, message: &serde_json::Value) -> Option<Vec<tungstenite::Message>> {
+	fn handle_message(&mut self, message: &serde_json::Value) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
 		//TODO send `PUT /api/v3/userDataStream` every 30m to keep alive the listen key when subscribed to UserDataStream
 		//Q: or should I just switch to [FIX api](https://developers.binance.com/docs/binance-spot-api-docs/fix-api)?
 		//A: will do if the thing with PUTs for listen-key renewal is specific to spot, same as currently the fix api. Otherwise it would be to narrow of a usecase to do extra work.
-		None
+		Ok(None)
 	}
 }
 impl WsOption for BinanceOption {

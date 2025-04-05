@@ -33,7 +33,7 @@ pub enum BybitOption {
 	/// receive window parameter used for requests
 	RecvWindow(u16),
 	/// Base url for Ws connections
-	WsUrl(BybitWsUrl),
+	WsUrl(BybitWsUrlBase),
 	/// Whether [BybitWsHandler] should perform authentication
 	WsAuth(bool),
 	/// The topics to subscribe to.
@@ -59,7 +59,7 @@ pub struct BybitOptions {
 	/// see [BybitOption::RecvWindow]
 	pub recv_window: Option<u16>,
 	/// see [BybitOption::WsUrl]
-	pub ws_url: BybitWsUrl,
+	pub ws_url: BybitWsUrlBase,
 	/// see [BybitOption::WsAuth]
 	pub ws_auth: bool,
 	/// see [BybitOption::WsTopics]
@@ -353,7 +353,7 @@ impl BybitWsHandler {
 impl WsHandler for BybitWsHandler {
 	fn config(&self) -> WsConfig {
 		let mut config = self.options.ws_config.clone();
-		if self.options.ws_url != BybitWsUrl::None {
+		if self.options.ws_url != BybitWsUrlBase::None {
 			config.base_url = Some(Url::parse(self.options.ws_url.as_str()).expect("Invalid url base"));
 		}
 		config
@@ -385,7 +385,7 @@ impl WsHandler for BybitWsHandler {
 	}
 
 	#[instrument(skip_all, fields(jrpc = ?format_args!("{:#?}", jrpc)))]
-	fn handle_message(&mut self, jrpc: &serde_json::Value) -> Option<Vec<tungstenite::Message>> {
+	fn handle_message(&mut self, jrpc: &serde_json::Value) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
 		match jrpc["op"].as_str() {
 			Some("auth") => {
 				if jrpc["success"].as_bool() == Some(true) {
@@ -393,23 +393,28 @@ impl WsHandler for BybitWsHandler {
 				} else {
 					tracing::warn!("Ws authentication unsuccessful");
 				}
-				Some(self.subscribe_messages())
+				Ok(Some(self.subscribe_messages()))
 			}
 			Some("subscribe") => {
 				if jrpc["success"].as_bool() == Some(true) {
 					tracing::info!("Ws topics subscription successful");
 				} else {
-					tracing::warn!("Ws topics subscription unsuccessful");
+					match self.options.ws_auth || jrpc["ret_msg"] != serde_json::Value::String("Request not authorized".to_owned()) {
+						true => tracing::warn!("Ws topics subscription unsuccessful"),
+						false => {
+							return Err(WsError::Auth(AuthError::Other(eyre!("Tried to access a private endpoint without authentication"))));
+						}
+					}
 				}
-				Some(vec![]) // otherwise, if we return None here, with current implementanion (2025/04/04) we'd be accepting the message as containing desired content.
+				Ok(Some(vec![])) // otherwise, if we return None here, with current implementanion (2025/04/04) we'd be accepting the message as containing desired content.
 			}
-			_ => None,
+			_ => Ok(None),
 		}
 	}
 }
 /// A `enum` that represents the base url of the Bybit Ws API.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum BybitWsUrl {
+pub enum BybitWsUrlBase {
 	/// `wss://stream.bybit.com`
 	#[default]
 	Bybit,
@@ -420,7 +425,7 @@ pub enum BybitWsUrl {
 	/// The url will not be modified by [BybitWsHandler]
 	None,
 }
-impl BybitWsUrl {
+impl BybitWsUrlBase {
 	/// The URL that this variant represents.
 	#[inline(always)]
 	pub fn as_str(&self) -> &'static str {

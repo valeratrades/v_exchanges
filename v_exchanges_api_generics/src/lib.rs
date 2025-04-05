@@ -23,10 +23,11 @@ pub mod ws;
 pub extern crate reqwest;
 pub extern crate tokio_tungstenite;
 
-#[allow(missing_docs)]
 #[derive(Debug, derive_more::Display, thiserror::Error, derive_more::From)]
+#[non_exhaustive]
 pub enum AuthError {
 	MissingPubkey,
 	MissingSecret,
 	InvalidCharacterInApiKey(String),
+	Other(eyre::Report),
 }

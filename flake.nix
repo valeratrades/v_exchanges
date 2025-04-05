@@ -18,7 +18,7 @@
 				#rust = pkgs.rust-bin.selectLatestNightlyWith (toolchain: toolchain.default.override {
 				#	extensions = [ "rust-src" "rust-analyzer" "rust-docs" "rustc-codegen-cranelift-preview" ];
 				#});
-				rust = pkgs.rust-bin.nightly."2025-03-01".default.override {
+				rust = pkgs.rust-bin.nightly."2025-02-01".default.override {
 					extensions = [ "rust-src" "rust-analyzer" "rust-docs" "rustc-codegen-cranelift-preview" ];
 				};
 
