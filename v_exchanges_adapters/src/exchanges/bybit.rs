@@ -385,9 +385,9 @@ impl WsHandler for BybitWsHandler {
 	}
 
 	#[instrument(skip_all, fields(jrpc = ?format_args!("{:#?}", jrpc)))]
-	fn handle_message(&mut self, jrpc: &serde_json::Value) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
-		match jrpc["op"].as_str() {
-			Some("auth") => {
+	fn handle_jrpc(&mut self, jrpc: &serde_json::Value) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
+		match jrpc["op"].as_str().expect("Missing \"op\" field") {
+			"auth" => {
 				if jrpc["success"].as_bool() == Some(true) {
 					tracing::info!("Ws authentication successful");
 				} else {
@@ -395,7 +395,7 @@ impl WsHandler for BybitWsHandler {
 				}
 				Ok(Some(self.subscribe_messages()))
 			}
-			Some("subscribe") => {
+			"subscribe" => {
 				if jrpc["success"].as_bool() == Some(true) {
 					tracing::info!("Ws topics subscription successful");
 				} else {

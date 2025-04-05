@@ -34,9 +34,16 @@ pub trait WsHandler {
 
 	/// Called when the [WsConnection] received a JSON-RPC value, returns messages to be sent to the server. If the message received is the desired content, should just return `None`.
 	#[allow(unused_variables)]
-	fn handle_message(&mut self, jrpc: &serde_json::Value) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
+	fn handle_jrpc(&mut self, jrpc: &serde_json::Value) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
 		Ok(None)
 	}
+
+	///// Additional POST communication with the exchange, not conditional on received messages, can be handled here.
+	/////
+	///// Really this is just for damn Binance with their stupid `listn-key` standard.
+	//fn handle_post(&mut self) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
+	//	Ok(None)
+	//}
 }
 
 #[derive(Debug)]
@@ -159,7 +166,7 @@ impl<H: WsHandler> WsConnection<H> {
 					tungstenite::Message::Text(text) => {
 						let value: serde_json::Value =
 							serde_json::from_str(&text).expect("API sent invalid JSON, which is completely unexpected. Disappointment is immeasurable and the day is ruined.");
-						if let Some(further_communication) = { self.handler.handle_message(&value)? } {
+						if let Some(further_communication) = { self.handler.handle_jrpc(&value)? } {
 							self.send_all(further_communication).await?;
 							continue; // only need to send responses when it's not yet the desired content.
 						}
@@ -169,8 +176,8 @@ impl<H: WsHandler> WsConnection<H> {
 					tungstenite::Message::Binary(_) => {
 						panic!("Received binary. But exchanges are not smart enough to send this, what is happening");
 					}
-					tungstenite::Message::Ping(_) => {
-						self.send(tungstenite::Message::Pong(Bytes::default())).await?;
+					tungstenite::Message::Ping(bytes) => {
+						self.send(tungstenite::Message::Pong(bytes)).await?; // Binance specifically requires the exact ping's payload to be returned here: https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams
 						tracing::debug!("ponged");
 						continue;
 					}

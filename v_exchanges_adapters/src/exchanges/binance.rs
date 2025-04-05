@@ -1,8 +1,13 @@
 // A module for communicating with the [Binance API](https://binance-docs.github.io/apidocs/spot/en/).
 
-use std::{marker::PhantomData, str::FromStr, time::SystemTime};
+use std::{
+	marker::PhantomData,
+	str::FromStr,
+	time::{Duration, SystemTime},
+};
 
-use chrono::{Duration, Utc};
+use chrono::Utc;
+use eyre::{Report, eyre};
 use generics::{
 	AuthError,
 	http::{ApiError, BuildError, HandleError, *},
@@ -14,7 +19,6 @@ use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
-use v_utils::prelude::*;
 
 use crate::traits::*;
 
@@ -100,7 +104,7 @@ where
 				};
 				let e = match retry_after_sec {
 					Some(s) => {
-						let until = Some(Utc::now() + Duration::seconds(s as i64));
+						let until = Some(Utc::now() + chrono::Duration::seconds(s as i64));
 						ApiError::IpTimeout { until }.into()
 					}
 					_ => eyre!("Could't interpret Retry-After header").into(),
@@ -118,9 +122,19 @@ where
 }
 
 // Ws stuff {{{
-#[derive(Clone, Debug, derive_new::new)]
+#[derive(Clone, Debug)]
 pub struct BinanceWsHandler {
 	options: BinanceOptions,
+	/// Binance has a retarded `listen-key` system. This is needed only for that.
+	last_keep_alive: SystemTime,
+}
+impl BinanceWsHandler {
+	pub fn new(options: BinanceOptions) -> Self {
+		Self {
+			options,
+			last_keep_alive: SystemTime::UNIX_EPOCH, // semantically creation itself does nothing for refreshing the token. But refreshment timer on it will be set to 0 on creation, so that's when we'll set it to [now](SystemTime::now)
+		}
+	}
 }
 impl WsHandler for BinanceWsHandler {
 	#[inline(always)]
@@ -144,6 +158,9 @@ impl WsHandler for BinanceWsHandler {
 	//	Ok(std::vec![])
 	//}
 	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
+		//NB: requires ed25519 key
+		// https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-api-general-info#log-in-with-api-key-signed
+
 		//TODO!!!!!!: /
 		//if self.options.ws_config.auth {
 		//	let api_key = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
@@ -177,12 +194,42 @@ impl WsHandler for BinanceWsHandler {
 		Ok(vec![])
 	}
 
-	fn handle_message(&mut self, message: &serde_json::Value) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
-		//TODO send `PUT /api/v3/userDataStream` every 30m to keep alive the listen key when subscribed to UserDataStream
+	fn handle_jrpc(&mut self, jrpc: &serde_json::Value) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
+		//if SystemTime::now().duration_since(self.last_keep_alive).unwrap() > Duration::from_mins(30) {
+		//	//XXX: will fail if it's not a USER_DATA_STREAM
+		//	//TODO send `PUT /api/v3/userDataStream`
+		//	let client = crate::Client::default();
+		//	.request(
+		//		&self.options,
+		//		"PUT",
+		//		"/api/v3/userDataStream",
+		//		None::<()>,
+		//	)
+		//}
+
 		//Q: or should I just switch to [FIX api](https://developers.binance.com/docs/binance-spot-api-docs/fix-api)?
 		//A: will do if the thing with PUTs for listen-key renewal is specific to spot, same as currently the fix api. Otherwise it would be to narrow of a usecase to do extra work.
-		Ok(None)
+
+		match jrpc["e"].as_str().expect("missing event type") {
+			"listenKeyExpired" => todo!(),
+			_ => Ok(None),
+		}
 	}
+
+	//	fn handle_post(&mut self) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
+	//	if SystemTime::now().duration_since(self.last_keep_alive).unwrap() > Duration::from_mins(30) {
+	//		//XXX: will fail if it's not a USER_DATA_STREAM //TODO: generalize to all binance streams
+	//		let msg_json = serde_json::json!({
+	//			"id": "815d5fce-0880-4287-a567-80badf004c74",
+	//			"method": "userDataStream.ping",
+	//			"params": {
+	//				"apiKey": self.options.pubkey.as_ref().unwrap()
+	//			}
+	//		});
+	//		return Ok(Some(vec![tungstenite::Message::Text(msg_json.to_string().into())]));
+	//	}
+	//	Ok(None)
+	//}
 }
 impl WsOption for BinanceOption {
 	type WsHandler = BinanceWsHandler;
@@ -626,7 +673,7 @@ impl From<i32> for BinanceErrorCode {
 			-2026 => Self::OrderArchived(code),
 
 			code => {
-				warn!("Encountered unknown Binance error code: {code}");
+				tracing::warn!("Encountered unknown Binance error code: {code}");
 				Self::Other(code)
 			}
 		}

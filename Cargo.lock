@@ -2778,6 +2778,7 @@ dependencies = [
  "derive-new",
  "derive_more",
  "env_logger",
+ "eyre",
  "hex",
  "hmac",
  "rand 0.9.0",
