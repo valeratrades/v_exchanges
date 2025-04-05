@@ -203,6 +203,8 @@ pub enum BinanceOption {
 	Pubkey(String),
 	/// Api secret
 	Secret(SecretString),
+	/// Use testnet
+	Test(bool),
 
 	/// Number of milliseconds the request is valid for. Only applicable for signed requests.
 	RecvWindow(u16),
@@ -360,7 +362,7 @@ pub struct BinanceRequestHandler<'a, R: DeserializeOwned> {
 /// A `struct` that represents a set of [BinanceOption] s.
 #[derive(Clone, derive_more::Debug, Default)]
 pub struct BinanceOptions {
-	/// see [BinanceOption::Key]
+	/// see [BinanceOption::Pubkey]
 	pub pubkey: Option<String>,
 	/// see [BinanceOption::Secret]
 	#[debug("[REDACTED]")]
@@ -386,6 +388,7 @@ impl HandlerOptions for BinanceOptions {
 			Self::OptionItem::None => (),
 			Self::OptionItem::Pubkey(v) => self.pubkey = Some(v),
 			Self::OptionItem::RecvWindow(v) => self.recv_window = Some(v),
+			Self::OptionItem::Test(v) => self.test = v,
 			Self::OptionItem::Secret(v) => self.secret = Some(v),
 			Self::OptionItem::HttpUrl(v) => self.http_url = v,
 			Self::OptionItem::HttpAuth(v) => self.http_auth = v,
