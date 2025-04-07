@@ -1,13 +1,9 @@
 // A module for communicating with the [Binance API](https://binance-docs.github.io/apidocs/spot/en/).
 
-use std::{
-	marker::PhantomData,
-	str::FromStr,
-	time::{Duration, SystemTime},
-};
+use std::{marker::PhantomData, str::FromStr, time::SystemTime};
 
 use chrono::Utc;
-use eyre::{Report, eyre};
+use eyre::eyre;
 use generics::{
 	AuthError,
 	http::{ApiError, BuildError, HandleError, *},
@@ -157,39 +153,21 @@ impl WsHandler for BinanceWsHandler {
 	//	}
 	//	Ok(std::vec![])
 	//}
-	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
-		//NB: requires ed25519 key
-		// https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-api-general-info#log-in-with-api-key-signed
 
-		//TODO!!!!!!: /
-		//if self.options.ws_config.auth {
-		//	let api_key = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
-		//	let private_key = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
-		//
-		//	let mut request_params = match params {
-		//		Some(serde_json::Value::Object(map)) => map,
-		//		Some(_) => return Err(WsError::Other(Report::msg("Parameters must be an object"))),
-		//		None => serde_json::Map::new(),
-		//	};
-		//
-		//	let signature = sign_binance_request(api_key, private_key, &mut request_params)?;
-		//
-		//	request_params.insert("signature".to_string(), serde_json::Value::String(signature));
-		//
-		//	let request = serde_json::json!({
-		//		"id": format!("auth_{}", request_params.get("timestamp").unwrap_or(&serde_json::Value::Null)),
-		//		"method": "auth",
-		//		"params": request_params
-		//	});
-		//
-		//	let message = tungstenite::Message::Text(request.to_string().into());
-		//	return Ok(vec![message]);
-		//}
-		//
-		//if let Some(params_value) = params {
-		//	let message = tungstenite::Message::Text(params_value.to_string().into());
-		//	return Ok(vec![message]);
-		//}
+	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
+		if self.options.ws_config.auth {
+			//TODO: implement ws auth once I can aquire ed25519 keys: https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-api-general-info#log-in-with-api-key-signed
+
+			let pubkey = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
+			let secret = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
+
+			//DO:
+			/*
+			match
+				user_data_stream => POST /api/v3/userDataStream
+				trade => sign each request (can't sign connection without ed25519)
+			*/
+		}
 
 		Ok(vec![])
 	}
@@ -207,14 +185,15 @@ impl WsHandler for BinanceWsHandler {
 		//	)
 		//}
 
-		//Q: or should I just switch to [FIX api](https://developers.binance.com/docs/binance-spot-api-docs/fix-api)?
-		//A: will do if the thing with PUTs for listen-key renewal is specific to spot, same as currently the fix api. Otherwise it would be to narrow of a usecase to do extra work.
-
 		match jrpc["e"].as_str().expect("missing event type") {
 			"listenKeyExpired" => todo!(),
 			_ => Ok(None),
 		}
 	}
+
+	// stream listen-key keepalive works for:
+	// - [x] binance spot
+	// - [?] binance perp
 
 	//	fn handle_post(&mut self) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
 	//	if SystemTime::now().duration_since(self.last_keep_alive).unwrap() > Duration::from_mins(30) {

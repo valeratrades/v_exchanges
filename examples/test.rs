@@ -1,25 +1,8 @@
 #![feature(try_blocks)]
-use std::{
-	env,
-	time::{SystemTime, UNIX_EPOCH},
-	vec,
-};
+use std::{env, vec};
 
-use eyre::Result;
-use hmac::{Hmac, Mac as _};
-use secrecy::{ExposeSecret as _, SecretString};
-use serde_json::json;
-use sha2::Sha256;
-use tracing::instrument;
-use v_exchanges_adapters::{
-	bybit::{BybitOption, BybitWsUrlBase},
-	generics::{
-		http::{HeaderMap, header::HeaderValue},
-		reqwest::{self, Url},
-		tokio_tungstenite::tungstenite,
-		ws::{WsConfig, WsConnection, WsError, WsHandler},
-	},
-};
+use hmac::Mac as _;
+use v_exchanges_adapters::bybit::{BybitOption, BybitWsUrlBase};
 
 fn main() {
 	v_utils::clientside!();

@@ -23,7 +23,7 @@ pub mod prelude {
 	#[cfg(feature = "mexc")]
 	pub use crate::mexc::Mexc;
 	#[cfg(feature = "data")]
-	pub use crate::yahoo::Yahoo;
+	pub use crate::yahoo::*;
 }
 pub use prelude::*;
 
