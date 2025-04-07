@@ -34,24 +34,25 @@ pub trait WsHandler {
 
 	//Q: problem: can be either {String, serde_json::Value} //? other things?
 	/*
-	"position" 
-	||
-	json!{
-  "id": "56374a46-3061-486b-a311-99ee972eb648",
-  "method": "order.place",
-  "params": {
-    "symbol": "BTCUSDT",
-    "side": "SELL",
-    "type": "LIMIT",
-    "timeInForce": "GTC",
-    "price": "23416.10000000",
-    "quantity": "0.00847000",
-    "apiKey": "vmPUZE6mv9SD5VNHk4HlWFsOr6aKE2zvsw0MuIgwCIPy6utIco14y7Ju91duEh8A",
-    "signature": "15af09e41c36f3cc61378c2fbe2c33719a03dd5eba8d0f9206fbda44de717c88",
-    "timestamp": 1660801715431
-	}
-	}
-	*/ 
+	  "position"
+	  ||
+	  json!{
+	"id": "56374a46-3061-486b-a311-99ee972eb648",
+	"method": "order.place",
+	"params": {
+	  "symbol": "BTCUSDT",
+	  "side": "SELL",
+	  "type": "LIMIT",
+	  "timeInForce": "GTC",
+	  "price": "23416.10000000",
+	  "quantity": "0.00847000",
+	  "apiKey": "vmPUZE6mv9SD5VNHk4HlWFsOr6aKE2zvsw0MuIgwCIPy6utIco14y7Ju91duEh8A",
+	  "signature": "15af09e41c36f3cc61378c2fbe2c33719a03dd5eba8d0f9206fbda44de717c88",
+	  "timestamp": 1660801715431
+	  }
+	  }
+	  - and then the latter could be requiring signing
+	  */
 	// handle_subcribe(&mut self, Vec<serde_json::Value>) -> Result<, WsError>
 
 	/// Called when the [WsConnection] received a JSON-RPC value, returns messages to be sent to the server. If the message received is the desired content, should just return `None`.
@@ -60,7 +61,7 @@ pub trait WsHandler {
 		Ok(None)
 	}
 
-	//A: use this iff spot&&perp binance accept listen-key refresh through stream 
+	//A: use this iff spot&&perp binance accept listen-key refresh through stream
 	///// Additional POST communication with the exchange, not conditional on received messages, can be handled here.
 	/////
 	///// Really this is just for damn Binance with their stupid `listn-key` standard.

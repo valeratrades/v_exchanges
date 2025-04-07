@@ -142,21 +142,9 @@ impl WsHandler for BinanceWsHandler {
 		config
 	}
 
-	//fn handle_start(&mut self, params: Option<serde_json::Value>) -> Result<Vec<tungstenite::Message>, WsError> {
-	//	if self.options.ws_config.auth {
-	//		let pubkey = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
-	//		let secret = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
-	//
-	//		//DO: send a listen-key request
-	//
-	//		todo!();
-	//	}
-	//	Ok(std::vec![])
-	//}
-
 	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
 		if self.options.ws_config.auth {
-			//TODO: implement ws auth once I can aquire ed25519 keys: https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-api-general-info#log-in-with-api-key-signed
+			//TODO: implement ws auth once I can acquire ed25519 keys: https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-api-general-info#log-in-with-api-key-signed
 
 			let pubkey = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
 			let secret = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
@@ -165,7 +153,7 @@ impl WsHandler for BinanceWsHandler {
 			/*
 			match
 				user_data_stream => POST /api/v3/userDataStream
-				trade => sign each request (can't sign connection without ed25519)
+				trade => need to sign each request (can't sign connection itself without ed25519), so do nothing here
 			*/
 		}
 

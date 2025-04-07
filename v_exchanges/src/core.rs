@@ -84,6 +84,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync {
 	async fn balances(&self, recv_window: Option<u16>, m: AbsMarket) -> ExchangeResult<Balances> {
 		unimplemented!();
 	}
+
 	//? potentially `total_balance`? Would return precompiled USDT-denominated balance of a (bybit::wallet/binance::account)
 	// balances are defined for each margin type: [futures_balance, spot_balance, margin_balance], but note that on some exchanges, (like bybit), some of these may point to the same exact call
 	// to negate confusion could add a `total_balance` endpoint

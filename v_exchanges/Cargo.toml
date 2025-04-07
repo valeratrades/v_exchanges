@@ -76,6 +76,13 @@ data = ["dep:reqwest"]
 [[example]]
 name = "test"
 path = "../examples/test.rs"
+[[example]]
+name = "test2"
+path = "../examples/test2.rs"
+
+[[example]]
+name = "spelled_out_request"
+path = "../examples/spelled_out_request.rs"
 
 [[example]]
 name = "ws"
