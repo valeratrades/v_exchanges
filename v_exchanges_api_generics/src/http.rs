@@ -113,7 +113,6 @@ impl Client {
 	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
 	///
 	/// For more information, see [request()][Self::request()].
-	#[inline(always)]
 	pub async fn get<Q, H>(&self, url: &str, query: &Q, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		Q: Serialize + ?Sized + Debug,
@@ -122,7 +121,6 @@ impl Client {
 	}
 
 	/// Derivation of [get()][Self::get()].
-	#[inline(always)]
 	pub async fn get_no_query<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<()>, {
@@ -134,7 +132,6 @@ impl Client {
 	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
 	///
 	/// For more information, see [request()][Self::request()].
-	#[inline(always)]
 	pub async fn post<B, H>(&self, url: &str, body: B, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<B>, {
@@ -142,7 +139,6 @@ impl Client {
 	}
 
 	/// Derivation of [post()][Self::post()].
-	#[inline(always)]
 	pub async fn post_no_body<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<()>, {
@@ -154,7 +150,6 @@ impl Client {
 	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
 	///
 	/// For more information, see [request()][Self::request()].
-	#[inline(always)]
 	pub async fn put<B, H>(&self, url: &str, body: B, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<B>, {
@@ -162,7 +157,6 @@ impl Client {
 	}
 
 	/// Derivation of [put()][Self::put()].
-	#[inline(always)]
 	pub async fn put_no_body<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<()>, {
@@ -175,7 +169,6 @@ impl Client {
 	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
 	///
 	/// For more information, see [request()][Self::request()].
-	#[inline(always)]
 	pub async fn delete<Q, H>(&self, url: &str, query: &Q, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		Q: Serialize + ?Sized + Debug,
@@ -184,7 +177,6 @@ impl Client {
 	}
 
 	/// Derivation of [delete()][Self::delete()].
-	#[inline(always)]
 	pub async fn delete_no_query<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<()>, {
@@ -256,7 +248,6 @@ pub struct RequestConfig {
 }
 
 impl RequestConfig {
-	#[inline(always)]
 	fn verify(&self) {
 		assert_ne!(self.max_tries, 0, "RequestConfig.max_tries must not be equal to 0");
 	}

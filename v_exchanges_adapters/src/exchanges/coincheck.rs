@@ -215,7 +215,6 @@ impl WebSocketHandler for CoincheckWebSocketHandler {
 
 impl CoincheckHttpUrl {
 	/// The base URL that this variant represents.
-	#[inline(always)]
 	fn as_str(&self) -> &'static str {
 		match self {
 			Self::Main => "https://coincheck.com",
@@ -226,7 +225,6 @@ impl CoincheckHttpUrl {
 
 impl CoincheckWebSocketUrl {
 	/// The base URL that this variant represents.
-	#[inline(always)]
 	fn as_str(&self) -> &'static str {
 		match self {
 			Self::Default => "wss://ws-api.coincheck.com/",
@@ -281,7 +279,6 @@ where
 {
 	type RequestHandler = CoincheckRequestHandler<'a, R>;
 
-	#[inline(always)]
 	fn request_handler(options: Self::Options) -> Self::RequestHandler {
 		CoincheckRequestHandler::<'a, R> { options, _phantom: PhantomData }
 	}
@@ -290,7 +287,6 @@ where
 impl<H: FnMut(serde_json::Value) + Send + 'static> WebSocketOption<H> for CoincheckOption {
 	type WebSocketHandler = CoincheckWebSocketHandler;
 
-	#[inline(always)]
 	fn websocket_handler(handler: H, options: Self::Options) -> Self::WebSocketHandler {
 		CoincheckWebSocketHandler {
 			message_handler: Box::new(handler),

@@ -345,7 +345,6 @@ pub struct BybitWsHandler {
 	options: BybitOptions,
 }
 impl BybitWsHandler {
-	#[inline(always)]
 	fn subscribe_messages(&self) -> Vec<tungstenite::Message> {
 		vec![tungstenite::Message::Text(json!({ "op": "subscribe", "args": self.options.ws_topics }).to_string().into())]
 	}
@@ -427,7 +426,6 @@ pub enum BybitWsUrlBase {
 }
 impl BybitWsUrlBase {
 	/// The URL that this variant represents.
-	#[inline(always)]
 	pub fn as_str(&self) -> &'static str {
 		match self {
 			Self::Bybit => "wss://stream.bybit.com",
@@ -440,7 +438,6 @@ impl BybitWsUrlBase {
 impl WsOption for BybitOption {
 	type WsHandler = BybitWsHandler;
 
-	#[inline(always)]
 	fn ws_handler(options: Self::Options) -> Self::WsHandler {
 		BybitWsHandler::new(options)
 	}
@@ -449,7 +446,6 @@ impl WsOption for BybitOption {
 
 impl BybitHttpUrl {
 	/// The URL that this variant represents.
-	#[inline(always)]
 	pub fn as_str(&self) -> &'static str {
 		match self {
 			Self::Bybit => "https://api.bybit.com",
@@ -490,7 +486,6 @@ where
 {
 	type RequestHandler = BybitRequestHandler<'a, R>;
 
-	#[inline(always)]
 	fn request_handler(options: Self::Options) -> Self::RequestHandler {
 		BybitRequestHandler::<'a, R> { options, _phantom: PhantomData }
 	}

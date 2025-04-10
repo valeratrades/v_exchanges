@@ -73,7 +73,6 @@ pub enum MexcHttpUrl {
 }
 impl MexcHttpUrl {
 	/// The URL that this variant represents
-	#[inline(always)]
 	fn as_str(&self) -> &'static str {
 		match self {
 			Self::Spot => "https://api.mexc.com",
@@ -236,7 +235,6 @@ pub enum MexcWsUrl {
 }
 impl MexcWsUrl {
 	/// The URL that this variant represents
-	#[inline(always)]
 	pub fn as_str(&self) -> &'static str {
 		match self {
 			Self::Spot => "wss://stream.mexc.com/ws",
@@ -249,7 +247,6 @@ impl MexcWsUrl {
 impl WsOption for MexcOption {
 	type WsHandler = MexcWsHandler;
 
-	#[inline(always)]
 	fn ws_handler(options: Self::Options) -> Self::WsHandler {
 		MexcWsHandler::new(options)
 	}
@@ -290,7 +287,6 @@ where
 {
 	type RequestHandler = MexcRequestHandler<'a, R>;
 
-	#[inline(always)]
 	fn request_handler(options: Self::Options) -> Self::RequestHandler {
 		MexcRequestHandler::<'a, R> { options, _phantom: PhantomData }
 	}

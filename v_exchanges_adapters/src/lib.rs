@@ -42,7 +42,6 @@ pub struct Client {
 
 impl Client {
 	/// Update the default options for this [Client]
-	#[inline(always)]
 	pub fn update_default_option<O>(&mut self, option: O)
 	where
 		O: HandlerOption,
@@ -50,7 +49,6 @@ impl Client {
 		self.default_options_mut().update(option);
 	}
 
-	#[inline(always)]
 	pub fn is_authenticated<O>(&self) -> bool
 	where
 		O: HandlerOption,
@@ -71,7 +69,6 @@ impl Client {
 	}
 
 	/// see [http::Client::request()]
-	#[inline(always)]
 	pub async fn request<'a, R, O, Q, B>(&self, method: Method, url: &str, query: Option<&Q>, body: Option<B>, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, B)
 	where
 		O: HttpOption<'a, R, B>,
@@ -82,7 +79,6 @@ impl Client {
 	}
 
 	/// see [http::Client::get()]
-	#[inline(always)]
 	pub async fn get<'a, R, O, Q>(&self, url: &str, query: &Q, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, ())
 	where
 		O: HttpOption<'a, R, ()>,
@@ -93,7 +89,6 @@ impl Client {
 	}
 
 	/// see [http::Client::get_no_query()]
-	#[inline(always)]
 	pub async fn get_no_query<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, ())
 	where
 		O: HttpOption<'a, R, ()>,
@@ -103,7 +98,6 @@ impl Client {
 	}
 
 	/// see [http::Client::post()]
-	#[inline(always)]
 	pub async fn post<'a, R, O, B>(&self, url: &str, body: B, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, B)
 	where
 		O: HttpOption<'a, R, B>,
@@ -113,7 +107,6 @@ impl Client {
 	}
 
 	/// see [http::Client::post_no_body()]
-	#[inline(always)]
 	pub async fn post_no_body<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, ())
 	where
 		O: HttpOption<'a, R, ()>,
@@ -123,7 +116,6 @@ impl Client {
 	}
 
 	/// see [http::Client::put()]
-	#[inline(always)]
 	pub async fn put<'a, R, O, B>(&self, url: &str, body: B, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, B)
 	where
 		O: HttpOption<'a, R, B>,
@@ -133,7 +125,6 @@ impl Client {
 	}
 
 	/// see [http::Client::put_no_body()]
-	#[inline(always)]
 	pub async fn put_no_body<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, ())
 	where
 		O: HttpOption<'a, R, ()>,
@@ -143,7 +134,6 @@ impl Client {
 	}
 
 	/// see [http::Client::delete()]
-	#[inline(always)]
 	pub async fn delete<'a, R, O, Q>(&self, url: &str, query: &Q, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, ())
 	where
 		O: HttpOption<'a, R, ()>,
@@ -154,7 +144,6 @@ impl Client {
 	}
 
 	/// see [http::Client::delete_no_query()]
-	#[inline(always)]
 	pub async fn delete_no_query<'a, R, O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> request_ret!('a, R, O, ())
 	where
 		O: HttpOption<'a, R, ()>,
@@ -163,7 +152,6 @@ impl Client {
 		self.client.delete_no_query(url, &O::request_handler(self.merged_options(options))).await
 	}
 
-	#[inline(always)]
 	pub fn ws_connection<O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> WsConnection<O::WsHandler>
 	where
 		O: WsOption,
@@ -184,12 +172,10 @@ pub trait GetOptions<O: HandlerOptions> {
 #[cfg(feature = "binance")]
 #[cfg_attr(docsrs, doc(cfg(feature = "binance")))]
 impl GetOptions<binance::BinanceOptions> for Client {
-	#[inline(always)]
 	fn default_options(&self) -> &binance::BinanceOptions {
 		&self.binance
 	}
 
-	#[inline(always)]
 	fn default_options_mut(&mut self) -> &mut binance::BinanceOptions {
 		&mut self.binance
 	}
@@ -198,12 +184,10 @@ impl GetOptions<binance::BinanceOptions> for Client {
 #[cfg(feature = "bitflyer")]
 #[cfg_attr(docsrs, doc(cfg(feature = "bitflyer")))]
 impl GetOptions<bitflyer::BitFlyerOptions> for Client {
-	#[inline(always)]
 	fn default_options(&self) -> &bitflyer::BitFlyerOptions {
 		&self.bitflyer
 	}
 
-	#[inline(always)]
 	fn default_options_mut(&mut self) -> &mut bitflyer::BitFlyerOptions {
 		&mut self.bitflyer
 	}
@@ -212,12 +196,10 @@ impl GetOptions<bitflyer::BitFlyerOptions> for Client {
 #[cfg(feature = "bybit")]
 #[cfg_attr(docsrs, doc(cfg(feature = "bybit")))]
 impl GetOptions<bybit::BybitOptions> for Client {
-	#[inline(always)]
 	fn default_options(&self) -> &bybit::BybitOptions {
 		&self.bybit
 	}
 
-	#[inline(always)]
 	fn default_options_mut(&mut self) -> &mut bybit::BybitOptions {
 		&mut self.bybit
 	}
@@ -226,12 +208,10 @@ impl GetOptions<bybit::BybitOptions> for Client {
 #[cfg(feature = "coincheck")]
 #[cfg_attr(docsrs, doc(cfg(feature = "coincheck")))]
 impl GetOptions<coincheck::CoincheckOptions> for Client {
-	#[inline(always)]
 	fn default_options(&self) -> &coincheck::CoincheckOptions {
 		&self.coincheck
 	}
 
-	#[inline(always)]
 	fn default_options_mut(&mut self) -> &mut coincheck::CoincheckOptions {
 		&mut self.coincheck
 	}
@@ -239,12 +219,10 @@ impl GetOptions<coincheck::CoincheckOptions> for Client {
 #[cfg(feature = "mexc")]
 #[cfg_attr(docsrs, doc(cfg(feature = "mexc")))]
 impl GetOptions<mexc::MexcOptions> for Client {
-	#[inline(always)]
 	fn default_options(&self) -> &mexc::MexcOptions {
 		&self.mexc
 	}
 
-	#[inline(always)]
 	fn default_options_mut(&mut self) -> &mut mexc::MexcOptions {
 		&mut self.mexc
 	}

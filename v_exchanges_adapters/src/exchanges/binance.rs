@@ -133,7 +133,6 @@ impl BinanceWsHandler {
 	}
 }
 impl WsHandler for BinanceWsHandler {
-	#[inline(always)]
 	fn config(&self) -> WsConfig {
 		let mut config = self.options.ws_config.clone();
 		if self.options.ws_url != BinanceWsUrl::None {
@@ -201,7 +200,6 @@ impl WsHandler for BinanceWsHandler {
 impl WsOption for BinanceOption {
 	type WsHandler = BinanceWsHandler;
 
-	#[inline(always)]
 	fn ws_handler(options: Self::Options) -> Self::WsHandler {
 		BinanceWsHandler::new(options)
 	}
@@ -262,7 +260,6 @@ pub enum BinanceHttpUrl {
 }
 impl BinanceHttpUrl {
 	/// The URL that this variant represents.
-	#[inline(always)]
 	fn as_str(&self) -> &'static str {
 		match self {
 			Self::Spot => "https://api.binance.com",
@@ -279,7 +276,6 @@ impl BinanceHttpUrl {
 	}
 
 	//TODO: impl more cleanly
-	#[inline(always)]
 	fn as_str_test(&self) -> Option<&'static str> {
 		match self {
 			Self::Spot => Some("https://testnet.binance.vision"),
@@ -423,7 +419,6 @@ where
 {
 	type RequestHandler = BinanceRequestHandler<'a, R>;
 
-	#[inline(always)]
 	fn request_handler(options: Self::Options) -> Self::RequestHandler {
 		BinanceRequestHandler::<'a, R> { options, _phantom: PhantomData }
 	}

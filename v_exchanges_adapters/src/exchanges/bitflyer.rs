@@ -295,7 +295,6 @@ impl BitFlyerWebSocketHandler {
 
 impl BitFlyerHttpUrl {
 	/// The base URL that this variant represents.
-	#[inline(always)]
 	fn as_str(&self) -> &'static str {
 		match self {
 			Self::Main => "https://api.bitflyer.com",
@@ -306,7 +305,6 @@ impl BitFlyerHttpUrl {
 
 impl BitFlyerWebSocketUrl {
 	/// The base URL that this variant represents.
-	#[inline(always)]
 	fn as_str(&self) -> &'static str {
 		match self {
 			Self::Default => "wss://ws.lightstream.bitflyer.com",
@@ -363,7 +361,6 @@ where
 {
 	type RequestHandler = BitFlyerRequestHandler<'a, R>;
 
-	#[inline(always)]
 	fn request_handler(options: Self::Options) -> Self::RequestHandler {
 		BitFlyerRequestHandler::<'a, R> { options, _phantom: PhantomData }
 	}
@@ -372,7 +369,6 @@ where
 impl<H: FnMut(BitFlyerChannelMessage) + Send + 'static> WebSocketOption<H> for BitFlyerOption {
 	type WebSocketHandler = BitFlyerWebSocketHandler;
 
-	#[inline(always)]
 	fn websocket_handler(handler: H, options: Self::Options) -> Self::WebSocketHandler {
 		BitFlyerWebSocketHandler {
 			message_handler: Box::new(handler),
