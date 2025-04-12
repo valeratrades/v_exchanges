@@ -1,10 +1,6 @@
 // A module for communicating with the MEXC API (https://mexcdevelop.github.io/apidocs/spot/en/)
 
-use std::{
-	marker::PhantomData,
-	str::FromStr,
-	time::{SystemTime},
-};
+use std::{marker::PhantomData, str::FromStr, time::SystemTime};
 
 use chrono::Utc;
 use generics::{AuthError, reqwest::Url};

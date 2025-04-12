@@ -2807,6 +2807,7 @@ dependencies = [
  "eyre",
  "futures-util",
  "parking_lot",
+ "pin-project-lite",
  "reqwest",
  "serde",
  "serde_json",

@@ -1,4 +1,6 @@
 use std::{
+	pin::Pin,
+	task::{Context, Poll},
 	time::{Duration, SystemTime},
 	vec,
 };
@@ -117,8 +119,6 @@ impl<H: WsHandler> WsConnection<H> {
 	}
 
 	/// The main interface. All ws operations are hidden, only thing getting through are the content messages or the lack thereof.
-	//XXX: reconnections to parametrized streams don't work properly currently: rn we resend everything on reconnection, so it would open a new one. FIX: should instead persist a connection id.
-	//Q: wtf do I do if we missed an updated there? Would you
 	pub async fn next(&mut self) -> Result<serde_json::Value, WsError> {
 		if let Some(inner) = &self.stream {
 			if inner.connected_since + self.config.refresh_after < SystemTime::now() {
@@ -228,10 +228,37 @@ impl<H: WsHandler> WsConnection<H> {
 						unreachable!("Can't get from reading");
 					}
 				},
-				Err(err) => {
-					//TODO!!!!!!: match on error types, attempt reconnect if that could help it
-					panic!("Error: {:?}", err);
-				}
+				Err(err) => match err {
+					tungstenite::Error::ConnectionClosed => {
+						tracing::error!("received `tungstenite::Error::ConnectionClosed` on polling. Will reconnect");
+						self.stream = None;
+						continue;
+					}
+					tungstenite::Error::AlreadyClosed => {
+						tracing::error!("received `tungstenite::Error::AlreadyClosed` from polling. Will reconnect");
+						self.stream = None;
+						continue;
+					}
+					tungstenite::Error::Io(error) => todo!(),
+					tungstenite::Error::Tls(tls_error) => todo!(),
+					tungstenite::Error::Capacity(capacity_error) => {
+						tracing::warn!("received `tungstenite::Error::Capacity` from polling: {capacity_error:?}. Skipping.");
+						continue;
+					}
+					tungstenite::Error::Protocol(protocol_error) => {
+						panic!("received `tungstenite::Error::Protocol` from polling: {protocol_error:?}");
+					}
+					tungstenite::Error::WriteBufferFull(_) => unreachable!("can only get from writing"),
+					tungstenite::Error::Utf8 => panic!("received `tungstenite::Error::Utf8` from polling. Exchange is going crazy, moving away from it"),
+					tungstenite::Error::AttackAttempt => {
+						tracing::warn!("received `tungstenite::Error::AttackAttempt` from polling. Don't have a reason to trust detection 100%, so just reconnecting.");
+						self.stream = None;
+						continue;
+					}
+					tungstenite::Error::Url(url_error) => todo!(),
+					tungstenite::Error::Http(response) => todo!(),
+					tungstenite::Error::HttpFormat(error) => todo!(),
+				},
 			}
 		};
 		Ok(json_rpc_value)
@@ -300,6 +327,257 @@ impl<H: WsHandler> WsConnection<H> {
 	}
 }
 
+mod test {
+	use std::time::SystemTime;
+
+	use futures_util::Stream;
+	use pin_project_lite::pin_project;
+	use tokio::time::timeout;
+
+	use super::*;
+
+	pin_project! {
+		struct ConnectionFuture<'a, H: WsHandler> {
+			connection: &'a mut WsConnection<H>,
+			#[pin]
+			state: ConnectionState<'a>,
+		}
+	}
+
+	enum ConnectionState<'a> {
+		Connect(Pin<Box<dyn std::future::Future<Output = Result<(), WsError>> + 'a>>),
+		Reconnect(Pin<Box<dyn std::future::Future<Output = Result<(), WsError>> + 'a>>),
+		SendAll(Pin<Box<dyn std::future::Future<Output = Result<(), tungstenite::Error>> + 'a>>),
+		Send(Pin<Box<dyn std::future::Future<Output = Result<(), tungstenite::Error>> + 'a>>),
+	}
+
+	impl<H: WsHandler + std::marker::Unpin> Stream for WsConnection<H> {
+    type Item = Result<serde_json::Value, WsError>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+        
+        // Check existing connection for refresh
+        if let Some(inner) = &this.stream {
+            if inner.connected_since + this.config.refresh_after < SystemTime::now() {
+                tracing::info!("Refreshing connection, as `refresh_after` specified in WsConfig has elapsed ({:?})", this.config.refresh_after);
+                
+                // Handle reconnection
+                let fut = this.reconnect();
+                tokio::pin!(fut);
+                
+                match fut.poll(cx) {
+                    Poll::Ready(Ok(())) => {},
+                    Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e))),
+                    Poll::Pending => return Poll::Pending,
+                }
+            }
+        }
+        
+        // Establish connection if none exists
+        if this.stream.is_none() {
+            let fut = this.connect();
+            tokio::pin!(fut);
+            
+            match fut.poll(cx) {
+                Poll::Ready(Ok(())) => {},
+                Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e))),
+                Poll::Pending => return Poll::Pending,
+            }
+        }
+        
+        // At this point, we have a valid connection
+        let stream = this.stream.as_mut().unwrap();
+        
+        // Determine timeout based on last communication
+        let timeout_duration = match stream.last_unanswered_communication {
+            Some(last_unanswered) => {
+                let now = SystemTime::now();
+                if last_unanswered + this.config.response_timeout > now {
+                    this.config.response_timeout
+                } else {
+                    tracing::error!(
+                        "Timeout for last unanswered communication ended before `.next()` was called. This likely indicates an implementation error on the clientside."
+                    );
+                    
+                    let fut = this.reconnect();
+                    tokio::pin!(fut);
+                    
+                    match fut.poll(cx) {
+                        Poll::Ready(Ok(())) => {},
+                        Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e))),
+                        Poll::Pending => return Poll::Pending,
+                    }
+                    
+                    return Poll::Pending;
+                }
+            }
+            None => this.config.message_timeout,
+        };
+        
+        // Poll for the next message with timeout
+        let timeout_future = timeout(timeout_duration, stream.next());
+        tokio::pin!(timeout_future);
+        
+        match timeout_future.poll(cx) {
+            Poll::Ready(Ok(Some(resp))) => {
+                stream.last_unanswered_communication = None;
+                
+                match resp {
+                    Ok(succ_resp) => match succ_resp {
+                        tungstenite::Message::Text(text) => {
+                            let value: serde_json::Value =
+                                serde_json::from_str(&text).expect("API sent invalid JSON, which is completely unexpected. Disappointment is immeasurable and the day is ruined.");
+                            
+                            match this.handler.handle_jrpc(&value) {
+                                Ok(further_communication) => {
+                                    if let Some(comm) = further_communication {
+                                        let fut = this.send_all(comm);
+                                        tokio::pin!(fut);
+                                        
+                                        match fut.poll(cx) {
+                                            Poll::Ready(Ok(())) => return Poll::Pending,
+                                            Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e.into()))),
+                                            Poll::Pending => return Poll::Pending,
+                                        }
+                                    }
+                                    
+                                    tracing::trace!("{value:#?}");
+                                    Poll::Ready(Some(Ok(value)))
+                                }
+                                Err(e) => Poll::Ready(Some(Err(e))),
+                            }
+                        }
+                        tungstenite::Message::Binary(_) => {
+                            panic!("Received binary. But exchanges are not smart enough to send this, what is happening");
+                        }
+                        tungstenite::Message::Ping(bytes) => {
+                            let fut = this.send(tungstenite::Message::Pong(bytes));
+                            tokio::pin!(fut);
+                            
+                            match fut.poll(cx) {
+                                Poll::Ready(Ok(())) => {
+                                    tracing::debug!("ponged");
+                                    return Poll::Pending;
+                                },
+                                Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e.into()))),
+                                Poll::Pending => return Poll::Pending,
+                            }
+                        }
+                        tungstenite::Message::Pong(_) => {
+                            tracing::info!("Received pong");
+                            return Poll::Pending;
+                        }
+                        tungstenite::Message::Close(maybe_reason) => {
+                            match maybe_reason {
+                                Some(close_frame) => {
+                                    tracing::info!("Server closed connection; reason: {close_frame:?}");
+                                }
+                                None => {
+                                    tracing::info!("Server closed connection; no reason specified.");
+                                }
+                            }
+                            this.stream = None;
+                            
+                            let fut = this.reconnect();
+                            tokio::pin!(fut);
+                            
+                            match fut.poll(cx) {
+                                Poll::Ready(Ok(())) => return Poll::Pending,
+                                Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e))),
+                                Poll::Pending => return Poll::Pending,
+                            }
+                        }
+                        tungstenite::Message::Frame(_) => {
+                            unreachable!("Can't get from reading");
+                        }
+                    },
+                    Err(err) => match err {
+                        tungstenite::Error::ConnectionClosed => {
+                            tracing::error!("received `tungstenite::Error::ConnectionClosed` on polling. Will reconnect");
+                            this.stream = None;
+                            return Poll::Pending;
+                        }
+                        tungstenite::Error::AlreadyClosed => {
+                            tracing::error!("received `tungstenite::Error::AlreadyClosed` from polling. Will reconnect");
+                            this.stream = None;
+                            return Poll::Pending;
+                        }
+                        tungstenite::Error::Capacity(capacity_error) => {
+                            tracing::warn!("received `tungstenite::Error::Capacity` from polling: {capacity_error:?}. Skipping.");
+                            return Poll::Pending;
+                        }
+                        tungstenite::Error::Protocol(protocol_error) => {
+                            panic!("received `tungstenite::Error::Protocol` from polling: {protocol_error:?}");
+                        }
+                        tungstenite::Error::WriteBufferFull(_) => unreachable!("can only get from writing"),
+                        tungstenite::Error::Utf8 => panic!("received `tungstenite::Error::Utf8` from polling. Exchange is going crazy, moving away from it"),
+                        tungstenite::Error::AttackAttempt => {
+                            tracing::warn!("received `tungstenite::Error::AttackAttempt` from polling. Don't have a reason to trust detection 100%, so just reconnecting.");
+                            this.stream = None;
+                            return Poll::Pending;
+                        }
+                        tungstenite::Error::Io(error) => todo!(),
+                        tungstenite::Error::Tls(tls_error) => todo!(),
+                        tungstenite::Error::Url(url_error) => todo!(),
+                        tungstenite::Error::Http(response) => todo!(),
+                        tungstenite::Error::HttpFormat(error) => todo!(),
+                    },
+                }
+            }
+            Poll::Ready(Ok(None)) => {
+                tracing::warn!("tungstenite couldn't read from the stream. Restarting.");
+                
+                let fut = this.reconnect();
+                tokio::pin!(fut);
+                
+                match fut.poll(cx) {
+                    Poll::Ready(Ok(())) => return Poll::Pending,
+                    Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e))),
+                    Poll::Pending => return Poll::Pending,
+                }
+            }
+            Poll::Ready(Err(timeout_error)) => {
+                tracing::warn!("Message reception timed out after {:?} seconds. // {timeout_error}", timeout_duration);
+                
+                let stream = this.stream.as_mut().unwrap();
+                match stream.last_unanswered_communication.is_some() {
+                    true => {
+                        let fut = this.reconnect();
+                        tokio::pin!(fut);
+                        
+                        match fut.poll(cx) {
+                            Poll::Ready(Ok(())) => return Poll::Pending,
+                            Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e))),
+                            Poll::Pending => return Poll::Pending,
+                        }
+                    }
+                    false => {
+                        // Reached standard message_timeout, so force communication
+                        let fut = this.send(tungstenite::Message::Ping(Bytes::default()));
+                        tokio::pin!(fut);
+                        
+                        match fut.poll(cx) {
+                            Poll::Ready(Ok(())) => return Poll::Pending,
+                            Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e.into()))),
+                            Poll::Pending => return Poll::Pending,
+                        }
+                    }
+                }
+            }
+            Poll::Pending => Poll::Pending,
+        }
+    }
+   
+		//dbg
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, None)
+    }
+}
+
+}
+pub use test::*; //dbg
+
 /// Configuration for [WsHandler].
 ///
 /// Should be returned by [WsHandler::ws_config()].
@@ -348,5 +626,6 @@ impl WsConfig {
 pub enum WsError {
 	Tungstenite(tungstenite::Error),
 	Auth(AuthError),
+	Parse(serde_json::Error),
 	Other(eyre::Report),
 }

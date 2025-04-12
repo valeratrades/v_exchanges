@@ -33,6 +33,10 @@ tokio.workspace = true
 tracing.workspace = true
 v_utils.workspace = true
 
+# temp {{{
+pin-project-lite = "*"
+#,}}}
+
 [features]
 native-tls = ["reqwest/native-tls", "tokio-tungstenite/native-tls"]
 native-tls-vendored = ["reqwest/native-tls-vendored", "tokio-tungstenite/native-tls-vendored"]

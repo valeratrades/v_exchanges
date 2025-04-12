@@ -3,7 +3,7 @@
 
 use std::{borrow::Cow, marker::PhantomData, time::SystemTime, vec};
 
-use generics::{reqwest::Url, tokio_tungstenite::tungstenite, AuthError};
+use generics::{AuthError, reqwest::Url, tokio_tungstenite::tungstenite};
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Serialize, de::DeserializeOwned};
@@ -162,7 +162,7 @@ where
 			BybitHttpAuth::BelowV3 => Self::v1_auth(builder, request_body, pubkey, timestamp, hmac, false, self.options.recv_window),
 			BybitHttpAuth::UsdcContractV1 => Self::v3_auth(builder, request_body, pubkey, timestamp, hmac, true, self.options.recv_window),
 			BybitHttpAuth::V3AndAbove => Self::v3_auth(builder, request_body, pubkey, timestamp, hmac, false, self.options.recv_window),
-			BybitHttpAuth::None => unreachable!(), // we've already handled this case
+			BybitHttpAuth::None => unreachable!("we're already handled this case"),
 		}
 	}
 
@@ -358,6 +358,7 @@ impl WsHandler for BybitWsHandler {
 		config
 	}
 
+	#[instrument(skip_all)]
 	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
 		if self.options.ws_auth {
 			let pubkey = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
@@ -385,29 +386,70 @@ impl WsHandler for BybitWsHandler {
 
 	#[instrument(skip_all, fields(jrpc = ?format_args!("{:#?}", jrpc)))]
 	fn handle_jrpc(&mut self, jrpc: &serde_json::Value) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
-		match jrpc["op"].as_str().expect("Missing \"op\" field") {
-			"auth" => {
-				if jrpc["success"].as_bool() == Some(true) {
-					tracing::info!("Ws authentication successful");
-				} else {
-					tracing::warn!("Ws authentication unsuccessful");
-				}
-				Ok(Some(self.subscribe_messages()))
-			}
-			"subscribe" => {
-				if jrpc["success"].as_bool() == Some(true) {
-					tracing::info!("Ws topics subscription successful");
-				} else {
-					match self.options.ws_auth || jrpc["ret_msg"] != serde_json::Value::String("Request not authorized".to_owned()) {
-						true => tracing::warn!("Ws topics subscription unsuccessful"),
-						false => {
-							return Err(WsError::Auth(AuthError::Other(eyre!("Tried to access a private endpoint without authentication"))));
+		//TODO!!!!!!!!!!!: tell serde that enum name is not part of it
+		#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+		#[serde(untagged)]
+		enum BybitResponse {
+			Feedback(FeedbackResponse),
+			Content(ContentResponse),
+		}
+		//HACK: this ignores differences of `Option` endpoints: https://bybit-exchange.github.io/docs/v5/ws/connect#:~:text=Linear/Inverse-,Option,-%7B%0A%20%20%20%20%22success%22%3A%20true%2C%0A%20%20%20%20%22conn_id
+		#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+		struct FeedbackResponse {
+			success: bool,
+			ret_msg: String,
+			op: Operation,
+			/// returned if was specified in the request
+			req_id: Option<String>,
+			conn_id: String,
+		}
+		#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+		#[serde(rename_all = "lowercase")]
+		enum Operation {
+			Auth,
+			Subscribe,
+			Unsubscribe,
+		}
+		#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+		struct ContentResponse {
+			pub data: serde_json::Value,
+			pub topic: String,
+			pub ts: u64,
+			#[serde(rename = "type")]
+			pub type_: String,
+		}
+
+		let bybit_response = serde_json::from_value::<BybitResponse>(jrpc.clone()).wrap_err_with(|| format!("Failed to deserialize Bybit response: {jrpc:?}"))?;
+		match bybit_response {
+			BybitResponse::Feedback(FeedbackResponse { op, success, ret_msg, .. }) => {
+				match op {
+					Operation::Auth => {
+						if success {
+							tracing::info!("Ws authentication successful");
+						} else {
+							tracing::warn!("Ws authentication unsuccessful");
 						}
+						Ok(Some(self.subscribe_messages()))
 					}
+					Operation::Subscribe => {
+						if jrpc["success"].as_bool() == Some(true) {
+							tracing::info!("Ws topics subscription successful");
+						} else {
+							match self.options.ws_auth || &ret_msg != "Request not authorized" {
+								true => tracing::warn!("Ws topics subscription unsuccessful"),
+								false => {
+									return Err(WsError::Auth(AuthError::Other(eyre!("Tried to access a private endpoint without authentication"))));
+								}
+							}
+						}
+						Ok(Some(vec![])) // otherwise, if we return None here, with current implementanion (2025/04/04) we'd be accepting the message as containing desired content.
+					}
+					_ => todo!(),
 				}
-				Ok(Some(vec![])) // otherwise, if we return None here, with current implementanion (2025/04/04) we'd be accepting the message as containing desired content.
 			}
-			_ => Ok(None),
+			BybitResponse::Content(_) => {
+				Ok(None) // this is a content message, we don't need to answer anything to the exchange here
+			}
 		}
 	}
 }
