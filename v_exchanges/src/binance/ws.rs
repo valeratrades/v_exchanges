@@ -13,44 +13,45 @@ use crate::ws_types::TradeEvent;
 
 // trades {{{
 pub(crate) async fn trades(client: &Client, pair: Pair, m: Market) -> mpsc::Receiver<Result<TradeEvent, WsError>> {
-	let topic = format!("ws/{}@trade", pair.fmt_binance().to_lowercase());
-	let base_url = match m {
-		Market::Perp => BinanceWsUrl::FuturesUsdM,
-		Market::Spot | Market::Marg => BinanceWsUrl::Spot,
-		_ => unimplemented!(),
-	};
-	let mut connection = client.ws_connection(&topic, vec![BinanceOption::WsUrl(base_url)]);
-	let (tx, rx) = mpsc::channel::<Result<TradeEvent, WsError>>(256);
-
-	//SPAWN: can go around it with proper impl of futures_core::Stream, but that would require "unwrapping" async into the underlying state-machine on Poll in every instance of its utilization there
-	tokio::spawn(async move {
-		loop {
-			let resp = connection.next().await;
-			static EXPECT_REASON: &str = "Fails if either a) exchange changed trade_event's serialization (unrecoverable), either b) exchange-communication layer failed to pick out an error response, which means we probably shouldn't run in production yet.\n";
-
-			let result_trade_event = resp.map(|msg| {
-				assert_eq!(msg["e"], "trade", "{EXPECT_REASON}");
-				match m {
-					Market::Perp => {
-						let initial = serde_json::from_value::<TradeEventFuts>(msg).expect(EXPECT_REASON);
-						TradeEvent::from(initial)
-					}
-					Market::Spot | Market::Marg => {
-						let initial = serde_json::from_value::<TradeEventSpot>(msg).expect(EXPECT_REASON);
-						TradeEvent::from(initial)
-					}
-					_ => unimplemented!(),
-				}
-			});
-
-			if tx.send(result_trade_event).await.is_err() {
-				tracing::debug!("Receiver dropped, dropping the connection");
-				break;
-			}
-		}
-	});
-
-	rx
+	todo!()
+	//let topic = format!("ws/{}@trade", pair.fmt_binance().to_lowercase());
+	//let base_url = match m {
+	//	Market::Perp => BinanceWsUrl::FuturesUsdM,
+	//	Market::Spot | Market::Marg => BinanceWsUrl::Spot,
+	//	_ => unimplemented!(),
+	//};
+	//let mut connection = client.ws_connection(&topic, vec![BinanceOption::WsUrl(base_url)]);
+	//let (tx, rx) = mpsc::channel::<Result<TradeEvent, WsError>>(256);
+	//
+	////SPAWN: can go around it with proper impl of futures_core::Stream, but that would require "unwrapping" async into the underlying state-machine on Poll in every instance of its utilization there
+	//tokio::spawn(async move {
+	//	loop {
+	//		let resp = connection.next().await;
+	//		static EXPECT_REASON: &str = "Fails if either a) exchange changed trade_event's serialization (unrecoverable), either b) exchange-communication layer failed to pick out an error response, which means we probably shouldn't run in production yet.\n";
+	//
+	//		let result_trade_event = resp.map(|msg| {
+	//			assert_eq!(msg["e"], "trade", "{EXPECT_REASON}");
+	//			match m {
+	//				Market::Perp => {
+	//					let initial = serde_json::from_value::<TradeEventFuts>(msg).expect(EXPECT_REASON);
+	//					TradeEvent::from(initial)
+	//				}
+	//				Market::Spot | Market::Marg => {
+	//					let initial = serde_json::from_value::<TradeEventSpot>(msg).expect(EXPECT_REASON);
+	//					TradeEvent::from(initial)
+	//				}
+	//				_ => unimplemented!(),
+	//			}
+	//		});
+	//
+	//		if tx.send(result_trade_event).await.is_err() {
+	//			tracing::debug!("Receiver dropped, dropping the connection");
+	//			break;
+	//		}
+	//	}
+	//});
+	//
+	//rx
 }
 
 #[serde_as]

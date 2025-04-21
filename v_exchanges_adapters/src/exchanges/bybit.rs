@@ -385,7 +385,7 @@ impl WsHandler for BybitWsHandler {
 	}
 
 	#[instrument(skip_all, fields(jrpc = ?format_args!("{:#?}", jrpc)))]
-	fn handle_jrpc(&mut self, jrpc: &serde_json::Value) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
+	fn handle_jrpc(&mut self, jrpc: &serde_json::Value, expected_event_names: HashSet<String>) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
 		//TODO!!!!!!!!!!!: tell serde that enum name is not part of it
 		#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 		#[serde(untagged)]

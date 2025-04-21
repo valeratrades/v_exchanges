@@ -1,8 +1,5 @@
 use std::{
-	pin::Pin,
-	task::{Context, Poll},
-	time::{Duration, SystemTime},
-	vec,
+	collections::HashSet, pin::Pin, task::{Context, Poll}, time::{Duration, SystemTime}, vec
 };
 
 use eyre::{Result, bail};
@@ -13,6 +10,11 @@ use tokio_tungstenite::{
 	MaybeTlsStream, WebSocketStream,
 	tungstenite::{self, Bytes},
 };
+use tracing::instrument;
+use futures_util::Stream;
+use pin_project_lite::pin_project;
+use tokio::time::timeout;
+
 
 use crate::AuthError;
 
@@ -20,6 +22,7 @@ type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 /// handle exchange-level events on the [WsConnection].
 pub trait WsHandler {
+	type Content;
 	/// Returns a [WsConfig] that will be applied for all WebSocket connections handled by this handler.
 	fn config(&self) -> WsConfig {
 		WsConfig::default()
@@ -33,6 +36,7 @@ pub trait WsHandler {
 	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
 		Ok(vec![])
 	}
+
 
 	//Q: problem: can be either {String, serde_json::Value} //? other things?
 	/*
@@ -55,24 +59,33 @@ pub trait WsHandler {
 	  }
 	  - and then the latter could be requiring signing
 	  */
-	// handle_subcribe(&mut self, Vec<serde_json::Value>) -> Result<, WsError>
-
-	/// Called when the [WsConnection] received a JSON-RPC value, returns messages to be sent to the server. If the message received is the desired content, should just return `None`.
-	#[allow(unused_variables)]
-	fn handle_jrpc(&mut self, jrpc: &serde_json::Value) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
-		Ok(None)
+	fn handle_subcribe(&mut self, topics_and_event_names: Vec<(Topic, String)>) -> Result<Vec<tungstenite::Message>, WsError> {
+		Ok(vec![])
 	}
+
+	/// Called when the [WsConnection] received a JSON-RPC value, returns messages to be sent to the server or the content with parsed event name. If not the desired content and no respose is to be sent (like after a confirmation for a subscription), return a Response with an empty Vec.
+	#[allow(unused_variables)]
+	fn handle_jrpc(&mut self, jrpc: &serde_json::Value, expected_event_names: HashSet<String>) -> Result<(Self::Content), WsError>;
 
 	//A: use this iff spot&&perp binance accept listen-key refresh through stream
 	///// Additional POST communication with the exchange, not conditional on received messages, can be handled here.
-	/////
 	///// Really this is just for damn Binance with their stupid `listn-key` standard.
 	//fn handle_post(&mut self) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
 	//	Ok(None)
 	//}
+
+	//#[allow(unused_variables)]
+	//fn handle_jrpc(&mut self, jrpc: &serde_json::Value) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
+	//	Ok(None)
+	//}
+
+}
+#[derive(Debug, Clone)]
+pub struct ContentEvent {
+	pub name: String,
+	pub content: serde_json::Value,
 }
 
-#[derive(Debug)]
 /// Main way to interact with the WebSocket APIs.
 pub struct WsConnection<H: WsHandler> {
 	url: Url,
@@ -239,7 +252,7 @@ impl<H: WsHandler> WsConnection<H> {
 						self.stream = None;
 						continue;
 					}
-					tungstenite::Error::Io(error) => todo!(),
+					tungstenite::Error::Io(error) => {tracing::warn!("received `tungstenite::Error::Io` from polling: {error:?}. Likely indicates connection issues. Skipping."); continue;},
 					tungstenite::Error::Tls(tls_error) => todo!(),
 					tungstenite::Error::Capacity(capacity_error) => {
 						tracing::warn!("received `tungstenite::Error::Capacity` from polling: {capacity_error:?}. Skipping.");
@@ -264,15 +277,18 @@ impl<H: WsHandler> WsConnection<H> {
 		Ok(json_rpc_value)
 	}
 
+	#[instrument(skip_all)]
 	async fn send_all(&mut self, messages: Vec<tungstenite::Message>) -> Result<(), tungstenite::Error> {
 		if let Some(inner) = &mut self.stream {
 			match messages.len() {
 				0 => return Ok(()),
 				1 => {
+					tracing::debug!("sending to server: {:#?}", &messages[0]);
 					inner.send(messages.into_iter().next().unwrap()).await?;
 					inner.last_unanswered_communication = Some(SystemTime::now());
 				}
 				_ => {
+					tracing::debug!("sending to server: {messages:#?}");
 					let mut message_stream = futures_util::stream::iter(messages).map(Ok);
 					inner.send_all(&mut message_stream).await?;
 					inner.last_unanswered_communication = Some(SystemTime::now());
@@ -327,257 +343,6 @@ impl<H: WsHandler> WsConnection<H> {
 	}
 }
 
-mod test {
-	use std::time::SystemTime;
-
-	use futures_util::Stream;
-	use pin_project_lite::pin_project;
-	use tokio::time::timeout;
-
-	use super::*;
-
-	pin_project! {
-		struct ConnectionFuture<'a, H: WsHandler> {
-			connection: &'a mut WsConnection<H>,
-			#[pin]
-			state: ConnectionState<'a>,
-		}
-	}
-
-	enum ConnectionState<'a> {
-		Connect(Pin<Box<dyn std::future::Future<Output = Result<(), WsError>> + 'a>>),
-		Reconnect(Pin<Box<dyn std::future::Future<Output = Result<(), WsError>> + 'a>>),
-		SendAll(Pin<Box<dyn std::future::Future<Output = Result<(), tungstenite::Error>> + 'a>>),
-		Send(Pin<Box<dyn std::future::Future<Output = Result<(), tungstenite::Error>> + 'a>>),
-	}
-
-	impl<H: WsHandler + std::marker::Unpin> Stream for WsConnection<H> {
-    type Item = Result<serde_json::Value, WsError>;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let this = self.get_mut();
-        
-        // Check existing connection for refresh
-        if let Some(inner) = &this.stream {
-            if inner.connected_since + this.config.refresh_after < SystemTime::now() {
-                tracing::info!("Refreshing connection, as `refresh_after` specified in WsConfig has elapsed ({:?})", this.config.refresh_after);
-                
-                // Handle reconnection
-                let fut = this.reconnect();
-                tokio::pin!(fut);
-                
-                match fut.poll(cx) {
-                    Poll::Ready(Ok(())) => {},
-                    Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e))),
-                    Poll::Pending => return Poll::Pending,
-                }
-            }
-        }
-        
-        // Establish connection if none exists
-        if this.stream.is_none() {
-            let fut = this.connect();
-            tokio::pin!(fut);
-            
-            match fut.poll(cx) {
-                Poll::Ready(Ok(())) => {},
-                Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e))),
-                Poll::Pending => return Poll::Pending,
-            }
-        }
-        
-        // At this point, we have a valid connection
-        let stream = this.stream.as_mut().unwrap();
-        
-        // Determine timeout based on last communication
-        let timeout_duration = match stream.last_unanswered_communication {
-            Some(last_unanswered) => {
-                let now = SystemTime::now();
-                if last_unanswered + this.config.response_timeout > now {
-                    this.config.response_timeout
-                } else {
-                    tracing::error!(
-                        "Timeout for last unanswered communication ended before `.next()` was called. This likely indicates an implementation error on the clientside."
-                    );
-                    
-                    let fut = this.reconnect();
-                    tokio::pin!(fut);
-                    
-                    match fut.poll(cx) {
-                        Poll::Ready(Ok(())) => {},
-                        Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e))),
-                        Poll::Pending => return Poll::Pending,
-                    }
-                    
-                    return Poll::Pending;
-                }
-            }
-            None => this.config.message_timeout,
-        };
-        
-        // Poll for the next message with timeout
-        let timeout_future = timeout(timeout_duration, stream.next());
-        tokio::pin!(timeout_future);
-        
-        match timeout_future.poll(cx) {
-            Poll::Ready(Ok(Some(resp))) => {
-                stream.last_unanswered_communication = None;
-                
-                match resp {
-                    Ok(succ_resp) => match succ_resp {
-                        tungstenite::Message::Text(text) => {
-                            let value: serde_json::Value =
-                                serde_json::from_str(&text).expect("API sent invalid JSON, which is completely unexpected. Disappointment is immeasurable and the day is ruined.");
-                            
-                            match this.handler.handle_jrpc(&value) {
-                                Ok(further_communication) => {
-                                    if let Some(comm) = further_communication {
-                                        let fut = this.send_all(comm);
-                                        tokio::pin!(fut);
-                                        
-                                        match fut.poll(cx) {
-                                            Poll::Ready(Ok(())) => return Poll::Pending,
-                                            Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e.into()))),
-                                            Poll::Pending => return Poll::Pending,
-                                        }
-                                    }
-                                    
-                                    tracing::trace!("{value:#?}");
-                                    Poll::Ready(Some(Ok(value)))
-                                }
-                                Err(e) => Poll::Ready(Some(Err(e))),
-                            }
-                        }
-                        tungstenite::Message::Binary(_) => {
-                            panic!("Received binary. But exchanges are not smart enough to send this, what is happening");
-                        }
-                        tungstenite::Message::Ping(bytes) => {
-                            let fut = this.send(tungstenite::Message::Pong(bytes));
-                            tokio::pin!(fut);
-                            
-                            match fut.poll(cx) {
-                                Poll::Ready(Ok(())) => {
-                                    tracing::debug!("ponged");
-                                    return Poll::Pending;
-                                },
-                                Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e.into()))),
-                                Poll::Pending => return Poll::Pending,
-                            }
-                        }
-                        tungstenite::Message::Pong(_) => {
-                            tracing::info!("Received pong");
-                            return Poll::Pending;
-                        }
-                        tungstenite::Message::Close(maybe_reason) => {
-                            match maybe_reason {
-                                Some(close_frame) => {
-                                    tracing::info!("Server closed connection; reason: {close_frame:?}");
-                                }
-                                None => {
-                                    tracing::info!("Server closed connection; no reason specified.");
-                                }
-                            }
-                            this.stream = None;
-                            
-                            let fut = this.reconnect();
-                            tokio::pin!(fut);
-                            
-                            match fut.poll(cx) {
-                                Poll::Ready(Ok(())) => return Poll::Pending,
-                                Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e))),
-                                Poll::Pending => return Poll::Pending,
-                            }
-                        }
-                        tungstenite::Message::Frame(_) => {
-                            unreachable!("Can't get from reading");
-                        }
-                    },
-                    Err(err) => match err {
-                        tungstenite::Error::ConnectionClosed => {
-                            tracing::error!("received `tungstenite::Error::ConnectionClosed` on polling. Will reconnect");
-                            this.stream = None;
-                            return Poll::Pending;
-                        }
-                        tungstenite::Error::AlreadyClosed => {
-                            tracing::error!("received `tungstenite::Error::AlreadyClosed` from polling. Will reconnect");
-                            this.stream = None;
-                            return Poll::Pending;
-                        }
-                        tungstenite::Error::Capacity(capacity_error) => {
-                            tracing::warn!("received `tungstenite::Error::Capacity` from polling: {capacity_error:?}. Skipping.");
-                            return Poll::Pending;
-                        }
-                        tungstenite::Error::Protocol(protocol_error) => {
-                            panic!("received `tungstenite::Error::Protocol` from polling: {protocol_error:?}");
-                        }
-                        tungstenite::Error::WriteBufferFull(_) => unreachable!("can only get from writing"),
-                        tungstenite::Error::Utf8 => panic!("received `tungstenite::Error::Utf8` from polling. Exchange is going crazy, moving away from it"),
-                        tungstenite::Error::AttackAttempt => {
-                            tracing::warn!("received `tungstenite::Error::AttackAttempt` from polling. Don't have a reason to trust detection 100%, so just reconnecting.");
-                            this.stream = None;
-                            return Poll::Pending;
-                        }
-                        tungstenite::Error::Io(error) => todo!(),
-                        tungstenite::Error::Tls(tls_error) => todo!(),
-                        tungstenite::Error::Url(url_error) => todo!(),
-                        tungstenite::Error::Http(response) => todo!(),
-                        tungstenite::Error::HttpFormat(error) => todo!(),
-                    },
-                }
-            }
-            Poll::Ready(Ok(None)) => {
-                tracing::warn!("tungstenite couldn't read from the stream. Restarting.");
-                
-                let fut = this.reconnect();
-                tokio::pin!(fut);
-                
-                match fut.poll(cx) {
-                    Poll::Ready(Ok(())) => return Poll::Pending,
-                    Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e))),
-                    Poll::Pending => return Poll::Pending,
-                }
-            }
-            Poll::Ready(Err(timeout_error)) => {
-                tracing::warn!("Message reception timed out after {:?} seconds. // {timeout_error}", timeout_duration);
-                
-                let stream = this.stream.as_mut().unwrap();
-                match stream.last_unanswered_communication.is_some() {
-                    true => {
-                        let fut = this.reconnect();
-                        tokio::pin!(fut);
-                        
-                        match fut.poll(cx) {
-                            Poll::Ready(Ok(())) => return Poll::Pending,
-                            Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e))),
-                            Poll::Pending => return Poll::Pending,
-                        }
-                    }
-                    false => {
-                        // Reached standard message_timeout, so force communication
-                        let fut = this.send(tungstenite::Message::Ping(Bytes::default()));
-                        tokio::pin!(fut);
-                        
-                        match fut.poll(cx) {
-                            Poll::Ready(Ok(())) => return Poll::Pending,
-                            Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e.into()))),
-                            Poll::Pending => return Poll::Pending,
-                        }
-                    }
-                }
-            }
-            Poll::Pending => Poll::Pending,
-        }
-    }
-   
-		//dbg
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (0, None)
-    }
-}
-
-}
-pub use test::*; //dbg
-
 /// Configuration for [WsHandler].
 ///
 /// Should be returned by [WsHandler::ws_config()].
@@ -622,10 +387,33 @@ impl WsConfig {
 	}
 }
 
+
 #[derive(Debug, derive_more::Display, thiserror::Error, derive_more::From)]
 pub enum WsError {
 	Tungstenite(tungstenite::Error),
 	Auth(AuthError),
 	Parse(serde_json::Error),
+	Subscription(SubscriptionError),
+	UnexpectedEvent(serde_json::Value),
 	Other(eyre::Report),
+}
+
+#[derive(Debug, derive_more::Display, thiserror::Error)]
+pub enum SubscriptionError {
+	Topic(String),
+	Params(serde_json::Value),
+	Incompatible(IncompatibleSubscriptionError),
+}
+#[derive(Debug, thiserror::Error)]
+#[error("Incompatible subscription error: {topic:#?} can't be opened on a stream that is subscribed to {existing_topics:?} with this base url: {base_url}")]
+pub struct IncompatibleSubscriptionError {
+	topic: Topic,
+	base_url: Url,
+	existing_topics: Vec<Topic>,
+}
+
+#[derive(Debug, derive_more::Display)]
+pub enum Topic {
+	String(String),
+	Trade(serde_json::Value),
 }
