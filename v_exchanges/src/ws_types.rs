@@ -1,3 +1,4 @@
+use adapters::generics::ws::{Topic, WsError};
 use chrono::{DateTime, Utc};
 
 #[async_trait::async_trait]
@@ -6,7 +7,7 @@ pub trait ExchangeStream {
 	type Topic;
 
 	async fn next(&mut self) -> Option<Result<Self::Content, WsError>>;
-	async fn subscribe(&mut self, topics_and_associated_event_names: Vec<(Self::Topic, HashSet<String>)>) -> Result<(), WsError>;
+	async fn subscribe(&mut self, topics: Vec<Topic>) -> Result<(), WsError>;
 }
 
 #[derive(Clone, Debug, Default)]

@@ -1,15 +1,15 @@
 // A module for communicating with the [Binance API](https://binance-docs.github.io/apidocs/spot/en/).
 
-use std::{marker::PhantomData, str::FromStr, time::SystemTime};
+use std::{collections::HashSet, marker::PhantomData, str::FromStr, time::SystemTime};
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use eyre::eyre;
 use generics::{
 	AuthError,
 	http::{ApiError, BuildError, HandleError, *},
 	reqwest::Url,
 	tokio_tungstenite::tungstenite,
-	ws::{WsConfig, WsError, WsHandler},
+	ws::{ContentEvent, ResponseOrContent, Topic, WsConfig, WsError, WsHandler},
 };
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
@@ -138,6 +138,8 @@ impl WsHandler for BinanceWsHandler {
 		if self.options.ws_url != BinanceWsUrl::None {
 			config.base_url = Some(self.options.ws_url.to_owned());
 		}
+		config.topics = config.topics.union(&self.options.ws_topics).cloned().collect();
+
 		config
 	}
 
@@ -159,23 +161,46 @@ impl WsHandler for BinanceWsHandler {
 		Ok(vec![])
 	}
 
-	fn handle_jrpc(&mut self, jrpc: &serde_json::Value) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
-		//if SystemTime::now().duration_since(self.last_keep_alive).unwrap() > Duration::from_mins(30) {
-		//	//XXX: will fail if it's not a USER_DATA_STREAM
-		//	//TODO send `PUT /api/v3/userDataStream`
-		//	let client = crate::Client::default();
-		//	.request(
-		//		&self.options,
-		//		"PUT",
-		//		"/api/v3/userDataStream",
-		//		None::<()>,
-		//	)
-		//}
+	fn handle_subscribe(&mut self, topics: HashSet<Topic>) -> eyre::Result<Vec<tungstenite::Message>, WsError> {
+		todo!();
+	}
 
-		match jrpc["e"].as_str().expect("missing event type") {
-			"listenKeyExpired" => todo!(),
-			_ => Ok(None),
+	fn handle_jrpc(&mut self, jrpc: serde_json::Value) -> Result<ResponseOrContent, WsError> {
+		//match jrpc["e"].as_str().expect("missing event type") { // matches with event_type
+		//	"listenKeyExpired" => todo!(),
+		//	_ => Ok(None),
+		//}
+		#[derive(serde::Deserialize)]
+		struct NamedStreamData {
+			pub stream: String,
+			pub data: serde_json::Value,
 		}
+		let (event_topic, data) = {
+			match serde_json::from_value::<NamedStreamData>(jrpc.clone()) {
+				Ok(NamedStreamData { stream, data }) => (stream, data),
+				Err(_) => ("".to_string(), jrpc),
+			}
+		};
+		assert!(data.is_object(), "data should be an object");
+
+		let (event_type, event_time, event_data) = {
+			//dbg: dirty impl
+			let mut event_data = data.as_object().unwrap().to_owned();
+			let event_type = data["e"].as_str().unwrap().to_owned();
+			event_data.remove("e");
+			let event_ts: i64 = data["E"].as_i64().unwrap();
+			let event_time = DateTime::<Utc>::from_timestamp(event_ts, 0).unwrap();
+			event_data.remove("E");
+			(event_type, event_time, event_data.into())
+		};
+
+		let content = ContentEvent {
+			data: event_data,
+			topic: event_topic,
+			time: event_time,
+			event_type,
+		};
+		Ok(ResponseOrContent::Content(content)) //dbg
 	}
 
 	// stream listen-key keepalive works for:
@@ -195,6 +220,17 @@ impl WsHandler for BinanceWsHandler {
 	//		return Ok(Some(vec![tungstenite::Message::Text(msg_json.to_string().into())]));
 	//	}
 	//	Ok(None)
+	//}
+	//if SystemTime::now().duration_since(self.last_keep_alive).unwrap() > Duration::from_mins(30) {
+	//	//XXX: will fail if it's not a USER_DATA_STREAM
+	//	//TODO send `PUT /api/v3/userDataStream`
+	//	let client = crate::Client::default();
+	//	.request(
+	//		&self.options,
+	//		"PUT",
+	//		"/api/v3/userDataStream",
+	//		None::<()>,
+	//	)
 	//}
 }
 impl WsOption for BinanceOption {
@@ -230,6 +266,8 @@ pub enum BinanceOption {
 	/// [WebSocketConfig] used for creating [WebSocketConnection]s
 	/// `url_prefix` will be overridden by [WebSocketUrl](Self::WebSocketUrl) unless `WebSocketUrl` is [BinanceWebSocketUrl::None].
 	WsConfig(WsConfig),
+	/// See [WsConfig::topics]. Will be merged with those manually defined in [Self::WsConfig::topics], if any.
+	WsTopics(Vec<Topic>),
 }
 
 /// A `enum` that represents the base url of the Binance REST API.
@@ -387,6 +425,8 @@ pub struct BinanceOptions {
 	pub ws_url: BinanceWsUrl,
 	/// see [BinanceOption::WsConfig]
 	pub ws_config: WsConfig,
+	/// see [BinanceOption::WsTopics]
+	pub ws_topics: HashSet<Topic>,
 	/// see [BinanceOption::Test]
 	pub test: bool,
 }
@@ -404,6 +444,7 @@ impl HandlerOptions for BinanceOptions {
 			Self::OptionItem::HttpAuth(v) => self.http_auth = v,
 			Self::OptionItem::WsUrl(v) => self.ws_url = v,
 			Self::OptionItem::WsConfig(v) => self.ws_config = v,
+			Self::OptionItem::WsTopics(v) => self.ws_topics = v.into_iter().collect(),
 		}
 	}
 

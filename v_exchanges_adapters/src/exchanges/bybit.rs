@@ -36,12 +36,12 @@ pub enum BybitOption {
 	WsUrl(BybitWsUrlBase),
 	/// Whether [BybitWsHandler] should perform authentication
 	WsAuth(bool),
-	/// The topics to subscribe to.
-	WsTopics(Vec<String>),
 	/// [WsConfig] used for creating [WsConnection]s
 	/// `url_prefix` will be overridden by [WsUrl](Self::WsUrl) unless `WsUrl` is [BybitWsUrl::None].
 	/// By default, `ignore_duplicate_during_reconnection` is set to `true`.
 	WsConfig(WsConfig),
+	/// Ref [WsConfig::topics]
+	WsTopics(Vec<String>),
 }
 
 /// A `struct` that represents a set of [BybitOption] s.
@@ -62,10 +62,10 @@ pub struct BybitOptions {
 	pub ws_url: BybitWsUrlBase,
 	/// see [BybitOption::WsAuth]
 	pub ws_auth: bool,
-	/// see [BybitOption::WsTopics]
-	pub ws_topics: Vec<String>,
 	/// see [BybitOption::WsConfig]
 	pub ws_config: WsConfig,
+	/// see [BybitOption::WsTopics]
+	pub ws_topics: HashSet<String>,
 }
 
 /// A `enum` that represents the base url of the Bybit REST API.
@@ -344,11 +344,6 @@ where
 pub struct BybitWsHandler {
 	options: BybitOptions,
 }
-impl BybitWsHandler {
-	fn subscribe_messages(&self) -> Vec<tungstenite::Message> {
-		vec![tungstenite::Message::Text(json!({ "op": "subscribe", "args": self.options.ws_topics }).to_string().into())]
-	}
-}
 impl WsHandler for BybitWsHandler {
 	fn config(&self) -> WsConfig {
 		let mut config = self.options.ws_config.clone();
@@ -360,32 +355,45 @@ impl WsHandler for BybitWsHandler {
 
 	#[instrument(skip_all)]
 	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
-		if self.options.ws_auth {
-			let pubkey = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
-			let secret = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
-			let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("always after the epoch");
-			//XXX: expiration time here is hardcoded to 1s, which would override any specifications of a longer recv_window on top.
-			let expires = time.as_millis() as u64 + 1000; //TODO: figure out how large can I make this
+		match self.options.ws_auth {
+			true => {
+				let pubkey = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
+				let secret = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
+				let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("always after the epoch");
+				//XXX: expiration time here is hardcoded to 1s, which would override any specifications of a longer recv_window on top.
+				let expires = time.as_millis() as u64 + 1000; //TODO: figure out how large can I make this
 
-			// sign with HMAC-SHA256
-			let mut hmac = Hmac::<Sha256>::new_from_slice(secret.expose_secret().as_bytes()).expect("hmac accepts key of any length");
-			hmac.update(format!("GET/realtime{expires}").as_bytes());
-			let signature = hex::encode(hmac.finalize().into_bytes());
+				// sign with HMAC-SHA256
+				let mut hmac = Hmac::<Sha256>::new_from_slice(secret.expose_secret().as_bytes()).expect("hmac accepts key of any length");
+				hmac.update(format!("GET/realtime{expires}").as_bytes());
+				let signature = hex::encode(hmac.finalize().into_bytes());
 
-			return Ok(vec![tungstenite::Message::Text(
-				json!({
-					"op": "auth",
-					"args": [pubkey, expires, signature],
-				})
-				.to_string()
-				.into(),
-			)]);
+				Ok(vec![tungstenite::Message::Text(
+					json!({
+						"op": "auth",
+						"args": [pubkey, expires, signature],
+					})
+					.to_string()
+					.into(),
+				)])
+			}
+			false => self.handle_subscribe(self.options.ws_topics.iter().cloned().map(Topic::String).collect()),
 		}
-		Ok(self.subscribe_messages())
+	}
+
+	fn handle_subscribe(&mut self, topics: HashSet<Topic>) -> Result<Vec<tungstenite::Message>, WsError> {
+		let topics: Vec<String> = topics
+			.into_iter()
+			.map(|topic| match topic {
+				Topic::String(s) => s,
+				Topic::Trade(_) => todo!(),
+			})
+			.collect();
+		Ok(vec![tungstenite::Message::Text(json!({ "op": "subscribe", "args": topics }).to_string().into())])
 	}
 
 	#[instrument(skip_all, fields(jrpc = ?format_args!("{:#?}", jrpc)))]
-	fn handle_jrpc(&mut self, jrpc: &serde_json::Value, expected_event_names: HashSet<String>) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
+	fn handle_jrpc(&mut self, jrpc: serde_json::Value) -> Result<ResponseOrContent, WsError> {
 		//TODO!!!!!!!!!!!: tell serde that enum name is not part of it
 		#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 		#[serde(untagged)]
@@ -411,45 +419,54 @@ impl WsHandler for BybitWsHandler {
 			Unsubscribe,
 		}
 		#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-		struct ContentResponse {
+		pub struct ContentResponse {
 			pub data: serde_json::Value,
 			pub topic: String,
-			pub ts: u64,
+			pub ts: i64,
 			#[serde(rename = "type")]
-			pub type_: String,
+			pub event_type: String,
+		}
+		impl From<ContentResponse> for ContentEvent {
+			fn from(content: ContentResponse) -> Self {
+				ContentEvent {
+					topic: content.topic,
+					data: content.data,
+					time: DateTime::<Utc>::from_timestamp(content.ts, 0).unwrap(),
+					event_type: content.event_type,
+				}
+			}
 		}
 
 		let bybit_response = serde_json::from_value::<BybitResponse>(jrpc.clone()).wrap_err_with(|| format!("Failed to deserialize Bybit response: {jrpc:?}"))?;
 		match bybit_response {
-			BybitResponse::Feedback(FeedbackResponse { op, success, ret_msg, .. }) => {
-				match op {
-					Operation::Auth => {
-						if success {
-							tracing::info!("Ws authentication successful");
-						} else {
-							tracing::warn!("Ws authentication unsuccessful");
-						}
-						Ok(Some(self.subscribe_messages()))
+			BybitResponse::Feedback(FeedbackResponse { op, success, ret_msg, .. }) => match op {
+				Operation::Auth => match success {
+					true => {
+						tracing::info!("Ws authentication successful");
+						Ok(ResponseOrContent::Response(
+							self.handle_subscribe(self.options.ws_topics.iter().cloned().map(Topic::String).collect())?,
+						))
 					}
-					Operation::Subscribe => {
-						if jrpc["success"].as_bool() == Some(true) {
-							tracing::info!("Ws topics subscription successful");
-						} else {
-							match self.options.ws_auth || &ret_msg != "Request not authorized" {
-								true => tracing::warn!("Ws topics subscription unsuccessful"),
-								false => {
-									return Err(WsError::Auth(AuthError::Other(eyre!("Tried to access a private endpoint without authentication"))));
-								}
+					false => {
+						return Err(WsError::Auth(AuthError::Other(eyre!("Authentication was not successful: {ret_msg}"))));
+					}
+				},
+				Operation::Subscribe => {
+					if jrpc["success"].as_bool() == Some(true) {
+						tracing::info!("Ws topics subscription successful");
+					} else {
+						match self.options.ws_auth || &ret_msg != "Request not authorized" {
+							true => return Err(WsError::Subscription(ret_msg)),
+							false => {
+								return Err(WsError::Auth(AuthError::Other(eyre!("Tried to access a private endpoint without authentication"))));
 							}
 						}
-						Ok(Some(vec![])) // otherwise, if we return None here, with current implementanion (2025/04/04) we'd be accepting the message as containing desired content.
 					}
-					_ => todo!(),
+					Ok(ResponseOrContent::Response(vec![]))
 				}
-			}
-			BybitResponse::Content(_) => {
-				Ok(None) // this is a content message, we don't need to answer anything to the exchange here
-			}
+				_ => todo!(),
+			},
+			BybitResponse::Content(content) => Ok(ResponseOrContent::Content(ContentEvent::from(content))),
 		}
 	}
 }
@@ -511,8 +528,8 @@ impl HandlerOptions for BybitOptions {
 			BybitOption::RecvWindow(v) => self.recv_window = Some(v),
 			BybitOption::WsUrl(v) => self.ws_url = v,
 			BybitOption::WsAuth(v) => self.ws_auth = v,
-			BybitOption::WsTopics(v) => self.ws_topics = v,
 			BybitOption::WsConfig(v) => self.ws_config = v,
+			BybitOption::WsTopics(v) => self.ws_topics = v.into_iter().collect(),
 		}
 	}
 

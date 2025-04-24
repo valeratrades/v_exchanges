@@ -1,20 +1,22 @@
 use std::{
-	collections::HashSet, pin::Pin, task::{Context, Poll}, time::{Duration, SystemTime}, vec
+	collections::HashSet,
+	pin::Pin,
+	task::{Context, Poll},
+	time::{Duration, SystemTime},
+	vec,
 };
 
+use chrono::{DateTime, Utc};
 use eyre::{Result, bail};
-use futures_util::{SinkExt as _, StreamExt as _};
+use futures_util::{SinkExt as _, Stream, StreamExt as _};
+use pin_project_lite::pin_project;
 use reqwest::Url;
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, time::timeout};
 use tokio_tungstenite::{
 	MaybeTlsStream, WebSocketStream,
 	tungstenite::{self, Bytes},
 };
 use tracing::instrument;
-use futures_util::Stream;
-use pin_project_lite::pin_project;
-use tokio::time::timeout;
-
 
 use crate::AuthError;
 
@@ -22,7 +24,6 @@ type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 /// handle exchange-level events on the [WsConnection].
 pub trait WsHandler {
-	type Content;
 	/// Returns a [WsConfig] that will be applied for all WebSocket connections handled by this handler.
 	fn config(&self) -> WsConfig {
 		WsConfig::default()
@@ -36,7 +37,6 @@ pub trait WsHandler {
 	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
 		Ok(vec![])
 	}
-
 
 	//Q: problem: can be either {String, serde_json::Value} //? other things?
 	/*
@@ -59,14 +59,12 @@ pub trait WsHandler {
 	  }
 	  - and then the latter could be requiring signing
 	  */
-	fn handle_subcribe(&mut self, topics_and_event_names: Vec<(Topic, String)>) -> Result<Vec<tungstenite::Message>, WsError> {
-		Ok(vec![])
-	}
+	#[allow(unused_variables)]
+	fn handle_subscribe(&mut self, topics: HashSet<Topic>) -> Result<Vec<tungstenite::Message>, WsError>;
 
 	/// Called when the [WsConnection] received a JSON-RPC value, returns messages to be sent to the server or the content with parsed event name. If not the desired content and no respose is to be sent (like after a confirmation for a subscription), return a Response with an empty Vec.
 	#[allow(unused_variables)]
-	fn handle_jrpc(&mut self, jrpc: &serde_json::Value, expected_event_names: HashSet<String>) -> Result<(Self::Content), WsError>;
-
+	fn handle_jrpc(&mut self, jrpc: serde_json::Value) -> Result<ResponseOrContent, WsError>;
 	//A: use this iff spot&&perp binance accept listen-key refresh through stream
 	///// Additional POST communication with the exchange, not conditional on received messages, can be handled here.
 	///// Really this is just for damn Binance with their stupid `listn-key` standard.
@@ -78,12 +76,39 @@ pub trait WsHandler {
 	//fn handle_jrpc(&mut self, jrpc: &serde_json::Value) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
 	//	Ok(None)
 	//}
+}
 
+#[derive(Debug, Clone)]
+pub enum ResponseOrContent {
+	/// Response to a message sent to the server.
+	Response(Vec<tungstenite::Message>),
+	/// Content received from the server.
+	Content(ContentEvent),
 }
 #[derive(Debug, Clone)]
 pub struct ContentEvent {
-	pub name: String,
-	pub content: serde_json::Value,
+	pub data: serde_json::Value,
+	pub topic: String,
+	pub time: DateTime<Utc>,
+	pub event_type: String,
+}
+
+#[derive(Debug, Clone, Eq)]
+pub struct TopicInterpreter<T> {
+	/// Only one interpreter for this name is allowed to exist // enforced through `Hash` impl defined over `event_name` only
+	pub event_name: String,
+	/// When name matches, interpretation should succeed.
+	pub interpret: fn(&serde_json::Value) -> Result<T, WsError>,
+}
+impl<T> std::hash::Hash for TopicInterpreter<T> {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.event_name.hash(state);
+	}
+}
+impl<T> PartialEq for TopicInterpreter<T> {
+	fn eq(&self, other: &Self) -> bool {
+		self.event_name == other.event_name
+	}
 }
 
 /// Main way to interact with the WebSocket APIs.
@@ -132,7 +157,7 @@ impl<H: WsHandler> WsConnection<H> {
 	}
 
 	/// The main interface. All ws operations are hidden, only thing getting through are the content messages or the lack thereof.
-	pub async fn next(&mut self) -> Result<serde_json::Value, WsError> {
+	pub async fn next(&mut self) -> Result<ContentEvent, WsError> {
 		if let Some(inner) = &self.stream {
 			if inner.connected_since + self.config.refresh_after < SystemTime::now() {
 				tracing::info!("Refreshing connection, as `refresh_after` specified in WsConfig has elapsed ({:?})", self.config.refresh_after);
@@ -203,12 +228,14 @@ impl<H: WsHandler> WsConnection<H> {
 					tungstenite::Message::Text(text) => {
 						let value: serde_json::Value =
 							serde_json::from_str(&text).expect("API sent invalid JSON, which is completely unexpected. Disappointment is immeasurable and the day is ruined.");
-						if let Some(further_communication) = { self.handler.handle_jrpc(&value)? } {
-							self.send_all(further_communication).await?;
-							continue; // only need to send responses when it's not yet the desired content.
-						}
 						tracing::trace!("{value:#?}"); // only log it after the `handle_message` has ran, as we're assuming that if it takes any actions, it will handle logging itself. (and that will likely be at a different level of important too)
-						break value;
+						break match { self.handler.handle_jrpc(value)? } {
+							ResponseOrContent::Response(messages) => {
+								self.send_all(messages).await?;
+								continue; // only need to send responses when it's not yet the desired content.
+							}
+							ResponseOrContent::Content(content) => content,
+						};
 					}
 					tungstenite::Message::Binary(_) => {
 						panic!("Received binary. But exchanges are not smart enough to send this, what is happening");
@@ -252,7 +279,10 @@ impl<H: WsHandler> WsConnection<H> {
 						self.stream = None;
 						continue;
 					}
-					tungstenite::Error::Io(error) => {tracing::warn!("received `tungstenite::Error::Io` from polling: {error:?}. Likely indicates connection issues. Skipping."); continue;},
+					tungstenite::Error::Io(error) => {
+						tracing::warn!("received `tungstenite::Error::Io` from polling: {error:?}. Likely indicates connection issues. Skipping.");
+						continue;
+					}
 					tungstenite::Error::Tls(tls_error) => todo!(),
 					tungstenite::Error::Capacity(capacity_error) => {
 						tracing::warn!("received `tungstenite::Error::Capacity` from polling: {capacity_error:?}. Skipping.");
@@ -301,7 +331,7 @@ impl<H: WsHandler> WsConnection<H> {
 	}
 
 	async fn send(&mut self, message: tungstenite::Message) -> Result<(), tungstenite::Error> {
-		self.send_all(vec![message]).await // vec cost is negligible
+		self.send_all(vec![message]).await // Vec cost is negligible
 	}
 
 	async fn connect(&mut self) -> Result<(), WsError> {
@@ -323,8 +353,8 @@ impl<H: WsHandler> WsConnection<H> {
 		let now = SystemTime::now();
 		self.stream = Some(WsConnectionStream::new(stream, now));
 
-		let messages = self.handler.handle_auth()?;
-		Ok(self.send_all(messages).await?)
+		let auth_messages = self.handler.handle_auth()?;
+		Ok(self.send_all(auth_messages).await?)
 	}
 
 	/// Sends the existing connection (if any) a `Close` message, and then simply drops it, opening a new one.
@@ -367,6 +397,8 @@ pub struct WsConfig {
 	///
 	/// Difference from the [message_timeout](Self::message_timeout) is that here we directly request communication. Eg: sending a Ping or attempting to auth.
 	pub response_timeout: Duration = Duration::from_mins(2),
+	/// The topics that will be subscribed to on creation of the connection.
+	pub topics: HashSet<Topic>,
 }
 impl WsConfig {
 	#[allow(missing_docs)]
@@ -387,32 +419,30 @@ impl WsConfig {
 	}
 }
 
-
 #[derive(Debug, derive_more::Display, thiserror::Error, derive_more::From)]
 pub enum WsError {
 	Tungstenite(tungstenite::Error),
 	Auth(AuthError),
 	Parse(serde_json::Error),
-	Subscription(SubscriptionError),
+	Subscription(String),
 	UnexpectedEvent(serde_json::Value),
 	Other(eyre::Report),
 }
 
-#[derive(Debug, derive_more::Display, thiserror::Error)]
-pub enum SubscriptionError {
-	Topic(String),
-	Params(serde_json::Value),
-	Incompatible(IncompatibleSubscriptionError),
-}
-#[derive(Debug, thiserror::Error)]
-#[error("Incompatible subscription error: {topic:#?} can't be opened on a stream that is subscribed to {existing_topics:?} with this base url: {base_url}")]
-pub struct IncompatibleSubscriptionError {
-	topic: Topic,
-	base_url: Url,
-	existing_topics: Vec<Topic>,
-}
+//#[derive(Debug, derive_more::Display, thiserror::Error)]
+//pub enum SubscriptionError {
+//	Topic(String),
+//	Params(serde_json::Value),
+//	Incompatible(IncompatibleSubscriptionError),
+//}
+//#[derive(Debug, thiserror::Error)]
+//#[error("Incompatible subscription error: could not subscribe to {topic:#?} on {base_url}")]
+//pub struct IncompatibleSubscriptionError {
+//	topic: Topic,
+//	base_url: Url,
+//}
 
-#[derive(Debug, derive_more::Display)]
+#[derive(Clone, Debug, derive_more::Display, serde::Serialize, PartialEq, Eq, Hash)]
 pub enum Topic {
 	String(String),
 	Trade(serde_json::Value),

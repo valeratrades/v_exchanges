@@ -4,6 +4,7 @@
 #![feature(try_blocks)]
 #![feature(duration_constructors)]
 #![feature(let_chains)]
+#![allow(clippy::result_large_err)]
 
 //! # Generic-API-Client
 //! This is a crate for interacting with HTTP/HTTPS/WebSocket APIs.

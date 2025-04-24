@@ -26,6 +26,7 @@ ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
 [dependencies]
 enum_dispatch = "0.3.13"
 v_exchanges_adapters = { version = "^0.6.5", path = "../v_exchanges_adapters/", optional = true }
+
 reqwest = { version = "^0.12.15", optional = true }
 
 chrono.workspace = true
@@ -58,8 +59,8 @@ hex = "*"
 #,}}}
 
 [features]
-default = ["major", "data"]
-#default = ["binance", "bybit"] #dbg
+#default = ["major", "data"]
+default = ["bybit", "binance"] #dbg
 
 full = ["major", "data", "bitflyer", "coincheck"]
 major = ["binance", "bybit", "mexc"]
