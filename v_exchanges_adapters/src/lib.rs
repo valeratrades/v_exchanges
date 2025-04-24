@@ -4,6 +4,7 @@
 #![feature(try_blocks)]
 pub extern crate v_exchanges_api_generics as generics;
 pub use exchanges::*;
+use generics::UrlError;
 use serde::Serialize;
 use traits::*;
 use v_exchanges_api_generics::{
@@ -152,12 +153,12 @@ impl Client {
 		self.client.delete_no_query(url, &O::request_handler(self.merged_options(options))).await
 	}
 
-	pub fn ws_connection<O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> WsConnection<O::WsHandler>
+	pub fn ws_connection<O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> Result<WsConnection<O::WsHandler>, UrlError>
 	where
 		O: WsOption,
 		O::WsHandler: WsHandler,
 		Self: GetOptions<O::Options>, {
-		WsConnection::new(url, O::ws_handler(self.merged_options(options)))
+		WsConnection::try_new(url, O::ws_handler(self.merged_options(options)))
 	}
 }
 

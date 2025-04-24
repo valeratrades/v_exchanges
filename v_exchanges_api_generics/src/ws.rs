@@ -18,15 +18,15 @@ use tokio_tungstenite::{
 };
 use tracing::instrument;
 
-use crate::AuthError;
+use crate::{AuthError, UrlError};
 
 type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 /// handle exchange-level events on the [WsConnection].
 pub trait WsHandler {
 	/// Returns a [WsConfig] that will be applied for all WebSocket connections handled by this handler.
-	fn config(&self) -> WsConfig {
-		WsConfig::default()
+	fn config(&self) -> Result<WsConfig, UrlError> {
+		Ok(WsConfig::default())
 	}
 
 	/// Called when the [WsConnection] is created and on reconnection. Returned messages will be sent back to the server as-is.
@@ -138,22 +138,22 @@ impl WsConnectionStream {
 }
 impl<H: WsHandler> WsConnection<H> {
 	#[allow(missing_docs)]
-	pub fn new(url_suffix: &str, handler: H) -> Self {
+	pub fn try_new(url_suffix: &str, handler: H) -> Result<Self, UrlError> {
 		// expects here are not expected to be seen by the user. Correctness should theoretically be checked at the moment of merging provided options; before this is ever constructed.
-		let config = handler.config();
+		let config = handler.config()?;
 		config.validate().expect("ws config is invalid");
 		let url = match &config.base_url {
-			Some(base_url) => base_url.join(url_suffix).expect("url is invalid"),
-			None => Url::parse(url_suffix).expect("url is invalid"),
+			Some(base_url) => base_url.join(url_suffix)?,
+			None => Url::parse(url_suffix)?,
 		};
 
-		Self {
+		Ok(Self {
 			url,
 			config,
 			handler,
 			stream: None,
 			last_reconnect_attempt: SystemTime::UNIX_EPOCH,
-		}
+		})
 	}
 
 	/// The main interface. All ws operations are hidden, only thing getting through are the content messages or the lack thereof.

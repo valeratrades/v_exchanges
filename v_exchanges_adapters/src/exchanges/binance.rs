@@ -5,9 +5,8 @@ use std::{collections::HashSet, marker::PhantomData, str::FromStr, time::SystemT
 use chrono::{DateTime, Utc};
 use eyre::eyre;
 use generics::{
-	AuthError,
+	AuthError, UrlError,
 	http::{ApiError, BuildError, HandleError, *},
-	reqwest::Url,
 	tokio_tungstenite::tungstenite,
 	ws::{ContentEvent, ResponseOrContent, Topic, WsConfig, WsDefinitionError, WsError, WsHandler},
 };
@@ -15,6 +14,7 @@ use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
+use url::Url;
 
 use crate::traits::*;
 
@@ -26,10 +26,10 @@ where
 {
 	type Successful = R;
 
-	fn base_url(&self, is_test: bool) -> String {
+	fn base_url(&self, is_test: bool) -> Result<Url, UrlError> {
 		match is_test {
-			true => self.options.http_url.as_str_test().unwrap().to_owned(),
-			false => self.options.http_url.as_str().to_owned(),
+			true => self.options.http_url.url_testnet().ok_or_else(|| UrlError::MissingTestnet(self.options.http_url.url_mainnet())),
+			false => Ok(self.options.http_url.url_mainnet()),
 		}
 	}
 
@@ -133,7 +133,7 @@ impl BinanceWsHandler {
 	}
 }
 impl WsHandler for BinanceWsHandler {
-	fn config(&self) -> WsConfig {
+	fn config(&self) -> Result<WsConfig, UrlError> {
 		let mut config = self.options.ws_config.clone();
 		match self.options.ws_url {
 			BinanceWsUrl::None => tracing::warn!(
@@ -148,10 +148,14 @@ impl WsHandler for BinanceWsHandler {
 					}
 					streams.push_str(topic);
 				}
-				config.base_url = Some(self.options.ws_url.to_owned().join(&format!("stream?streams={streams}")).unwrap());
+				let base_url = match self.options.test {
+					true => self.options.ws_url.url_testnet().ok_or_else(|| UrlError::MissingTestnet(self.options.ws_url.url_mainnet()))?,
+					false => self.options.ws_url.url_mainnet(),
+				};
+				config.base_url = Some(base_url.join(&format!("stream?streams={streams}")).unwrap());
 			}
 		}
-		config
+		Ok(config)
 	}
 
 	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
@@ -318,43 +322,40 @@ pub enum BinanceHttpUrl {
 	#[default]
 	None,
 }
-impl BinanceHttpUrl {
-	/// The URL that this variant represents.
-	fn as_str(&self) -> &'static str {
+impl EndpointUrl for BinanceHttpUrl {
+	fn url_mainnet(&self) -> Url {
 		match self {
-			Self::Spot => "https://api.binance.com",
-			Self::Spot1 => "https://api1.binance.com",
-			Self::Spot2 => "https://api2.binance.com",
-			Self::Spot3 => "https://api3.binance.com",
-			Self::Spot4 => "https://api4.binance.com",
-			Self::SpotData => "https://data.binance.com",
-			Self::FuturesUsdM => "https://fapi.binance.com",
-			Self::FuturesCoinM => "https://dapi.binance.com",
-			Self::EuropeanOptions => "https://eapi.binance.com",
-			Self::None => "",
+			Self::Spot => Url::parse("https://api.binance.com").unwrap(),
+			Self::Spot1 => Url::parse("https://api1.binance.com").unwrap(),
+			Self::Spot2 => Url::parse("https://api2.binance.com").unwrap(),
+			Self::Spot3 => Url::parse("https://api3.binance.com").unwrap(),
+			Self::Spot4 => Url::parse("https://api4.binance.com").unwrap(),
+			Self::SpotData => Url::parse("https://data.binance.com").unwrap(),
+			Self::FuturesUsdM => Url::parse("https://fapi.binance.com").unwrap(),
+			Self::FuturesCoinM => Url::parse("https://dapi.binance.com").unwrap(),
+			Self::EuropeanOptions => Url::parse("https://eapi.binance.com").unwrap(),
+			Self::None => Url::parse("").unwrap(),
 		}
 	}
 
-	//TODO: impl more cleanly
-	fn as_str_test(&self) -> Option<&'static str> {
+	fn url_testnet(&self) -> Option<Url> {
 		match self {
-			Self::Spot => Some("https://testnet.binance.vision"),
-			Self::Spot1 => Some("https://testnet.binance.vision"),
-			Self::Spot2 => Some("https://testnet.binance.vision"),
-			Self::Spot3 => Some("https://testnet.binance.vision"),
-			Self::Spot4 => Some("https://testnet.binance.vision"),
-			Self::SpotData => Some("https://testnet.binance.vision"),
-			Self::FuturesUsdM => Some("https://testnet.binancefuture.com"),
-			Self::FuturesCoinM => Some("https://testnet.binancefuture.com"),
+			Self::Spot => Some(Url::parse("https://testnet.binance.vision").unwrap()),
+			Self::Spot1 => Some(Url::parse("https://testnet.binance.vision").unwrap()),
+			Self::Spot2 => Some(Url::parse("https://testnet.binance.vision").unwrap()),
+			Self::Spot3 => Some(Url::parse("https://testnet.binance.vision").unwrap()),
+			Self::Spot4 => Some(Url::parse("https://testnet.binance.vision").unwrap()),
+			Self::SpotData => Some(Url::parse("https://testnet.binance.vision").unwrap()),
+			Self::FuturesUsdM => Some(Url::parse("https://testnet.binancefuture.com").unwrap()),
+			Self::FuturesCoinM => Some(Url::parse("https://testnet.binancefuture.com").unwrap()),
 			Self::EuropeanOptions => None,
-			Self::None => Some(""),
+			Self::None => Some(Url::parse("").unwrap()),
 		}
 	}
 }
 
 /// A `enum` that represents the base url of the Binance WebSocket API
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-#[non_exhaustive]
 pub enum BinanceWsUrl {
 	/// Evaluated to whatever spot url is estimated to be currently preferrable.
 	Spot,
@@ -362,8 +363,6 @@ pub enum BinanceWsUrl {
 	Spot9443,
 	/// `wss://stream.binance.com:443`
 	Spot443,
-	/// `wss://testnet.binance.vision`
-	SpotTest,
 	/// `wss://data-stream.binance.com`
 	SpotData,
 	/// `wss://ws-api.binance.com:443`
@@ -376,34 +375,38 @@ pub enum BinanceWsUrl {
 	FuturesUsdMAuth,
 	/// `wss://dstream.binance.com`
 	FuturesCoinM,
-	/// `wss://stream.binancefuture.com`
-	FuturesUsdMTest,
-	/// `wss://dstream.binancefuture.com`
-	FuturesCoinMTest,
 	/// `wss://nbstream.binance.com`
 	EuropeanOptions,
 	/// The url will not be modified by [BinanceRequestHandler]
 	#[default]
 	None,
 }
-impl BinanceWsUrl {
+impl EndpointUrl for BinanceWsUrl {
 	// Can't impl [ToOwned], as there is a blanket impl of it on everything with [Clone]
-	fn to_owned(self) -> Url {
+	fn url_mainnet(&self) -> url::Url {
 		match self {
 			Self::Spot => Url::parse("wss://stream.binance.com:9443").unwrap(), //TODO: actually have some metric to select the best url here
 			Self::Spot9443 => Url::parse("wss://stream.binance.com:9443").unwrap(),
 			Self::Spot443 => Url::parse("wss://stream.binance.com:443").unwrap(),
-			Self::SpotTest => Url::parse("wss://testnet.binance.vision").unwrap(),
 			Self::SpotData => Url::parse("wss://data-stream.binance.com").unwrap(),
 			Self::WebSocket443 => Url::parse("wss://ws-api.binance.com:443").unwrap(),
 			Self::WebSocket9443 => Url::parse("wss://ws-api.binance.com:9443").unwrap(),
 			Self::FuturesUsdM => Url::parse("wss://fstream.binance.com").unwrap(),
 			Self::FuturesUsdMAuth => Url::parse("wss://fstream-auth.binance.com").unwrap(),
 			Self::FuturesCoinM => Url::parse("wss://dstream.binance.com").unwrap(),
-			Self::FuturesUsdMTest => Url::parse("wss://stream.binancefuture.com").unwrap(),
-			Self::FuturesCoinMTest => Url::parse("wss://dstream.binancefuture.com").unwrap(),
 			Self::EuropeanOptions => Url::parse("wss://nbstream.binance.com").unwrap(),
-			Self::None => panic!("calling .to_owned() on BinanceWsUrl::None is invalid"),
+			Self::None => Url::parse("").unwrap(),
+		}
+	}
+
+	fn url_testnet(&self) -> Option<url::Url> {
+		match self {
+			Self::Spot => Some(Url::parse("wss://testnet.binance.vision").unwrap()),
+			Self::Spot9443 => Some(Url::parse("wss://testnet.binance.vision:9443").unwrap()),
+			Self::Spot443 => Some(Url::parse("wss://testnet.binance.vision:443").unwrap()),
+			Self::FuturesUsdM => Some(Url::parse("wss://stream.binancefuture.com").unwrap()),
+			Self::FuturesCoinM => Some(Url::parse("wss://dstream.binancefuture.com").unwrap()),
+			Self::SpotData | Self::WebSocket443 | Self::WebSocket9443 | Self::FuturesUsdMAuth | Self::EuropeanOptions | Self::None => None,
 		}
 	}
 }

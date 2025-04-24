@@ -30,3 +30,10 @@ pub trait WsOption: HandlerOption {
 
 	fn ws_handler(options: Self::Options) -> Self::WsHandler;
 }
+
+/// A `trait` that shows the implementing type is an enpoint url. Meant to be implemented on enums with all currently accessible urls for exchange defined.
+pub trait EndpointUrl {
+	fn url_mainnet(&self) -> url::Url;
+	/// Returns the testnet url for the exchange. Not that not all exchanges have testnets for all endpoints.
+	fn url_testnet(&self) -> Option<url::Url>;
+}

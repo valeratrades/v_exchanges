@@ -2660,6 +2660,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "url",
  "v_exchanges_api_generics",
  "v_utils",
 ]
@@ -2685,6 +2686,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "tracing",
+ "url",
  "v_utils",
 ]
 

@@ -3,9 +3,7 @@ use std::{collections::HashSet, env, vec};
 
 use futures_util::StreamExt;
 //use futures_util::StreamExt;
-use v_exchanges_adapters::{
-	generics::ws::WsConnection,
-};
+use v_exchanges_adapters::generics::ws::WsConnection;
 
 fn main() {
 	v_utils::clientside!();
@@ -21,7 +19,7 @@ fn main() {
 //	use v_exchanges_adapters::bybit::{BybitOption, BybitWsHandler, BybitWsUrlBase};
 //	let topics = vec!["publicTrade.BTCUSDT".to_owned()];
 //	let client = v_exchanges_adapters::Client::default();
-//	let mut ws_connection = client.ws_connection("/v5/public/linear", vec![BybitOption::WsUrl(BybitWsUrlBase::Bybit), BybitOption::WsTopics(topics)]);
+//	let mut ws_connection = client.ws_connection("/v5/public/linear", vec![BybitOption::WsUrl(BybitWsUrlBase::Bybit), BybitOption::WsTopics(topics)]).unwrap();
 //	loop {
 //		let v = ws_connection.next().await.unwrap();
 //		println!("{v:#?}");
@@ -32,7 +30,9 @@ pub async fn run_binance() {
 	use v_exchanges_adapters::binance::{BinanceOption, BinanceWsUrl};
 	let topics = vec!["btcusdt@aggTrade".to_owned()];
 	let client = v_exchanges_adapters::Client::default();
-	let mut ws_connection = client.ws_connection("", vec![BinanceOption::WsUrl(BinanceWsUrl::FuturesUsdM), BinanceOption::WsTopics(topics)]);
+	let mut ws_connection = client
+		.ws_connection("", vec![BinanceOption::WsUrl(BinanceWsUrl::FuturesUsdM), BinanceOption::WsTopics(topics)])
+		.unwrap();
 	loop {
 		let v = ws_connection.next().await.unwrap();
 		println!("{v:#?}");
@@ -54,7 +54,7 @@ pub async fn run_binance() {
 //			BybitOption::WsUrl(BybitWsUrlBase::Bybit),
 //			BybitOption::WsTopics(topics),
 //		],
-//	);
+//	).unwrap();
 //
 //	loop {
 //		let v = ws_connection.next().await.unwrap();

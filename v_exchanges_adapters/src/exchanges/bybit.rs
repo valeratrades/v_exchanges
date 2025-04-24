@@ -3,12 +3,13 @@
 
 use std::{borrow::Cow, marker::PhantomData, time::SystemTime, vec};
 
-use generics::{AuthError, reqwest::Url, tokio_tungstenite::tungstenite};
+use generics::{AuthError, UrlError, tokio_tungstenite::tungstenite};
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::json;
 use sha2::Sha256;
+use url::Url;
 use v_exchanges_api_generics::{
 	http::{header::HeaderValue, *},
 	ws::*,
@@ -26,6 +27,9 @@ pub enum BybitOption {
 	Pubkey(String),
 	/// Api secret
 	Secret(SecretString),
+	/// Use testnet
+	Testnet(bool),
+
 	/// Base url for HTTP requests
 	HttpUrl(BybitHttpUrl),
 	/// Type of authentication used for HTTP requests.
@@ -52,6 +56,8 @@ pub struct BybitOptions {
 	/// see [BybitOption::Secret]
 	#[debug("[REDACTED]")]
 	pub secret: Option<SecretString>,
+	/// see [BybitOption::Testnet]
+	pub testnet: bool,
 	/// see [BybitOption::HttpUrl]
 	pub http_url: BybitHttpUrl,
 	/// see [BybitOption::HttpAuth]
@@ -76,10 +82,25 @@ pub enum BybitHttpUrl {
 	Bybit,
 	/// `https://api.bytick.com`
 	Bytick,
-	/// `https://api-testnet.bybit.com`
-	Test,
 	/// The url will not be modified by [BybitRequestHandler]
 	None,
+}
+impl EndpointUrl for BybitHttpUrl {
+	fn url_mainnet(&self) -> Url {
+		match self {
+			Self::Bybit => Url::parse("https://api.bybit.com").unwrap(),
+			Self::Bytick => Url::parse("https://api.bytick.com").unwrap(),
+			Self::None => Url::parse("").unwrap(),
+		}
+	}
+
+	fn url_testnet(&self) -> Option<Url> {
+		match self {
+			Self::Bybit => Some(Url::parse("https://api-testnet.bybit.com").unwrap()),
+			Self::Bytick => None, //HACK: maybe it has it, idk, needs checking
+			Self::None => Some(Url::parse("").unwrap()),
+		}
+	}
 }
 
 /// Represents the auth type.
@@ -133,10 +154,10 @@ where
 {
 	type Successful = R;
 
-	fn base_url(&self, is_test: bool) -> String {
+	fn base_url(&self, is_test: bool) -> Result<Url, UrlError> {
 		match is_test {
-			true => todo!(),
-			false => self.options.http_url.as_str().to_owned(),
+			true => self.options.http_url.url_testnet().ok_or_else(|| UrlError::MissingTestnet(self.options.http_url.url_mainnet())),
+			false => Ok(self.options.http_url.url_mainnet()),
 		}
 	}
 
@@ -345,13 +366,16 @@ pub struct BybitWsHandler {
 	options: BybitOptions,
 }
 impl WsHandler for BybitWsHandler {
-	fn config(&self) -> WsConfig {
+	fn config(&self) -> Result<WsConfig, UrlError> {
 		let mut config = self.options.ws_config.clone();
 		if self.options.ws_url != BybitWsUrlBase::None {
-			config.base_url = Some(Url::parse(self.options.ws_url.as_str()).expect("Invalid url base"));
+			config.base_url = match self.options.testnet {
+				true => Some(self.options.ws_url.url_testnet().ok_or_else(|| UrlError::MissingTestnet(self.options.ws_url.url_mainnet()))?),
+				false => Some(self.options.ws_url.url_mainnet()),
+			}
 		}
 		config.topics = config.topics.union(&self.options.ws_topics).cloned().collect();
-		config
+		Ok(config)
 	}
 
 	#[instrument(skip_all)]
@@ -479,19 +503,23 @@ pub enum BybitWsUrlBase {
 	Bybit,
 	/// `wss://stream.bytick.com`
 	Bytick,
-	/// `wss://stream-testnet.bybit.com`
-	Test,
 	/// The url will not be modified by [BybitWsHandler]
 	None,
 }
-impl BybitWsUrlBase {
-	/// The URL that this variant represents.
-	pub fn as_str(&self) -> &'static str {
+impl EndpointUrl for BybitWsUrlBase {
+	fn url_mainnet(&self) -> Url {
 		match self {
-			Self::Bybit => "wss://stream.bybit.com",
-			Self::Bytick => "wss://stream.bytick.com",
-			Self::Test => "wss://stream-testnet.bybit.com",
-			Self::None => "",
+			Self::Bybit => Url::parse("wss://stream.bybit.com").unwrap(),
+			Self::Bytick => Url::parse("wss://stream.bytick.com").unwrap(),
+			Self::None => Url::parse("").unwrap(),
+		}
+	}
+
+	fn url_testnet(&self) -> Option<Url> {
+		match self {
+			Self::Bybit => Some(Url::parse("wss://stream-testnet.bybit.com").unwrap()),
+			Self::Bytick => None, //HACK: no clue if it actually exists, but don't care rn
+			Self::None => Some(Url::parse("").unwrap()),
 		}
 	}
 }
@@ -504,18 +532,6 @@ impl WsOption for BybitOption {
 }
 //,}}}
 
-impl BybitHttpUrl {
-	/// The URL that this variant represents.
-	pub fn as_str(&self) -> &'static str {
-		match self {
-			Self::Bybit => "https://api.bybit.com",
-			Self::Bytick => "https://api.bytick.com",
-			Self::Test => "https://api-testnet.bybit.com",
-			Self::None => "",
-		}
-	}
-}
-
 impl HandlerOptions for BybitOptions {
 	type OptionItem = BybitOption;
 
@@ -524,6 +540,7 @@ impl HandlerOptions for BybitOptions {
 			BybitOption::None => (),
 			BybitOption::Pubkey(v) => self.pubkey = Some(v),
 			BybitOption::Secret(v) => self.secret = Some(v),
+			BybitOption::Testnet(v) => self.testnet = v,
 			BybitOption::HttpUrl(v) => self.http_url = v,
 			BybitOption::HttpAuth(v) => self.http_auth = v,
 			BybitOption::RecvWindow(v) => self.recv_window = Some(v),

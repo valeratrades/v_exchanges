@@ -32,3 +32,11 @@ pub enum AuthError {
 	InvalidCharacterInApiKey(String),
 	Other(eyre::Report),
 }
+
+#[derive(Debug, thiserror::Error)]
+pub enum UrlError {
+	#[error("Failed to parse URL: {0}")]
+	Parse(#[from] url::ParseError),
+	#[error("Exchange does not provide testnet for requested endpoint: {0}")]
+	MissingTestnet(url::Url),
+}

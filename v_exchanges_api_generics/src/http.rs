@@ -1,13 +1,14 @@
 use std::{fmt::Debug, path::PathBuf, sync::OnceLock, time::Duration};
 
 pub use bytes::Bytes;
+use reqwest::Url;
 pub use reqwest::{
 	Method, Request, RequestBuilder, StatusCode,
 	header::{self, HeaderMap},
 };
 use v_utils::{prelude::*, xdg_cache};
 
-use crate::AuthError;
+use crate::{AuthError, UrlError};
 
 /// The User Agent string
 pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_PKG_VERSION"));
@@ -36,8 +37,8 @@ impl Client {
 		H: RequestHandler<B>, {
 		let config = &self.config;
 		config.verify();
-		let base_url = handler.base_url(config.use_testnet);
-		let url = base_url + url;
+		let base_url = handler.base_url(config.use_testnet)?;
+		let url = base_url.join(url).map_err(|_| RequestError::Other(eyre!("Failed to parse provided URL")))?;
 		debug!(?config);
 
 		for i in 1..=config.max_tries {
@@ -51,7 +52,7 @@ impl Client {
 			if config.use_testnet
 				&& let Some(cache_duration) = config.cache_testnet_calls
 			{
-				let path = test_calls_path(url.as_str(), &query);
+				let path = test_calls_path(&url, &query);
 				if let Ok(file) = std::fs::read_to_string(&path)
 					&& path
 						.metadata()
@@ -191,8 +192,8 @@ pub trait RequestHandler<B> {
 
 	/// Produce a url prefix (if any).
 	#[allow(unused_variables)]
-	fn base_url(&self, is_test: bool) -> String {
-		String::default()
+	fn base_url(&self, is_test: bool) -> Result<url::Url, UrlError> {
+		Url::parse("").map_err(UrlError::Parse)
 	}
 
 	/// Build a HTTP request to be sent.
@@ -278,30 +279,28 @@ pub enum ApiError {
 }
 
 /// An `enum` that represents errors that could be returned by [Client::request()]
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum RequestError {
-	/// from sending a HTTP request.
 	#[error("failed to send HTTP request: {0}")]
 	SendRequest(#[source] reqwest::Error),
-	/// from parsing the response body as UTF-8.
 	#[error("failed to parse response body as UTF-8: {0}")]
 	Utf8Error(#[from] std::str::Utf8Error),
-	/// from receiving a HTTP response.
 	#[error("failed to receive HTTP response: {0}")]
 	ReceiveResponse(#[source] reqwest::Error),
-	/// from [RequestHandler::build_request()].
 	#[error("handler failed to build a request: {0}")]
 	BuildRequest(#[from] BuildError),
-	/// from [RequestHandler::handle_response()].
 	#[error("handler failed to process the response: {0}")]
 	HandleResponse(#[from] HandleError),
+	#[error("{0}")]
+	Url(#[from] UrlError),
+	/// errors meant to be propagated to the user or the developer, thus having no defined type.
 	#[allow(missing_docs)]
 	#[error("{0}")]
 	Other(#[from] Report),
 }
 
 /// Errors that can occur during exchange's implementation of the build-request process.
-#[derive(Debug, derive_more::Display, Error, derive_more::From)]
+#[derive(Debug, derive_more::Display, thiserror::Error, derive_more::From)]
 pub enum BuildError {
 	/// Signed request attempted, while lacking one of the necessary auth fields
 	Auth(AuthError),
@@ -317,7 +316,7 @@ pub enum BuildError {
 }
 
 static TEST_CALLS_PATH: OnceLock<PathBuf> = OnceLock::new();
-fn test_calls_path<Q: Serialize>(url: &str, query: &Option<Q>) -> PathBuf {
+fn test_calls_path<Q: Serialize>(url: &Url, query: &Option<Q>) -> PathBuf {
 	let base = TEST_CALLS_PATH.get_or_init(|| xdg_cache!("test_calls"));
 
 	let mut filename = url.to_string();
