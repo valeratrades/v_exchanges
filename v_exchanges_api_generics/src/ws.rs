@@ -141,7 +141,6 @@ impl<H: WsHandler> WsConnection<H> {
 	pub fn try_new(url_suffix: &str, handler: H) -> Result<Self, UrlError> {
 		// expects here are not expected to be seen by the user. Correctness should theoretically be checked at the moment of merging provided options; before this is ever constructed.
 		let config = handler.config()?;
-		config.validate().expect("ws config is invalid");
 		let url = match &config.base_url {
 			Some(base_url) => base_url.join(url_suffix)?,
 			None => Url::parse(url_suffix)?,
@@ -388,33 +387,48 @@ pub struct WsConfig {
 	///
 	/// This matters because the [WebSocketConnection] reconnects on error. If the error
 	/// continues to happen, it could spam the server if `connect_cooldown` is too short.
-	pub reconnect_cooldown: Duration = Duration::from_secs(3),
+	reconnect_cooldown: Duration = Duration::from_secs(3),
 	/// The [WebSocketConnection] will automatically reconnect when `refresh_after` has elapsed since the last connection started.
-	pub refresh_after: Duration = Duration::from_hours(12),
+	refresh_after: Duration = Duration::from_hours(12),
 	/// A reconnection will be triggered if no messages are received within this amount of time.
-	pub message_timeout: Duration = Duration::from_mins(16), // assume all exchanges ping more frequently than this
+	message_timeout: Duration = Duration::from_mins(16), // assume all exchanges ping more frequently than this
 	/// Timeout for the response to a message sent to the server.
 	///
 	/// Difference from the [message_timeout](Self::message_timeout) is that here we directly request communication. Eg: sending a Ping or attempting to auth.
-	pub response_timeout: Duration = Duration::from_mins(2),
+	response_timeout: Duration = Duration::from_mins(2),
 	/// The topics that will be subscribed to on creation of the connection. Note that we don't allow for passing anything that changes state here like [Trade](Topic::Trade) payloads, thus submissions are limited to [String]s
 	pub topics: HashSet<String>,
 }
 impl WsConfig {
-	#[allow(missing_docs)]
-	pub fn validate(&self) -> Result<()> {
-		if self.reconnect_cooldown.is_zero() {
-			bail!("connect_cooldown must be greater than 0");
+	pub fn set_reconnect_cooldown(&mut self, duration: Duration) -> Result<()> {
+		if duration.is_zero() {
+			bail!("reconnect_cooldown must be greater than 0");
 		}
-		if self.refresh_after.is_zero() {
+		self.reconnect_cooldown = duration;
+		Ok(())
+	}
+
+	pub fn set_refresh_after(&mut self, duration: Duration) -> Result<()> {
+		if duration.is_zero() {
 			bail!("refresh_after must be greater than 0");
 		}
-		if self.message_timeout.is_zero() {
+		self.refresh_after = duration;
+		Ok(())
+	}
+
+	pub fn set_message_timeout(&mut self, duration: Duration) -> Result<()> {
+		if duration.is_zero() {
 			bail!("message_timeout must be greater than 0");
 		}
-		if self.response_timeout.is_zero() {
+		self.message_timeout = duration;
+		Ok(())
+	}
+
+	pub fn set_response_timeout(&mut self, duration: Duration) -> Result<()> {
+		if duration.is_zero() {
 			bail!("response_timeout must be greater than 0");
 		}
+		self.response_timeout = duration;
 		Ok(())
 	}
 }
