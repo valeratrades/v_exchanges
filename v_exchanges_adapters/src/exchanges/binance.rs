@@ -9,7 +9,7 @@ use generics::{
 	http::{ApiError, BuildError, HandleError, *},
 	reqwest::Url,
 	tokio_tungstenite::tungstenite,
-	ws::{ContentEvent, ResponseOrContent, Topic, WsConfig, WsError, WsHandler},
+	ws::{ContentEvent, ResponseOrContent, Topic, WsConfig, WsDefinitionError, WsError, WsHandler},
 };
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
@@ -135,11 +135,22 @@ impl BinanceWsHandler {
 impl WsHandler for BinanceWsHandler {
 	fn config(&self) -> WsConfig {
 		let mut config = self.options.ws_config.clone();
-		if self.options.ws_url != BinanceWsUrl::None {
-			config.base_url = Some(self.options.ws_url.to_owned());
+		match self.options.ws_url {
+			BinanceWsUrl::None => tracing::warn!(
+				"BinanceWsUrl was not set. Due to Binance shenanigans, any provided topics will now be ignored, and must be manually hardcoded into the provided url on creation of the websocket. However, recommended approach is to simply provide a BinanceOption::WsUrl."
+			),
+			_ => {
+				let mut streams = String::new();
+				config.topics = config.topics.union(&self.options.ws_topics).cloned().collect();
+				for (i, topic) in config.topics.iter().enumerate() {
+					if i > 0 {
+						streams.push('/');
+					}
+					streams.push_str(topic);
+				}
+				config.base_url = Some(self.options.ws_url.to_owned().join(&format!("stream?streams={streams}")).unwrap());
+			}
 		}
-		config.topics = config.topics.union(&self.options.ws_topics).cloned().collect();
-
 		config
 	}
 
@@ -150,7 +161,7 @@ impl WsHandler for BinanceWsHandler {
 			let pubkey = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
 			let secret = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
 
-			//DO:
+			//TODO:
 			/*
 			match
 				user_data_stream => POST /api/v3/userDataStream
@@ -162,10 +173,20 @@ impl WsHandler for BinanceWsHandler {
 	}
 
 	fn handle_subscribe(&mut self, topics: HashSet<Topic>) -> eyre::Result<Vec<tungstenite::Message>, WsError> {
-		todo!();
+		topics
+			.into_iter()
+			.map(|topic| {
+				let topic = match topic {
+					Topic::Trade(topic) => topic,
+					_ => return Err(WsError::Subscription("Binance only supports string topics".to_owned())),
+				};
+				todo!();
+			})
+			.collect::<Result<Vec<_>, _>>()
 	}
 
 	fn handle_jrpc(&mut self, jrpc: serde_json::Value) -> Result<ResponseOrContent, WsError> {
+		//TODO: handle listen key expiration \
 		//match jrpc["e"].as_str().expect("missing event type") { // matches with event_type
 		//	"listenKeyExpired" => todo!(),
 		//	_ => Ok(None),
@@ -189,7 +210,8 @@ impl WsHandler for BinanceWsHandler {
 			let event_type = data["e"].as_str().unwrap().to_owned();
 			event_data.remove("e");
 			let event_ts: i64 = data["E"].as_i64().unwrap();
-			let event_time = DateTime::<Utc>::from_timestamp(event_ts, 0).unwrap();
+			dbg!(&event_ts);
+			let event_time = DateTime::<Utc>::from_timestamp_millis(event_ts).unwrap();
 			event_data.remove("E");
 			(event_type, event_time, event_data.into())
 		};
@@ -267,7 +289,7 @@ pub enum BinanceOption {
 	/// `url_prefix` will be overridden by [WebSocketUrl](Self::WebSocketUrl) unless `WebSocketUrl` is [BinanceWebSocketUrl::None].
 	WsConfig(WsConfig),
 	/// See [WsConfig::topics]. Will be merged with those manually defined in [Self::WsConfig::topics], if any.
-	WsTopics(Vec<Topic>),
+	WsTopics(Vec<String>),
 }
 
 /// A `enum` that represents the base url of the Binance REST API.
@@ -426,7 +448,7 @@ pub struct BinanceOptions {
 	/// see [BinanceOption::WsConfig]
 	pub ws_config: WsConfig,
 	/// see [BinanceOption::WsTopics]
-	pub ws_topics: HashSet<Topic>,
+	pub ws_topics: HashSet<String>,
 	/// see [BinanceOption::Test]
 	pub test: bool,
 }

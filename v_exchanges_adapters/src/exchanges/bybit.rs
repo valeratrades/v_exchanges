@@ -350,6 +350,7 @@ impl WsHandler for BybitWsHandler {
 		if self.options.ws_url != BybitWsUrlBase::None {
 			config.base_url = Some(Url::parse(self.options.ws_url.as_str()).expect("Invalid url base"));
 		}
+		config.topics = config.topics.union(&self.options.ws_topics).cloned().collect();
 		config
 	}
 
@@ -431,7 +432,7 @@ impl WsHandler for BybitWsHandler {
 				ContentEvent {
 					topic: content.topic,
 					data: content.data,
-					time: DateTime::<Utc>::from_timestamp(content.ts, 0).unwrap(),
+					time: DateTime::<Utc>::from_timestamp_millis(content.ts).unwrap(),
 					event_type: content.event_type,
 				}
 			}
@@ -444,7 +445,7 @@ impl WsHandler for BybitWsHandler {
 					true => {
 						tracing::info!("Ws authentication successful");
 						Ok(ResponseOrContent::Response(
-							self.handle_subscribe(self.options.ws_topics.iter().cloned().map(Topic::String).collect())?,
+							self.handle_subscribe(self.options.ws_topics.clone().into_iter().map(Topic::String).collect())?,
 						))
 					}
 					false => {

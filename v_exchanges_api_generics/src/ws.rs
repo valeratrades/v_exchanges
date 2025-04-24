@@ -397,8 +397,8 @@ pub struct WsConfig {
 	///
 	/// Difference from the [message_timeout](Self::message_timeout) is that here we directly request communication. Eg: sending a Ping or attempting to auth.
 	pub response_timeout: Duration = Duration::from_mins(2),
-	/// The topics that will be subscribed to on creation of the connection.
-	pub topics: HashSet<Topic>,
+	/// The topics that will be subscribed to on creation of the connection. Note that we don't allow for passing anything that changes state here like [Trade](Topic::Trade) payloads, thus submissions are limited to [String]s
+	pub topics: HashSet<String>,
 }
 impl WsConfig {
 	#[allow(missing_docs)]
@@ -421,12 +421,17 @@ impl WsConfig {
 
 #[derive(Debug, derive_more::Display, thiserror::Error, derive_more::From)]
 pub enum WsError {
+	Definition(WsDefinitionError),
 	Tungstenite(tungstenite::Error),
 	Auth(AuthError),
 	Parse(serde_json::Error),
 	Subscription(String),
 	UnexpectedEvent(serde_json::Value),
 	Other(eyre::Report),
+}
+#[derive(Debug, derive_more::Display, thiserror::Error)]
+pub enum WsDefinitionError {
+	MissingUrl,
 }
 
 //#[derive(Debug, derive_more::Display, thiserror::Error)]

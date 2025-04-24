@@ -45,7 +45,7 @@ pub async fn vix(tf: YahooTimeframe, n: u8) -> Result<Vec<Close>> {
 			.zip(timestamps.iter())
 			.map(|(c, t)| Close {
 				close: c,
-				timestamp: DateTime::<Utc>::from_timestamp(*t, 0).unwrap(),
+				timestamp: DateTime::<Utc>::from_timestamp_millis(*t).unwrap(),
 			})
 			.collect()
 	};
