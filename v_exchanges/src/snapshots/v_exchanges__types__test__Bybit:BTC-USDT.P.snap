@@ -1,0 +1,5 @@
+---
+source: v_exchanges/src/types.rs
+expression: "r#\"{\"pair\":\"BTCUSDT\",\"instrument\":\"Perp\",\"exchange_name\":\"Bybit\"}\"#"
+---
+{"pair":"BTCUSDT","instrument":"Perp","exchange_name":"Bybit"}

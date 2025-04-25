@@ -27,6 +27,7 @@ pub mod prelude {
 }
 pub use prelude::*;
 
+pub mod types;
 pub(crate) mod utils;
 
 #[cfg(feature = "binance")]

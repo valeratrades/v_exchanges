@@ -20,15 +20,17 @@ async fn run() {
 
 	let client = v_exchanges_adapters::Client::default();
 	let topics = vec!["position".to_owned()];
-	let mut ws_connection = client.ws_connection(
-		"/v5/private",
-		vec![
-			BybitOption::Pubkey(pubkey),
-			BybitOption::Secret(secret.into()),
-			/*BybitOption::WsAuth(true),*/ BybitOption::WsUrl(BybitWsUrlBase::Bybit),
-			BybitOption::WsTopics(topics),
-		],
-	);
+	let mut ws_connection = client
+		.ws_connection(
+			"/v5/private",
+			vec![
+				BybitOption::Pubkey(pubkey),
+				BybitOption::Secret(secret.into()),
+				/*BybitOption::WsAuth(true),*/ BybitOption::WsUrl(BybitWsUrlBase::Bybit),
+				BybitOption::WsTopics(topics),
+			],
+		)
+		.unwrap();
 
 	loop {
 		let v = ws_connection.next().await.unwrap();
