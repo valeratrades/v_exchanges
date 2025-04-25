@@ -37,6 +37,7 @@ secrecy = "^0.10.3"
 cfg-if = "^1.0.0"
 eyre = "^0.6.12"
 url = "^2.5.4"
+derive_builder = "^0.20.2"
 
 #[dev-dependencies]
 insta = "1.42.2"

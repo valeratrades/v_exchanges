@@ -375,7 +375,7 @@ impl<H: WsHandler> WsConnection<H> {
 /// Configuration for [WsHandler].
 ///
 /// Should be returned by [WsHandler::ws_config()].
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WsConfig {
 	/// Whether the connection should be authenticated. Normally implemented through a "listen key"
 	pub auth: bool,
@@ -399,36 +399,37 @@ pub struct WsConfig {
 	/// The topics that will be subscribed to on creation of the connection. Note that we don't allow for passing anything that changes state here like [Trade](Topic::Trade) payloads, thus submissions are limited to [String]s
 	pub topics: HashSet<String>,
 }
+
 impl WsConfig {
-	pub fn set_reconnect_cooldown(&mut self, duration: Duration) -> Result<()> {
-		if duration.is_zero() {
-			bail!("reconnect_cooldown must be greater than 0");
+	pub fn set_reconnect_cooldown(&mut self, reconnect_cooldown: Duration) -> Result<()> {
+		if reconnect_cooldown.is_zero() {
+			bail!("connect_cooldown must be greater than 0");
 		}
-		self.reconnect_cooldown = duration;
+		self.reconnect_cooldown = reconnect_cooldown;
 		Ok(())
 	}
 
-	pub fn set_refresh_after(&mut self, duration: Duration) -> Result<()> {
-		if duration.is_zero() {
+	pub fn set_refresh_after(&mut self, refresh_after: Duration) -> Result<()> {
+		if refresh_after.is_zero() {
 			bail!("refresh_after must be greater than 0");
 		}
-		self.refresh_after = duration;
+		self.refresh_after = refresh_after;
 		Ok(())
 	}
 
-	pub fn set_message_timeout(&mut self, duration: Duration) -> Result<()> {
-		if duration.is_zero() {
+	pub fn set_message_timeout(&mut self, message_timeout: Duration) -> Result<()> {
+		if message_timeout.is_zero() {
 			bail!("message_timeout must be greater than 0");
 		}
-		self.message_timeout = duration;
+		self.message_timeout = message_timeout;
 		Ok(())
 	}
 
-	pub fn set_response_timeout(&mut self, duration: Duration) -> Result<()> {
-		if duration.is_zero() {
+	pub fn set_response_timout(&mut self, response_timeout: Duration) -> Result<()> {
+		if response_timeout.is_zero() {
 			bail!("response_timeout must be greater than 0");
 		}
-		self.response_timeout = duration;
+		self.response_timeout = response_timeout;
 		Ok(())
 	}
 }
