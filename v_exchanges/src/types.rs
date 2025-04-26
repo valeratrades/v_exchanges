@@ -92,14 +92,12 @@ impl std::str::FromStr for Ticker {
 }
 
 mod test {
-	use super::*;
-
 	#[test]
 	fn display() {
-		let ticker = Ticker {
-			pair: Pair::new("BTC", "USDT"),
-			instrument: Instrument::Perp,
-			exchange_name: Some(ExchangeName::Bybit),
+		let ticker = super::Ticker {
+			pair: super::Pair::new("BTC", "USDT"),
+			instrument: super::Instrument::Perp,
+			exchange_name: Some(super::ExchangeName::Bybit),
 		};
 		assert_eq!(ticker.to_string(), "bybit:BTC-USDT.P");
 	}
@@ -107,9 +105,9 @@ mod test {
 	#[test]
 	fn from_str() {
 		let ticker_str = "bybit:BTC-USDT.P";
-		let ticker: Ticker = ticker_str.parse().unwrap();
-		assert_eq!(ticker.pair, Pair::new("BTC", "USDT"));
-		assert_eq!(ticker.instrument, Instrument::Perp);
-		assert_eq!(ticker.exchange_name, Some(ExchangeName::Bybit));
+		let ticker: super::Ticker = ticker_str.parse().unwrap();
+		assert_eq!(ticker.pair, super::Pair::new("BTC", "USDT"));
+		assert_eq!(ticker.instrument, super::Instrument::Perp);
+		assert_eq!(ticker.exchange_name, Some(super::ExchangeName::Bybit));
 	}
 }
