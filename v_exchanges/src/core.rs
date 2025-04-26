@@ -15,6 +15,8 @@ use v_utils::{
 	utils::filter_nulls,
 };
 
+use crate::types::{Instrument, Symbol};
+
 /// Main trait for all standardized exchange interactions
 ///
 /// Each **private** method allows to specify `recv_window`.
@@ -54,29 +56,29 @@ pub trait Exchange: std::fmt::Debug + Send + Sync {
 	//DO: same for other fields in [RequestConfig](v_exchanges_api_generics::http::RequestConfig)
 	//,}}}
 
-	async fn exchange_info(&self, m: AbsMarket) -> ExchangeResult<ExchangeInfo> {
+	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
 		unimplemented!();
 	}
 
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
-	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, m: AbsMarket) -> ExchangeResult<Klines> {
+	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
 		unimplemented!();
 	}
 
 	/// If no pairs are specified, returns for all;
-	async fn prices(&self, pairs: Option<Vec<Pair>>, m: AbsMarket) -> ExchangeResult<BTreeMap<Pair, f64>> {
+	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		unimplemented!();
 	}
-	async fn price(&self, pair: Pair, m: AbsMarket) -> ExchangeResult<f64> {
+	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
 		unimplemented!();
 	}
 
 	/// balance of a specific asset. Does not guarantee provision of USD values.
-	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, m: AbsMarket) -> ExchangeResult<AssetBalance> {
+	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, instrument: Instrument) -> ExchangeResult<AssetBalance> {
 		unimplemented!();
 	}
 	/// vec of _non-zero_ balances exclusively. Provides USD values.
-	async fn balances(&self, recv_window: Option<u16>, m: AbsMarket) -> ExchangeResult<Balances> {
+	async fn balances(&self, recv_window: Option<u16>, instrument: Instrument) -> ExchangeResult<Balances> {
 		unimplemented!();
 	}
 
@@ -89,8 +91,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync {
 	// Start a websocket connection for individual trades
 	async fn ws_trades(
 		&self,
-		pair: Pair,
-		m: AbsMarket,
+		symbol: Symbol,
 	) -> ExchangeResult<
 		mpsc::Receiver<
 			Result<

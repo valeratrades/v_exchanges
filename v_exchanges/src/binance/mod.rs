@@ -10,7 +10,10 @@ use secrecy::SecretString;
 use tokio::sync::mpsc;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
-use crate::{AbsMarket, AssetBalance, Balances, Exchange, ExchangeInfo, ExchangeResult, Klines, RequestRange, WrongExchangeError};
+use crate::{
+	AbsMarket, AssetBalance, Balances, Exchange, ExchangeInfo, ExchangeResult, Klines, RequestRange, WrongExchangeError,
+	types::{Instrument, Symbol},
+};
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
 pub struct Binance {
@@ -40,76 +43,59 @@ impl Exchange for Binance {
 		self.update_default_option(BinanceOption::RecvWindow(recv_window));
 	}
 
-	async fn exchange_info(&self, am: AbsMarket) -> ExchangeResult<ExchangeInfo> {
-		match am {
-			AbsMarket::Binance(m) => match m {
-				Market::Perp => perp::general::exchange_info(&self.client).await,
-				_ => unimplemented!(),
-			},
-			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
+	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
+		match instrument {
+			Instrument::Perp => perp::general::exchange_info(&self.client).await,
+			_ => unimplemented!(),
 		}
 	}
 
-	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, am: AbsMarket) -> ExchangeResult<Klines> {
-		match am {
-			AbsMarket::Binance(m) => market::klines(&self.client, pair, tf.try_into()?, range, m).await,
-			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
+	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
+		match symbol.instrument {
+			Instrument::Spot | Instrument::Margin => market::klines(&self.client, symbol.pair, tf.try_into()?, range, Market::Spot).await,
+			Instrument::Perp => market::klines(&self.client, symbol.pair, tf.try_into()?, range, Market::Perp).await,
+			_ => unimplemented!(),
 		}
 	}
 
-	async fn prices(&self, pairs: Option<Vec<Pair>>, am: AbsMarket) -> ExchangeResult<BTreeMap<Pair, f64>> {
-		match am {
-			AbsMarket::Binance(m) => match m {
-				Market::Spot => spot::market::prices(&self.client, pairs).await,
-				Market::Perp => perp::market::prices(&self.client, pairs).await,
-				_ => unimplemented!(),
-			},
-			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
+	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
+		match instrument {
+			Instrument::Spot => spot::market::prices(&self.client, pairs).await,
+			Instrument::Perp => perp::market::prices(&self.client, pairs).await,
+			_ => unimplemented!(),
 		}
 	}
 
-	async fn price(&self, pair: Pair, am: AbsMarket) -> ExchangeResult<f64> {
-		match am {
-			AbsMarket::Binance(m) => match m {
-				Market::Spot => spot::market::price(&self.client, pair).await,
-				Market::Perp => perp::market::price(&self.client, pair).await,
-				_ => unimplemented!(),
-			},
-			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
+	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
+		match symbol.instrument {
+			Instrument::Spot => spot::market::price(&self.client, symbol.pair).await,
+			Instrument::Perp => perp::market::price(&self.client, symbol.pair).await,
+			_ => unimplemented!(),
 		}
 	}
 
-	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, am: AbsMarket) -> ExchangeResult<AssetBalance> {
-		match am {
-			AbsMarket::Binance(m) => match m {
-				Market::Perp => perp::account::asset_balance(self, asset, recv_window).await,
-				_ => unimplemented!(),
-			},
-			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
+	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, instrument: Instrument) -> ExchangeResult<AssetBalance> {
+		match instrument {
+			Instrument::Perp => perp::account::asset_balance(self, asset, recv_window).await,
+			_ => unimplemented!(),
 		}
 	}
 
-	async fn balances(&self, recv_window: Option<u16>, am: AbsMarket) -> ExchangeResult<Balances> {
-		match am {
-			AbsMarket::Binance(m) => match m {
-				Market::Perp => {
-					let prices = self.prices(None, am).await?;
-					perp::account::balances(&self.client, recv_window, &prices).await
-				}
-				_ => unimplemented!(),
-			},
-			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
+	async fn balances(&self, recv_window: Option<u16>, instrument: Instrument) -> ExchangeResult<Balances> {
+		match instrument {
+			Instrument::Perp => {
+				let prices = self.prices(None, instrument).await?;
+				perp::account::balances(&self.client, recv_window, &prices).await
+			}
+			_ => unimplemented!(),
 		}
 	}
 
-	async fn ws_trades(&self, pair: Pair, am: AbsMarket) -> ExchangeResult<mpsc::Receiver<Result<crate::ws_types::TradeEvent, WsError>>> {
-		match am {
-			AbsMarket::Binance(m) => match m {
-				Market::Perp => Ok(ws::trades(&self.client, pair, Market::Perp).await),
-				Market::Spot | Market::Marg => Ok(ws::trades(&self.client, pair, Market::Spot).await),
-				_ => unimplemented!(),
-			},
-			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
+	async fn ws_trades(&self, symbol: Symbol) -> ExchangeResult<mpsc::Receiver<Result<crate::ws_types::TradeEvent, WsError>>> {
+		match symbol.instrument {
+			Instrument::Perp => Ok(ws::trades(&self.client, symbol.pair, Market::Perp).await),
+			Instrument::Spot | Instrument::Margin => Ok(ws::trades(&self.client, symbol.pair, Market::Spot).await),
+			_ => unimplemented!(),
 		}
 	}
 }

@@ -51,7 +51,7 @@ define_string_enum! {
 	pub enum Instrument {
 		Spot => "",
 		Perp => ".P",
-		Marg => ".M", //Q: do we care for being able to parse spot/margin diff from ticker defs?
+		Margin => ".M", //Q: do we care for being able to parse spot/margin diff from ticker defs?
 		PerpInverse => ".PERP_INVERSE",
 		Options => ".OPTIONS",
 	}
