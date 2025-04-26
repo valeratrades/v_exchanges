@@ -60,17 +60,11 @@ define_string_enum! {
 pub struct Ticker {
 	pub pair: Pair,
 	pub instrument: Instrument,
-	pub exchange_name: Option<ExchangeName>,
+	pub exchange_name: ExchangeName,
 }
 impl std::fmt::Display for Ticker {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(
-			f,
-			"{}{}{}",
-			self.exchange_name.clone().map(|s| format!("{s}:")).unwrap_or("".to_owned()),
-			self.pair,
-			self.instrument
-		)
+		write!(f, "{}{}{}", self.exchange_name, self.pair, self.instrument)
 	}
 }
 
@@ -78,11 +72,8 @@ impl std::str::FromStr for Ticker {
 	type Err = eyre::Report;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let (exchange_name, rest) = match s.split_once(':') {
-			Some((exchange_str, rest_str)) => (Some(ExchangeName::from_str(exchange_str)?), rest_str),
-			None => (None, s),
-		};
-
+		let (exchange_str, rest) = s.split_once(':').ok_or_else(|| eyre::eyre!("Invalid ticker format"))?;
+		let exchange_name = ExchangeName::from_str(exchange_str)?;
 		let (pair_str, instrument_ticker_str) = rest.split_once('.').map(|(p, i)| (p, format!(".{i}"))).unwrap_or((rest, "".to_owned()));
 		let pair = Pair::from_str(pair_str)?;
 		let instrument = Instrument::from_str(&instrument_ticker_str)?;
@@ -97,7 +88,7 @@ mod test {
 		let ticker = super::Ticker {
 			pair: super::Pair::new("BTC", "USDT"),
 			instrument: super::Instrument::Perp,
-			exchange_name: Some(super::ExchangeName::Bybit),
+			exchange_name: super::ExchangeName::Bybit,
 		};
 		assert_eq!(ticker.to_string(), "bybit:BTC-USDT.P");
 	}
@@ -108,6 +99,6 @@ mod test {
 		let ticker: super::Ticker = ticker_str.parse().unwrap();
 		assert_eq!(ticker.pair, super::Pair::new("BTC", "USDT"));
 		assert_eq!(ticker.instrument, super::Instrument::Perp);
-		assert_eq!(ticker.exchange_name, Some(super::ExchangeName::Bybit));
+		assert_eq!(ticker.exchange_name, super::ExchangeName::Bybit);
 	}
 }
