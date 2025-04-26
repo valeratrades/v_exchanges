@@ -1,5 +1,5 @@
 pub mod data; // interfaced with directly, not through `Exchange` trait, thus must be public.
-mod futures;
+mod perp;
 use std::collections::BTreeMap;
 mod market;
 mod spot;
@@ -23,12 +23,6 @@ pub struct Binance {
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
 #[async_trait::async_trait]
 impl Exchange for Binance {
-	//TODO!!!!!!!!!!!: \
-	//XXX: really should not be done in such a way. With overhaul to expected use patterns (making direct specific Exchange creation prominent), having this footgun is unacceptable.
-	fn source_market(&self) -> AbsMarket {
-		self.source_market.unwrap()
-	}
-
 	fn __client(&self) -> &Client {
 		&self.client
 	}
@@ -49,7 +43,7 @@ impl Exchange for Binance {
 	async fn exchange_info(&self, am: AbsMarket) -> ExchangeResult<ExchangeInfo> {
 		match am {
 			AbsMarket::Binance(m) => match m {
-				Market::Perp => futures::general::exchange_info(&self.client).await,
+				Market::Perp => perp::general::exchange_info(&self.client).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -67,7 +61,7 @@ impl Exchange for Binance {
 		match am {
 			AbsMarket::Binance(m) => match m {
 				Market::Spot => spot::market::prices(&self.client, pairs).await,
-				Market::Perp => futures::market::prices(&self.client, pairs).await,
+				Market::Perp => perp::market::prices(&self.client, pairs).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -78,7 +72,7 @@ impl Exchange for Binance {
 		match am {
 			AbsMarket::Binance(m) => match m {
 				Market::Spot => spot::market::price(&self.client, pair).await,
-				Market::Perp => futures::market::price(&self.client, pair).await,
+				Market::Perp => perp::market::price(&self.client, pair).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -88,7 +82,7 @@ impl Exchange for Binance {
 	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, am: AbsMarket) -> ExchangeResult<AssetBalance> {
 		match am {
 			AbsMarket::Binance(m) => match m {
-				Market::Perp => futures::account::asset_balance(self, asset, recv_window).await,
+				Market::Perp => perp::account::asset_balance(self, asset, recv_window).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -100,7 +94,7 @@ impl Exchange for Binance {
 			AbsMarket::Binance(m) => match m {
 				Market::Perp => {
 					let prices = self.prices(None, am).await?;
-					futures::account::balances(&self.client, recv_window, &prices).await
+					perp::account::balances(&self.client, recv_window, &prices).await
 				}
 				_ => unimplemented!(),
 			},

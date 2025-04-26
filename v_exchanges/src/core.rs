@@ -24,11 +24,6 @@ use v_utils::{
 #[async_trait::async_trait]
 pub trait Exchange: std::fmt::Debug + Send + Sync {
 	// dev {{{
-	/// will always be `Some` when created from `AbsMarket`. When creating client manually could lead to weird errors from this method being used elsewhere, like displaying a `AbsMarket` object.
-	fn source_market(&self) -> AbsMarket;
-	fn exchange_name(&self) -> &'static str {
-		self.source_market().exchange_name()
-	}
 	#[doc(hidden)]
 	fn __client_mut(&mut self) -> &mut Client;
 	#[doc(hidden)]
@@ -105,11 +100,6 @@ pub trait Exchange: std::fmt::Debug + Send + Sync {
 		>,
 	> {
 		unimplemented!();
-	}
-}
-impl std::fmt::Display for dyn Exchange {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", self.exchange_name())
 	}
 }
 
