@@ -50,32 +50,27 @@ define_string_enum! {
 	#[non_exhaustive]
 	pub enum Instrument {
 		Spot => "",
-		Perp => "P",
-		Marg => "M",
-		PerpInverse => "PERP_INVERSE",
-		Options => "OPTIONS",
-	}
-}
-impl Instrument {
-	pub fn fmt_for_ticker(&self) -> &'static str {
-		match self {
-			Self::Spot => "",
-			Self::Perp => ".P",
-			Self::Marg => ".M", //Q: do we care for being able to parse spot/margin diff from ticker defs?
-			Self::PerpInverse => ".PERP_INVERSE",
-			Self::Options => ".OPTIONS",
-		}
+		Perp => ".P",
+		Marg => ".M", //Q: do we care for being able to parse spot/margin diff from ticker defs?
+		PerpInverse => ".PERP_INVERSE",
+		Options => ".OPTIONS",
 	}
 }
 
 pub struct Ticker {
 	pub pair: Pair,
 	pub instrument: Instrument,
-	pub exchange_name: ExchangeName,
+	pub exchange_name: Option<ExchangeName>,
 }
 impl std::fmt::Display for Ticker {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}:{}{}", self.exchange_name, self.pair, self.instrument.fmt_for_ticker())
+		write!(
+			f,
+			"{}{}{}",
+			self.exchange_name.clone().map(|s| format!("{s}:")).unwrap_or("".to_owned()),
+			self.pair,
+			self.instrument
+		)
 	}
 }
 
@@ -83,11 +78,15 @@ impl std::str::FromStr for Ticker {
 	type Err = eyre::Report;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let (exchange_str, rest) = s.split_once(':').ok_or_else(|| eyre::eyre!("Invalid ticker format"))?;
-		let (pair_str, instrument_str) = rest.split_once('.').unwrap_or((rest, ""));
+		let (exchange_name, rest) = match s.split_once(':') {
+			Some((exchange_str, rest_str)) => (Some(ExchangeName::from_str(exchange_str)?), rest_str),
+			None => (None, s),
+		};
+
+		let (pair_str, instrument_ticker_str) = rest.split_once('.').map(|(p, i)| (p, format!(".{i}"))).unwrap_or((rest, "".to_owned()));
 		let pair = Pair::from_str(pair_str)?;
-		let instrument = Instrument::from_str(instrument_str)?;
-		let exchange_name = ExchangeName::from_str(exchange_str)?;
+		let instrument = Instrument::from_str(&instrument_ticker_str)?;
+
 		Ok(Ticker { pair, instrument, exchange_name })
 	}
 }
@@ -100,7 +99,7 @@ mod test {
 		let ticker = Ticker {
 			pair: Pair::new("BTC", "USDT"),
 			instrument: Instrument::Perp,
-			exchange_name: ExchangeName::Bybit,
+			exchange_name: Some(ExchangeName::Bybit),
 		};
 		assert_eq!(ticker.to_string(), "bybit:BTC-USDT.P");
 	}
@@ -111,6 +110,6 @@ mod test {
 		let ticker: Ticker = ticker_str.parse().unwrap();
 		assert_eq!(ticker.pair, Pair::new("BTC", "USDT"));
 		assert_eq!(ticker.instrument, Instrument::Perp);
-		assert_eq!(ticker.exchange_name, ExchangeName::Bybit);
+		assert_eq!(ticker.exchange_name, Some(ExchangeName::Bybit));
 	}
 }
