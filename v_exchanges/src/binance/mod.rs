@@ -3,10 +3,11 @@ mod futures;
 use std::collections::BTreeMap;
 mod market;
 mod spot;
-use adapters::binance::BinanceOption;
+mod ws;
+use adapters::{Client, binance::BinanceOption, generics::ws::WsError};
 use derive_more::{Deref, DerefMut};
 use secrecy::SecretString;
-use v_exchanges_adapters::Client;
+use tokio::sync::mpsc;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::{AbsMarket, AssetBalance, Balances, Exchange, ExchangeInfo, ExchangeResult, Klines, RequestRange, WrongExchangeError};
@@ -22,6 +23,8 @@ pub struct Binance {
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
 #[async_trait::async_trait]
 impl Exchange for Binance {
+	//TODO!!!!!!!!!!!: \
+	//XXX: really should not be done in such a way. With overhaul to expected use patterns (making direct specific Exchange creation prominent), having this footgun is unacceptable.
 	fn source_market(&self) -> AbsMarket {
 		self.source_market.unwrap()
 	}
@@ -34,8 +37,8 @@ impl Exchange for Binance {
 		&mut self.client
 	}
 
-	fn auth(&mut self, key: String, secret: SecretString) {
-		self.update_default_option(BinanceOption::Key(key));
+	fn auth(&mut self, pubkey: String, secret: SecretString) {
+		self.update_default_option(BinanceOption::Pubkey(pubkey));
 		self.update_default_option(BinanceOption::Secret(secret));
 	}
 
@@ -46,7 +49,7 @@ impl Exchange for Binance {
 	async fn exchange_info(&self, am: AbsMarket) -> ExchangeResult<ExchangeInfo> {
 		match am {
 			AbsMarket::Binance(m) => match m {
-				Market::Futures => futures::general::exchange_info(&self.client).await,
+				Market::Perp => futures::general::exchange_info(&self.client).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -64,7 +67,7 @@ impl Exchange for Binance {
 		match am {
 			AbsMarket::Binance(m) => match m {
 				Market::Spot => spot::market::prices(&self.client, pairs).await,
-				Market::Futures => futures::market::prices(&self.client, pairs).await,
+				Market::Perp => futures::market::prices(&self.client, pairs).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -75,7 +78,7 @@ impl Exchange for Binance {
 		match am {
 			AbsMarket::Binance(m) => match m {
 				Market::Spot => spot::market::price(&self.client, pair).await,
-				Market::Futures => futures::market::price(&self.client, pair).await,
+				Market::Perp => futures::market::price(&self.client, pair).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -85,7 +88,7 @@ impl Exchange for Binance {
 	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, am: AbsMarket) -> ExchangeResult<AssetBalance> {
 		match am {
 			AbsMarket::Binance(m) => match m {
-				Market::Futures => futures::account::asset_balance(self, asset, recv_window).await,
+				Market::Perp => futures::account::asset_balance(self, asset, recv_window).await,
 				_ => unimplemented!(),
 			},
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
@@ -95,7 +98,7 @@ impl Exchange for Binance {
 	async fn balances(&self, recv_window: Option<u16>, am: AbsMarket) -> ExchangeResult<Balances> {
 		match am {
 			AbsMarket::Binance(m) => match m {
-				Market::Futures => {
+				Market::Perp => {
 					let prices = self.prices(None, am).await?;
 					futures::account::balances(&self.client, recv_window, &prices).await
 				}
@@ -104,14 +107,28 @@ impl Exchange for Binance {
 			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
 		}
 	}
+
+	async fn ws_trades(&self, pair: Pair, am: AbsMarket) -> ExchangeResult<mpsc::Receiver<Result<crate::ws_types::TradeEvent, WsError>>> {
+		match am {
+			AbsMarket::Binance(m) => match m {
+				Market::Perp => Ok(ws::trades(&self.client, pair, Market::Perp).await),
+				Market::Spot | Market::Marg => Ok(ws::trades(&self.client, pair, Market::Spot).await),
+				_ => unimplemented!(),
+			},
+			_ => Err(WrongExchangeError::new(self.exchange_name(), am).into()),
+		}
+	}
 }
 
-#[derive(Debug, Clone, Default, Copy, derive_more::Display, derive_more::FromStr)]
+//TODO: add `Futures`, `Perpetual`, `Perp`, `Perps`, etc options as possible source deff strings.
+#[derive(Clone, Copy, Debug, Default, derive_more::Display, derive_more::FromStr)]
+#[non_exhaustive]
 pub enum Market {
 	#[default]
-	Futures,
+	Perp,
 	Spot,
-	Margin,
+	/// Margin. Name shortened for alignment, following Tiger Style
+	Marg,
 }
 impl crate::core::MarketTrait for Market {
 	fn client(&self, source_market: AbsMarket) -> Box<dyn Exchange> {

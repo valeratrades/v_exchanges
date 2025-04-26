@@ -17,7 +17,7 @@ pub async fn exchange_info(client: &v_exchanges_adapters::Client) -> Result<Exch
 	Ok(r.into())
 }
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BinanceExchangeFutures {
 	pub exchange_filters: Vec<String>,
@@ -64,7 +64,7 @@ impl From<FuturesSymbol> for PairInfo {
 //	}
 //}
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RateLimit {
 	pub interval: String,
@@ -92,7 +92,7 @@ pub struct RateLimit {
 //}
 
 #[serde_as]
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FuturesSymbol {
 	pub symbol: String,

@@ -13,7 +13,7 @@ use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::{
-	Balances, ExchangeResult, UnsupportedTimeframeError,
+	Balances, ExchangeResult,
 	core::{AbsMarket, AssetBalance, Exchange, ExchangeInfo, Klines, RequestRange, WrongExchangeError},
 };
 
@@ -40,8 +40,8 @@ impl Exchange for Bybit {
 		&mut self.client
 	}
 
-	fn auth(&mut self, key: String, secret: SecretString) {
-		self.update_default_option(BybitOption::Key(key));
+	fn auth(&mut self, pubkey: String, secret: SecretString) {
+		self.update_default_option(BybitOption::Pubkey(pubkey));
 		self.update_default_option(BybitOption::Secret(secret));
 	}
 
@@ -104,7 +104,7 @@ impl Exchange for Bybit {
 	}
 }
 
-#[derive(Debug, Clone, Default, Copy, Display, FromStr)]
+#[derive(Clone, Copy, Debug, Default, Display, FromStr)]
 pub enum Market {
 	#[default]
 	Linear,

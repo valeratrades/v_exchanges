@@ -24,13 +24,16 @@ rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
 
 [dependencies]
-async-trait = "^0.1.85"
+enum_dispatch = "0.3.13"
+v_exchanges_adapters = { version = "^0.6.5", path = "../v_exchanges_adapters/", optional = true }
+
+reqwest = { version = "^0.12.15", optional = true }
+
 chrono.workspace = true
+async-trait.workspace = true
 derive-new.workspace = true
 derive_more.workspace = true
-enum_dispatch = "0.3.13"
-env_logger = "0.11.5" #DEPRECATE
-eyre = "0.6.12"
+eyre.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_plain.workspace = true
@@ -40,24 +43,27 @@ tokio.workspace = true
 tracing.workspace = true
 v_utils.workspace = true 
 cfg-if.workspace = true
-
-v_exchanges_adapters = { version = "^0.6.5", path = "../v_exchanges_adapters/", optional = true }
-
-reqwest = { version = "^0.12.14", optional = true }
-
-insta.workspace = true #dbg (for some reason is not loading in dev-dependencies rn
+#insta.workspace = true #dbg (for some reason is not loading in dev-dependencies rn
 secrecy.workspace = true
 
 [dev-dependencies]
 color-eyre = "^0.6.3"
 insta.workspace = true
-#
+
+
+#dbg: ws dev {{{
+futures-util = "*"
+sha2 = "*"
+hmac = "*"
+hex = "*"
+#,}}}
 
 [features]
-default = ["major"]
+#default = ["major", "data"]
+default = ["bybit", "binance"] #dbg
 
-full = ["major", "bitflyer", "coincheck"]
-major = ["binance", "bybit", "mexc", "data"]
+full = ["major", "data", "bitflyer", "coincheck"]
+major = ["binance", "bybit", "mexc"]
 
 binance = ["v_exchanges_adapters/binance"]
 bybit = ["v_exchanges_adapters/bybit"]
@@ -70,23 +76,38 @@ data = ["dep:reqwest"]
 [[example]]
 name = "test"
 path = "../examples/test.rs"
+[[example]]
+name = "test2"
+path = "../examples/test2.rs"
+
+[[example]]
+name = "spelled_out_request"
+path = "../examples/spelled_out_request.rs"
+
+[[example]]
+name = "ws"
+path = "../examples/ws.rs"
+
+[[example]]
+name = "specify_exchange_from_cli"
+path = "../examples/specify_exchange_from_cli.rs"
 
 [[example]]
 name = "binance_market_futures"
+required-features = ["binance"]
 path = "../examples/binance/market_futures.rs"
 
 [[example]]
 name = "binance_market_spot"
+required-features = ["binance"]
 path = "../examples/binance/market_spot.rs"
 
 [[example]]
 name = "bybit_market"
+required-features = ["bybit"]
 path = "../examples/bybit/market.rs"
 
 [[example]]
 name = "mexc"
+required-features = ["mexc"]
 path = "../examples/mexc.rs"
-
-[[example]]
-name = "data"
-path = "../examples/data.rs"

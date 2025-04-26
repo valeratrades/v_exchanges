@@ -32,7 +32,7 @@ pub async fn prices(client: &Client, pairs: Option<Vec<Pair>>) -> ExchangeResult
 }
 
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkPriceResponse {
 	pub symbol: String,
@@ -49,7 +49,7 @@ pub struct MarkPriceResponse {
 }
 
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PriceObject {
 	#[serde_as(as = "DisplayFromStr")]

@@ -6,7 +6,7 @@ use serde_with::{DisplayFromStr, serde_as};
 
 // // Klines Core
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KlineNamed {
 	#[serde(rename = "t")]
@@ -56,7 +56,7 @@ pub struct KlineNamed {
 //
 
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KlineEvent {
 	#[serde(rename = "e")]
@@ -73,7 +73,7 @@ pub struct KlineEvent {
 }
 
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FullKlines {
 	#[serde(flatten)]

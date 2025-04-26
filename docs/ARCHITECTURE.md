@@ -26,3 +26,21 @@ Some functions on specific exchange+endpoint pairs, on `Exchange` trait or not, 
 
 ### data endpoints
 Some exchanges provide specialized `data` endpoints. Those can't be part of `Exchange` trait, but then I just trivially expose them natively on the associated structs of each exchange, without any traits whatsoever. 
+
+# Target Interaction
+Two mods:
+a) arbitrary exchange, determined at runtime
+```rs
+let exchange_str = std::env::args().skip(1).next();
+let exchange_client = AbsMarket::from(exchange_str).client();
+let price = exchange_client.price(("BTC","USDT").into(), exchange_client.source_market()); //TODO: get rid of the need to submit abs market for all reqs, just market (ie `"Futs".into()`) should suffice
+println!("{price}");
+```
+b) want to work with specific exchange
+```rs
+use v_exchanges::Exchange as _;
+let mut binance = v_exchanges::Binance::default();
+let price = binance.price(("BTC","USDT").into(), "Binance/Futures".into()); //HACK: as you can see, current approach leads to tautology in this type of evocation. 
+println!("{price}");
+```
+Both should be equally seamless to work with (not the case as of (2025/04/01))

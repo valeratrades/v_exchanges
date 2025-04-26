@@ -36,7 +36,7 @@ pub struct BvolPoint {
 	pub price: f64,
 }
 
-#[derive(Clone, Debug, Default, derive_new::new, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, derive_new::new)]
 #[serde(rename_all = "camelCase")]
 pub struct BvolResponse {
 	pub timestamp: DateTime<Utc>,

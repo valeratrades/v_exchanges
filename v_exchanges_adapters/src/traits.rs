@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use v_exchanges_api_generics::{http, websocket};
+use v_exchanges_api_generics::{http, ws};
 
 /// A `trait` that represents an option which can be set when creating handlers
 pub trait HandlerOption: Default {
@@ -24,9 +24,16 @@ pub trait HttpOption<'a, R, B>: HandlerOption {
 	fn request_handler(options: Self::Options) -> Self::RequestHandler;
 }
 
-/// A `trait` that shows the implementing type is able to create [websocket::WebSocketHandler]s
-pub trait WebSocketOption<H>: HandlerOption {
-	type WebSocketHandler: websocket::WebSocketHandler;
+/// shows that the implementing type is able to create [websocket::WebSocketHandler]s
+pub trait WsOption: HandlerOption {
+	type WsHandler: ws::WsHandler;
 
-	fn websocket_handler(handler: H, options: Self::Options) -> Self::WebSocketHandler;
+	fn ws_handler(options: Self::Options) -> Self::WsHandler;
+}
+
+/// A `trait` that shows the implementing type is an enpoint url. Meant to be implemented on enums with all currently accessible urls for exchange defined.
+pub trait EndpointUrl {
+	fn url_mainnet(&self) -> url::Url;
+	/// Returns the testnet url for the exchange. Not that not all exchanges have testnets for all endpoints.
+	fn url_testnet(&self) -> Option<url::Url>;
 }

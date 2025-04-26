@@ -1,13 +1,39 @@
-use v_exchanges::prelude::*;
-use v_utils::prelude::*;
+#![feature(try_blocks)]
+use std::{env, vec};
 
-// Random test stuff, for dev purposes only
-#[tokio::main]
-async fn main() {
-	clientside!();
+use hmac::Mac as _;
+use v_exchanges_adapters::bybit::{BybitOption, BybitWsUrlBase};
 
-	let market: AbsMarket = "Binance/Futures".into();
-	let exchange = market.client();
-	let klines = exchange.klines(("BTC", "USDT").into(), "1m".into(), 2000.into(), market).await.unwrap();
-	dbg!(klines);
+fn main() {
+	v_utils::clientside!();
+
+	let rt = tokio::runtime::Runtime::new().unwrap();
+	rt.block_on(async {
+		run().await;
+	});
+}
+
+//TODO: switch ot a private endpoint for Binance now
+async fn run() {
+	let pubkey = env::var("BINANCE_TIGER_FULL_PUBKEY").unwrap();
+	let secret = env::var("BINANCE_TIGER_FULL_SECRET").unwrap();
+
+	let client = v_exchanges_adapters::Client::default();
+	let topics = vec!["position".to_owned()];
+	let mut ws_connection = client
+		.ws_connection(
+			"/v5/private",
+			vec![
+				BybitOption::Pubkey(pubkey),
+				BybitOption::Secret(secret.into()),
+				/*BybitOption::WsAuth(true),*/ BybitOption::WsUrl(BybitWsUrlBase::Bybit),
+				BybitOption::WsTopics(topics),
+			],
+		)
+		.unwrap();
+
+	loop {
+		let v = ws_connection.next().await.unwrap();
+		println!("{v:#?}");
+	}
 }

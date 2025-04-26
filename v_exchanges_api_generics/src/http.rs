@@ -1,11 +1,14 @@
 use std::{fmt::Debug, path::PathBuf, sync::OnceLock, time::Duration};
 
 pub use bytes::Bytes;
+use reqwest::Url;
 pub use reqwest::{
 	Method, Request, RequestBuilder, StatusCode,
 	header::{self, HeaderMap},
 };
 use v_utils::{prelude::*, xdg_cache};
+
+use crate::{AuthError, UrlError};
 
 /// The User Agent string
 pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_PKG_VERSION"));
@@ -14,10 +17,9 @@ pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_P
 ///
 /// When making a HTTP request or starting a websocket connection with this client,
 /// a handler that implements [RequestHandler] is required.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Client {
 	client: reqwest::Client,
-	#[doc(hidden)]
 	pub config: RequestConfig,
 }
 
@@ -35,8 +37,8 @@ impl Client {
 		H: RequestHandler<B>, {
 		let config = &self.config;
 		config.verify();
-		let base_url = handler.base_url(config.use_testnet);
-		let url = base_url + url;
+		let base_url = handler.base_url(config.use_testnet)?;
+		let url = base_url.join(url).map_err(|_| RequestError::Other(eyre!("Failed to parse provided URL")))?;
 		debug!(?config);
 
 		for i in 1..=config.max_tries {
@@ -50,7 +52,7 @@ impl Client {
 			if config.use_testnet
 				&& let Some(cache_duration) = config.cache_testnet_calls
 			{
-				let path = test_calls_path(url.as_str(), &query);
+				let path = test_calls_path(&url, &query);
 				if let Ok(file) = std::fs::read_to_string(&path)
 					&& path
 						.metadata()
@@ -112,7 +114,6 @@ impl Client {
 	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
 	///
 	/// For more information, see [request()][Self::request()].
-	#[inline(always)]
 	pub async fn get<Q, H>(&self, url: &str, query: &Q, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		Q: Serialize + ?Sized + Debug,
@@ -121,7 +122,6 @@ impl Client {
 	}
 
 	/// Derivation of [get()][Self::get()].
-	#[inline(always)]
 	pub async fn get_no_query<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<()>, {
@@ -133,7 +133,6 @@ impl Client {
 	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
 	///
 	/// For more information, see [request()][Self::request()].
-	#[inline(always)]
 	pub async fn post<B, H>(&self, url: &str, body: B, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<B>, {
@@ -141,7 +140,6 @@ impl Client {
 	}
 
 	/// Derivation of [post()][Self::post()].
-	#[inline(always)]
 	pub async fn post_no_body<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<()>, {
@@ -153,7 +151,6 @@ impl Client {
 	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
 	///
 	/// For more information, see [request()][Self::request()].
-	#[inline(always)]
 	pub async fn put<B, H>(&self, url: &str, body: B, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<B>, {
@@ -161,7 +158,6 @@ impl Client {
 	}
 
 	/// Derivation of [put()][Self::put()].
-	#[inline(always)]
 	pub async fn put_no_body<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<()>, {
@@ -174,7 +170,6 @@ impl Client {
 	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
 	///
 	/// For more information, see [request()][Self::request()].
-	#[inline(always)]
 	pub async fn delete<Q, H>(&self, url: &str, query: &Q, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		Q: Serialize + ?Sized + Debug,
@@ -183,7 +178,6 @@ impl Client {
 	}
 
 	/// Derivation of [delete()][Self::delete()].
-	#[inline(always)]
 	pub async fn delete_no_query<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError>
 	where
 		H: RequestHandler<()>, {
@@ -198,8 +192,8 @@ pub trait RequestHandler<B> {
 
 	/// Produce a url prefix (if any).
 	#[allow(unused_variables)]
-	fn base_url(&self, is_test: bool) -> String {
-		String::default()
+	fn base_url(&self, is_test: bool) -> Result<url::Url, UrlError> {
+		Url::parse("").map_err(UrlError::Parse)
 	}
 
 	/// Build a HTTP request to be sent.
@@ -233,49 +227,35 @@ pub trait RequestHandler<B> {
 /// Configuration when sending a request using [Client].
 ///
 /// Modified in-place later if necessary.
-#[derive(Debug, Clone)]
-#[non_exhaustive]
+#[derive(Clone, Debug, Default)]
 pub struct RequestConfig {
 	/// [Client] will retry sending a request if it failed to send. `max_try` can be used limit the number of attempts.
 	///
 	/// Do not set this to `0` or [Client::request()] will **panic**. [Default]s to `1` (which means no retry).
-	pub max_tries: u8,
+	//TODO: change to `num_retries`, so there is no special case.
+	pub max_tries: u8 = 1,
 	/// Duration that should elapse after retrying sending a request.
-	///
-	/// [Default]s to 500ms. See also: `max_try`.
-	pub retry_cooldown: Duration,
+	pub retry_cooldown: Duration = Duration::from_millis(500),
 	/// The timeout set when sending a request. [Default]s to 3s.
 	///
 	/// It is possible for the [RequestHandler] to override this in [RequestHandler::build_request()].
 	/// See also: [RequestBuilder::timeout()].
-	pub timeout: Duration,
+	pub timeout: Duration = Duration::from_secs(3),
 
 	/// Make all requests in test mode
 	pub use_testnet: bool,
 	/// if `test` is true, then we will try to read the file with the cached result of any request to the same URL, aged less than specified [Duration]
-	pub cache_testnet_calls: Option<Duration>,
+	pub cache_testnet_calls: Option<Duration> = Some(Duration::from_days(30)),
 }
 
 impl RequestConfig {
-	#[inline(always)]
 	fn verify(&self) {
 		assert_ne!(self.max_tries, 0, "RequestConfig.max_tries must not be equal to 0");
 	}
 }
-impl Default for RequestConfig {
-	fn default() -> Self {
-		Self {
-			max_tries: 1,
-			retry_cooldown: Duration::from_millis(500),
-			timeout: Duration::from_secs(3),
-			use_testnet: Default::default(),
-			cache_testnet_calls: Some(Duration::from_days(30)),
-		}
-	}
-}
 
 /// Error type encompassing all the failure modes of [RequestHandler::handle_response()].
-#[derive(Error, Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, derive_more::Display, Error, derive_more::From)]
 pub enum HandleError {
 	/// Refer to [ApiError]
 	Api(ApiError),
@@ -285,7 +265,7 @@ pub enum HandleError {
 	Other(Report),
 }
 /// Errors that exchanges purposefully transmit.
-#[derive(Error, Debug, derive_more::From)]
+#[derive(Debug, Error, derive_more::From)]
 pub enum ApiError {
 	/// Ip has been timed out or banned
 	#[error("IP has been timed out or banned until {until:?}")]
@@ -299,30 +279,28 @@ pub enum ApiError {
 }
 
 /// An `enum` that represents errors that could be returned by [Client::request()]
-#[derive(Error, Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum RequestError {
-	/// from sending a HTTP request.
 	#[error("failed to send HTTP request: {0}")]
 	SendRequest(#[source] reqwest::Error),
-	/// from parsing the response body as UTF-8.
 	#[error("failed to parse response body as UTF-8: {0}")]
 	Utf8Error(#[from] std::str::Utf8Error),
-	/// from receiving a HTTP response.
 	#[error("failed to receive HTTP response: {0}")]
 	ReceiveResponse(#[source] reqwest::Error),
-	/// from [RequestHandler::build_request()].
 	#[error("handler failed to build a request: {0}")]
 	BuildRequest(#[from] BuildError),
-	/// from [RequestHandler::handle_response()].
 	#[error("handler failed to process the response: {0}")]
 	HandleResponse(#[from] HandleError),
+	#[error("{0}")]
+	Url(#[from] UrlError),
+	/// errors meant to be propagated to the user or the developer, thus having no defined type.
 	#[allow(missing_docs)]
 	#[error("{0}")]
 	Other(#[from] Report),
 }
 
 /// Errors that can occur during exchange's implementation of the build-request process.
-#[derive(Error, Debug, derive_more::From, derive_more::Display)]
+#[derive(Debug, derive_more::Display, thiserror::Error, derive_more::From)]
 pub enum BuildError {
 	/// Signed request attempted, while lacking one of the necessary auth fields
 	Auth(AuthError),
@@ -337,16 +315,8 @@ pub enum BuildError {
 	Other(Report),
 }
 
-#[allow(missing_docs)]
-#[derive(Error, Debug, derive_more::Display, derive_more::From)]
-pub enum AuthError {
-	MissingApiKey,
-	MissingSecret,
-	InvalidCharacterInApiKey(String),
-}
-
 static TEST_CALLS_PATH: OnceLock<PathBuf> = OnceLock::new();
-fn test_calls_path<Q: Serialize>(url: &str, query: &Option<Q>) -> PathBuf {
+fn test_calls_path<Q: Serialize>(url: &Url, query: &Option<Q>) -> PathBuf {
 	let base = TEST_CALLS_PATH.get_or_init(|| xdg_cache!("test_calls"));
 
 	let mut filename = url.to_string();

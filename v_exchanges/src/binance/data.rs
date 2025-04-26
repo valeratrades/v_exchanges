@@ -26,7 +26,7 @@ impl From<&str> for LsrWho {
 impl Binance {
 	pub async fn lsr(&self, pair: Pair, tf: Timeframe, range: RequestRange, who: LsrWho) -> ExchangeResult<Lsrs> {
 		range.ensure_allowed(0..=500, &tf)?;
-		let range_json = range.serialize(AbsMarket::Binance(crate::binance::Market::Futures));
+		let range_json = range.serialize(AbsMarket::Binance(crate::binance::Market::Perp));
 
 		let ending = match who {
 			LsrWho::Global => "globalLongShortAccountRatio",
@@ -57,7 +57,7 @@ pub struct LsrResponse {
 	pub short_account: String,
 	pub timestamp: i64,
 }
-#[derive(Clone, Debug, Default, Copy, derive_more::Deref, derive_more::DerefMut, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Default, derive_more::Deref, derive_more::DerefMut, Deserialize, Serialize)]
 pub struct Lsr {
 	pub time: DateTime<Utc>,
 	#[deref_mut]

@@ -15,9 +15,9 @@ get_first = "allow" # const fn, so actually more performant
 get_last_with_len = "allow"
 
 [workspace.dependencies]
-v_utils = { version = "^2.6.4", path = "../v_utils/v_utils" } #ga: rm path
+v_utils = { version = "^2.6.4" }#, path = "../v_utils/v_utils" } #ga: rm path
 futures-util = "^0.3.31"
-reqwest = { version = "^0.12.14", features = ["blocking", "json"] }
+reqwest = { version = "^0.12.15", features = ["blocking", "json"] }
 serde = { version = "^1.0.219", features = ["derive"] }
 serde_plain = "^1.0.2" #TEST
 serde_json = "^1.0.140"
@@ -25,8 +25,9 @@ chrono = { version = "^0.4.40", features = ["serde"] }
 serde_with = "^3.12.0"
 thiserror = "^2.0.12"
 serde_urlencoded = "^0.7.1"
+async-trait = "^0.1.88"
 derive_more = { version = "^2.0.1", features = ["deref", "deref_mut"] }
-tokio = { version = "^1.44.1", features = ["sync", "macros", "io-util", "rt", "time"] } # enable only features that play with wasm.
+tokio = { version = "^1.44.2", features = ["sync", "macros", "io-util", "rt", "rt-multi-thread", "time"] } # enable only features that play with wasm.
 tracing = "^0.1.41"
 hmac = "^0.12.1"
 sha2 = "^0.10.8"
@@ -34,6 +35,9 @@ hex = "^0.4.3"
 derive-new = "^0.7.0"
 secrecy = "^0.10.3"
 cfg-if = "^1.0.0"
+eyre = "^0.6.12"
+url = "^2.5.4"
+derive_builder = "^0.20.2"
 
 #[dev-dependencies]
 insta = "1.42.2"

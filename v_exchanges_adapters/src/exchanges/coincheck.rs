@@ -69,7 +69,7 @@ pub struct CoincheckOptions {
 }
 
 /// A `enum` that represents the base url of the Coincheck HTTP API.
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum CoincheckHttpUrl {
 	/// `https://coincheck.com`
 	Main,
@@ -79,7 +79,7 @@ pub enum CoincheckHttpUrl {
 }
 
 /// A `enum` that represents the base url of the Coincheck Realtime API
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum CoincheckWebSocketUrl {
 	/// `wss://ws-api.coincheck.com/`
@@ -215,7 +215,6 @@ impl WebSocketHandler for CoincheckWebSocketHandler {
 
 impl CoincheckHttpUrl {
 	/// The base URL that this variant represents.
-	#[inline(always)]
 	fn as_str(&self) -> &'static str {
 		match self {
 			Self::Main => "https://coincheck.com",
@@ -226,7 +225,6 @@ impl CoincheckHttpUrl {
 
 impl CoincheckWebSocketUrl {
 	/// The base URL that this variant represents.
-	#[inline(always)]
 	fn as_str(&self) -> &'static str {
 		match self {
 			Self::Default => "wss://ws-api.coincheck.com/",
@@ -259,7 +257,7 @@ impl HandlerOptions for CoincheckOptions {
 
 impl Default for CoincheckOptions {
 	fn default() -> Self {
-		let mut websocket_config = WebSocketConfig::new();
+		let mut websocket_config = WebSocketConfig::default();
 		websocket_config.ignore_duplicate_during_reconnection = true;
 		Self {
 			key: None,
@@ -281,7 +279,6 @@ where
 {
 	type RequestHandler = CoincheckRequestHandler<'a, R>;
 
-	#[inline(always)]
 	fn request_handler(options: Self::Options) -> Self::RequestHandler {
 		CoincheckRequestHandler::<'a, R> { options, _phantom: PhantomData }
 	}
@@ -290,7 +287,6 @@ where
 impl<H: FnMut(serde_json::Value) + Send + 'static> WebSocketOption<H> for CoincheckOption {
 	type WebSocketHandler = CoincheckWebSocketHandler;
 
-	#[inline(always)]
 	fn websocket_handler(handler: H, options: Self::Options) -> Self::WebSocketHandler {
 		CoincheckWebSocketHandler {
 			message_handler: Box::new(handler),

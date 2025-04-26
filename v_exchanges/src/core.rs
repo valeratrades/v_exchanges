@@ -1,10 +1,14 @@
 use std::collections::{BTreeMap, VecDeque};
 
-use adapters::{Client, generics::http::RequestError};
+use adapters::{
+	Client,
+	generics::{http::RequestError, ws::WsError},
+};
 use chrono::{DateTime, TimeDelta, Utc};
 use derive_more::{Deref, DerefMut};
 use secrecy::SecretString;
 use serde_json::json;
+use tokio::sync::mpsc;
 use v_utils::{
 	prelude::*,
 	trades::{Asset, Kline, Pair, Timeframe, Usd},
@@ -12,8 +16,11 @@ use v_utils::{
 };
 
 /// Main trait for all standardized exchange interactions
+///
+/// Each **private** method allows to specify `recv_window`.
+///
 /// # Other
-/// - each private method provides recv_window
+/// - has too many methods, so for dev purposes most default to `unimplemented!()`.
 #[async_trait::async_trait]
 pub trait Exchange: std::fmt::Debug + Send + Sync {
 	// dev {{{
@@ -29,7 +36,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync {
 	//,}}}
 
 	// Config {{{
-	fn auth(&mut self, key: String, secret: SecretString);
+	fn auth(&mut self, pubkey: String, secret: SecretString);
 	/// Set number of **milliseconds** the request is valid for. Recv Window of over a minute does not make sense, thus it's expressed as u16.
 	//Q: really don't think this should be used like that, globally, - if unable to find cases, rm in a month (now is 2025/01/24)
 	#[deprecated(note = "This shouldn't be a global setting, but a per-request one. Use `recv_window` in the request instead.")]
@@ -52,27 +59,53 @@ pub trait Exchange: std::fmt::Debug + Send + Sync {
 	//DO: same for other fields in [RequestConfig](v_exchanges_api_generics::http::RequestConfig)
 	//,}}}
 
-	async fn exchange_info(&self, m: AbsMarket) -> ExchangeResult<ExchangeInfo>;
+	async fn exchange_info(&self, m: AbsMarket) -> ExchangeResult<ExchangeInfo> {
+		unimplemented!();
+	}
 
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
-	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, m: AbsMarket) -> ExchangeResult<Klines>;
+	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, m: AbsMarket) -> ExchangeResult<Klines> {
+		unimplemented!();
+	}
 
 	/// If no pairs are specified, returns for all;
-	async fn prices(&self, pairs: Option<Vec<Pair>>, m: AbsMarket) -> ExchangeResult<BTreeMap<Pair, f64>>;
-	async fn price(&self, pair: Pair, m: AbsMarket) -> ExchangeResult<f64>;
-
-	// Defined in terms of actors
-	//TODO!!!: async fn spawn_klines_listener(&self, symbol: Pair, tf: Timeframe) -> mpsc::Receiver<Kline>;
+	async fn prices(&self, pairs: Option<Vec<Pair>>, m: AbsMarket) -> ExchangeResult<BTreeMap<Pair, f64>> {
+		unimplemented!();
+	}
+	async fn price(&self, pair: Pair, m: AbsMarket) -> ExchangeResult<f64> {
+		unimplemented!();
+	}
 
 	/// balance of a specific asset. Does not guarantee provision of USD values.
-	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, m: AbsMarket) -> ExchangeResult<AssetBalance>;
+	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, m: AbsMarket) -> ExchangeResult<AssetBalance> {
+		unimplemented!();
+	}
 	/// vec of _non-zero_ balances exclusively. Provides USD values.
-	async fn balances(&self, recv_window: Option<u16>, m: AbsMarket) -> ExchangeResult<Balances>;
+	async fn balances(&self, recv_window: Option<u16>, m: AbsMarket) -> ExchangeResult<Balances> {
+		unimplemented!();
+	}
+
 	//? potentially `total_balance`? Would return precompiled USDT-denominated balance of a (bybit::wallet/binance::account)
 	// balances are defined for each margin type: [futures_balance, spot_balance, margin_balance], but note that on some exchanges, (like bybit), some of these may point to the same exact call
 	// to negate confusion could add a `total_balance` endpoint
 
 	//? could implement many things that are _explicitly_ combinatorial. I can imagine several cases, where knowing that say the specified limit for the klines is wayyy over the max and that you may be opting into a long wait by calling it, could be useful.
+
+	// Start a websocket connection for individual trades
+	async fn ws_trades(
+		&self,
+		pair: Pair,
+		m: AbsMarket,
+	) -> ExchangeResult<
+		mpsc::Receiver<
+			Result<
+				crate::ws_types::TradeEvent,
+				WsError, /*The key could get out of the date while the connection is ongoing, and then the next attempt to reconnect will fail. Thus must encapsulate received type in WsError.*/
+			>,
+		>,
+	> {
+		unimplemented!();
+	}
 }
 impl std::fmt::Display for dyn Exchange {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -82,7 +115,7 @@ impl std::fmt::Display for dyn Exchange {
 
 // Exchange Error {{{
 pub type ExchangeResult<T> = Result<T, ExchangeError>;
-#[derive(Error, Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, derive_more::Display, Error, derive_more::From)]
 pub enum ExchangeError {
 	Request(RequestError),
 	Exchange(WrongExchangeError),
@@ -90,7 +123,7 @@ pub enum ExchangeError {
 	Range(RequestRangeError),
 	Other(Report),
 }
-#[derive(Error, Debug, derive_new::new)]
+#[derive(Debug, Error, derive_new::new)]
 #[error("Chosen exchange does not support the requested timeframe. Provided: {provided}, allowed: {allowed:?}")]
 pub struct UnsupportedTimeframeError {
 	provided: Timeframe,
@@ -99,7 +132,7 @@ pub struct UnsupportedTimeframeError {
 //,}}}
 
 // AbsMarket {{{
-#[derive(derive_more::Debug, derive_new::new, thiserror::Error)]
+#[derive(derive_more::Debug, thiserror::Error, derive_new::new)]
 pub struct WrongExchangeError {
 	correct: &'static str,
 	provided: AbsMarket,
@@ -124,7 +157,9 @@ pub trait MarketTrait {
 	fn abs_market(&self) -> AbsMarket;
 }
 
-#[derive(Debug, Clone, Copy)]
+//Q: potentially rename to `ExchangeMarket` for 1:1 meaning mapping to the contents?
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug)]
 pub enum AbsMarket {
 	#[cfg(feature = "binance")]
 	Binance(crate::binance::Market),
@@ -187,7 +222,7 @@ impl std::str::FromStr for AbsMarket {
 	fn from_str(s: &str) -> Result<Self> {
 		let parts: Vec<&str> = s.split('/').collect();
 		if parts.len() != 2 {
-			bail!("Invalid market string: {}", s);
+			bail!("Invalid market string: {s}\nMust be in the form of `Exchange/SubMarket`; eg `Binance/Futures`");
 		}
 		let exchange = parts[0];
 		let sub_market = parts[1];
@@ -229,7 +264,7 @@ impl From<&str> for AbsMarket {
 //,}}}
 
 // Klines {{{
-#[derive(Clone, Debug, Default, Copy)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Oi {
 	pub lsr: f64,
 	pub total: f64,
@@ -270,7 +305,7 @@ impl TryFrom<Klines> for FullKlines {
 //,}}}
 
 // RequestRange {{{
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum RequestRange {
 	/// Preferred way of defining the range
 	StartEnd { start: DateTime<Utc>, end: Option<DateTime<Utc>> },
@@ -377,12 +412,12 @@ impl From<(i64, i64)> for RequestRange {
 	}
 }
 
-#[derive(Error, Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, derive_more::Display, Error, derive_more::From)]
 pub enum RequestRangeError {
 	OutOfRange(OutOfRangeError),
 	Others(Report),
 }
-#[derive(derive_more::Debug, derive_new::new, thiserror::Error)]
+#[derive(derive_more::Debug, thiserror::Error, derive_new::new)]
 pub struct OutOfRangeError {
 	allowed: std::ops::RangeInclusive<u32>,
 	provided: u32,
@@ -399,7 +434,7 @@ impl std::fmt::Display for OutOfRangeError {
 //,}}}
 
 // Balance {{{
-#[derive(Clone, Debug, Default, Copy, derive_more::Deref, derive_more::DerefMut)]
+#[derive(Clone, Copy, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
 pub struct AssetBalance {
 	pub asset: Asset,
 	pub underlying: f64,
@@ -425,7 +460,7 @@ pub struct AssetBalance {
 	//position_margin: f64,
 	//unrealized: f64,
 }
-#[derive(Clone, Debug, Default, derive_new::new, derive_more::Deref, derive_more::DerefMut)]
+#[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut, derive_new::new)]
 pub struct Balances {
 	#[deref_mut]
 	#[deref]

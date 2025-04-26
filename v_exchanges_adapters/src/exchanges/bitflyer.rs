@@ -72,7 +72,7 @@ pub struct BitFlyerOptions {
 }
 
 /// A `enum` that represents the base url of the BitFlyer HTTP API.
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum BitFlyerHttpUrl {
 	/// `https://api.bitflyer.com`
 	Main,
@@ -82,7 +82,7 @@ pub enum BitFlyerHttpUrl {
 }
 
 /// A `enum` that represents the base url of the BitFlyer Realtime API
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum BitFlyerWebSocketUrl {
 	/// `wss://ws.lightstream.bitflyer.com`
@@ -91,7 +91,7 @@ pub enum BitFlyerWebSocketUrl {
 	None,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Deserialize)]
 pub struct BitFlyerChannelMessage {
 	pub channel: String,
 	pub message: serde_json::Value,
@@ -265,7 +265,7 @@ impl WebSocketHandler for BitFlyerWebSocketHandler {
 						tracing::debug!("WebSocket authentication successful");
 						return self.message_subscribe();
 					} else {
-						tracing::debug!("WebSocket authentication unsuccessful");
+						tracing::error!("WebSocket authentication unsuccessful");
 					}
 					self.auth_id = None;
 				} else if message.method.as_deref() == Some("channelMessage") {
@@ -295,7 +295,6 @@ impl BitFlyerWebSocketHandler {
 
 impl BitFlyerHttpUrl {
 	/// The base URL that this variant represents.
-	#[inline(always)]
 	fn as_str(&self) -> &'static str {
 		match self {
 			Self::Main => "https://api.bitflyer.com",
@@ -306,7 +305,6 @@ impl BitFlyerHttpUrl {
 
 impl BitFlyerWebSocketUrl {
 	/// The base URL that this variant represents.
-	#[inline(always)]
 	fn as_str(&self) -> &'static str {
 		match self {
 			Self::Default => "wss://ws.lightstream.bitflyer.com",
@@ -340,7 +338,7 @@ impl HandlerOptions for BitFlyerOptions {
 
 impl Default for BitFlyerOptions {
 	fn default() -> Self {
-		let mut websocket_config = WebSocketConfig::new();
+		let mut websocket_config = WebSocketConfig::default();
 		websocket_config.ignore_duplicate_during_reconnection = true;
 		Self {
 			key: None,
@@ -363,7 +361,6 @@ where
 {
 	type RequestHandler = BitFlyerRequestHandler<'a, R>;
 
-	#[inline(always)]
 	fn request_handler(options: Self::Options) -> Self::RequestHandler {
 		BitFlyerRequestHandler::<'a, R> { options, _phantom: PhantomData }
 	}
@@ -372,7 +369,6 @@ where
 impl<H: FnMut(BitFlyerChannelMessage) + Send + 'static> WebSocketOption<H> for BitFlyerOption {
 	type WebSocketHandler = BitFlyerWebSocketHandler;
 
-	#[inline(always)]
 	fn websocket_handler(handler: H, options: Self::Options) -> Self::WebSocketHandler {
 		BitFlyerWebSocketHandler {
 			message_handler: Box::new(handler),

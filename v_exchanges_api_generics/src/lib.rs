@@ -1,7 +1,10 @@
-#![warn(future_incompatible, let_underscore, nonstandard_style, missing_docs)]
+#![warn(future_incompatible, let_underscore, nonstandard_style)] //, missing_docs)]
 #![feature(slice_pattern)]
+#![feature(default_field_values)]
+#![feature(try_blocks)]
 #![feature(duration_constructors)]
 #![feature(let_chains)]
+#![allow(clippy::result_large_err)]
 
 //! # Generic-API-Client
 //! This is a crate for interacting with HTTP/HTTPS/WebSocket APIs.
@@ -16,8 +19,24 @@
 //!
 //! For a more detailed documentation, see the links above.
 
-/// Module for interacting with HTTP/HTTPS APIs.
 pub mod http;
-/// Module for interacting with WebSocket APIs.
-pub mod websocket;
+pub mod ws;
 pub extern crate reqwest;
+pub extern crate tokio_tungstenite;
+
+#[derive(Debug, derive_more::Display, thiserror::Error, derive_more::From)]
+#[non_exhaustive]
+pub enum AuthError {
+	MissingPubkey,
+	MissingSecret,
+	InvalidCharacterInApiKey(String),
+	Other(eyre::Report),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum UrlError {
+	#[error("Failed to parse URL: {0}")]
+	Parse(#[from] url::ParseError),
+	#[error("Exchange does not provide testnet for requested endpoint: {0}")]
+	MissingTestnet(url::Url),
+}

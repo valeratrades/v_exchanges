@@ -50,11 +50,11 @@ pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> Exchang
 	Ok(price)
 }
 
-#[derive(Clone, Debug, Default, derive_new::new, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, derive_new::new)]
 struct PricesResponse(Vec<AssetPriceResponse>);
 
 #[serde_as]
-#[derive(Clone, Debug, Default, derive_new::new, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, derive_new::new)]
 #[serde(rename_all = "camelCase")]
 struct AssetPriceResponse {
 	symbol: String,

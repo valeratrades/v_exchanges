@@ -80,7 +80,7 @@ pub async fn balances(client: &v_exchanges_adapters::Client, recv_window: Option
 }
 #[allow(unused)]
 #[serde_as]
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AssetBalanceResponse {
 	account_alias: String,

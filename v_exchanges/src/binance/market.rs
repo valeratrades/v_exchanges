@@ -29,8 +29,8 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Binan
 
 	let (endpoint_prefix, base_url) = match market {
 		Market::Spot => ("/api/v3", BinanceHttpUrl::Spot),
-		Market::Futures => ("/fapi/v1", BinanceHttpUrl::FuturesUsdM),
-		Market::Margin => unimplemented!(),
+		Market::Perp => ("/fapi/v1", BinanceHttpUrl::FuturesUsdM),
+		Market::Marg => unimplemented!(),
 	};
 
 	let kline_responses: Vec<KlineResponse> = client.get(&format!("{endpoint_prefix}/klines"), &params, [BinanceOption::HttpUrl(base_url)]).await?;
@@ -70,7 +70,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: Binan
 ```
 **/
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct KlineResponse {
 	pub open_time: i64,
 	#[serde_as(as = "DisplayFromStr")]

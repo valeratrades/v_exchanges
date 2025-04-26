@@ -1,17 +1,14 @@
 // A module for communicating with the MEXC API (https://mexcdevelop.github.io/apidocs/spot/en/)
 
-use std::{
-	marker::PhantomData,
-	str::FromStr,
-	time::{self, SystemTime},
-};
+use std::{marker::PhantomData, str::FromStr, time::SystemTime};
 
-use chrono::{Duration, Utc};
+use chrono::Utc;
+use generics::{AuthError, reqwest::Url};
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
-use v_exchanges_api_generics::{http::*, websocket::*};
+use v_exchanges_api_generics::{http::*, ws::*};
 use v_utils::prelude::*;
 
 use crate::traits::*;
@@ -19,11 +16,13 @@ use crate::traits::*;
 static MAX_RECV_WINDOW: u16 = 60000; // as of (2025/01/18)
 
 /// Options that can be set when creating handlers
+#[derive(Debug, Default)]
 pub enum MexcOption {
-	/// [Default] variant, does nothing
+	/// Does nothing
+	#[default]
 	Default,
 	/// API key
-	Key(String),
+	Pubkey(String),
 	/// Api secret
 	Secret(SecretString),
 	/// Base url for HTTP requests
@@ -32,17 +31,17 @@ pub enum MexcOption {
 	HttpAuth(MexcAuth),
 	/// receive window parameter used for requests
 	RecvWindow(u16),
-	/// Base url for WebSocket connections
-	WebSocketUrl(MexcWebSocketUrl),
-	/// WebSocketConfig used for creating WebSocketConnections
-	WebSocketConfig(WebSocketConfig),
+	/// Base url for Ws connections
+	WsUrl(MexcWsUrl),
+	/// WsConfig used for creating WsConnections
+	WsConfig(WsConfig),
 }
 
 /// A struct that represents a set of MexcOptions
-#[derive(Clone, derive_more::Debug)]
+#[derive(Clone, derive_more::Debug, Default)]
 pub struct MexcOptions {
 	/// see [MexcOption::Key]
-	pub key: Option<String>,
+	pub pubkey: Option<String>,
 	/// see [MexcOption::Secret]
 	#[debug("[REDACTED]")]
 	pub secret: Option<SecretString>,
@@ -52,14 +51,14 @@ pub struct MexcOptions {
 	pub http_auth: MexcAuth,
 	/// see [MexcOption::RecvWindow]
 	pub recv_window: Option<u16>,
-	/// see [MexcOption::WebSocketUrl]
-	pub websocket_url: MexcWebSocketUrl,
-	/// see [MexcOption::WebSocketConfig]
-	pub websocket_config: WebSocketConfig,
+	/// see [MexcOption::WsUrl]
+	pub ws_url: MexcWsUrl,
+	/// see [MexcOption::WsConfig]
+	pub ws_config: WsConfig,
 }
 
 /// Enum that represents the base url of the MEXC REST API
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum MexcHttpUrl {
 	Spot,
@@ -70,7 +69,6 @@ pub enum MexcHttpUrl {
 }
 impl MexcHttpUrl {
 	/// The URL that this variant represents
-	#[inline(always)]
 	fn as_str(&self) -> &'static str {
 		match self {
 			Self::Spot => "https://api.mexc.com",
@@ -81,36 +79,15 @@ impl MexcHttpUrl {
 	}
 }
 
-/// Enum that represents the base url of the MEXC WebSocket API
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
-#[non_exhaustive]
-pub enum MexcWebSocketUrl {
-	Spot,
-	SpotTest,
-	Futures,
-	None,
-}
-impl MexcWebSocketUrl {
-	/// The URL that this variant represents
-	#[inline(always)]
-	pub fn as_str(&self) -> &'static str {
-		match self {
-			Self::Spot => "wss://stream.mexc.com/ws",
-			Self::SpotTest => "wss://stream-testnet.mexc.com/ws",
-			Self::Futures => "wss://contract.mexc.com/ws",
-			Self::None => "",
-		}
-	}
-}
-
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum MexcAuth {
 	Sign,
 	Key,
+	#[default]
 	None,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct MexcError {
 	pub code: i32,
 	pub msg: String,
@@ -125,12 +102,6 @@ impl From<MexcError> for ApiError {
 pub struct MexcRequestHandler<'a, R: DeserializeOwned> {
 	options: MexcOptions,
 	_phantom: PhantomData<&'a R>,
-}
-
-/// A struct that implements WebSocketHandler
-pub struct MexcWebSocketHandler {
-	message_handler: Box<dyn FnMut(serde_json::Value) + Send>,
-	options: MexcOptions,
 }
 
 impl<B, R> RequestHandler<B> for MexcRequestHandler<'_, R>
@@ -156,8 +127,8 @@ where
 		}
 
 		if self.options.http_auth != MexcAuth::None {
-			let key = self.options.key.as_deref().ok_or(AuthError::MissingApiKey)?;
-			builder = builder.header("ApiKey", key);
+			let pubkey = self.options.pubkey.as_deref().ok_or(AuthError::MissingPubkey)?;
+			builder = builder.header("ApiKey", pubkey);
 
 			let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
 			let timestamp = time.as_millis();
@@ -179,7 +150,7 @@ where
 					String::from_utf8(request.body().and_then(|body| body.as_bytes()).unwrap_or_default().to_vec()).unwrap_or_default()
 				};
 
-				let signature_base = format!("{}{}{}", key, timestamp, param_string);
+				let signature_base = format!("{pubkey}{timestamp}{param_string}");
 				hmac.update(signature_base.as_bytes());
 				let signature = hex::encode(hmac.finalize().into_bytes());
 				request.headers_mut().insert("Signature", signature.parse().unwrap());
@@ -216,7 +187,7 @@ where
 				};
 				let e = match retry_after_sec {
 					Some(s) => {
-						let until = Some(Utc::now() + Duration::seconds(s as i64));
+						let until = Some(Utc::now() + chrono::Duration::seconds(s as i64));
 						ApiError::IpTimeout { until }.into()
 					}
 					None => eyre!("Could't interpret Retry-After header").into(),
@@ -233,29 +204,50 @@ where
 	}
 }
 
-impl WebSocketHandler for MexcWebSocketHandler {
-	fn websocket_config(&self) -> WebSocketConfig {
-		let mut config = self.options.websocket_config.clone();
-		if self.options.websocket_url != MexcWebSocketUrl::None {
-			config.url_prefix = self.options.websocket_url.as_str().to_owned();
+// Ws stuff {{{
+/// A struct that implements [WsHandler]
+#[derive(Debug, derive_new::new)]
+pub struct MexcWsHandler {
+	options: MexcOptions,
+}
+impl WsHandler for MexcWsHandler {
+	fn config(&self) -> WsConfig {
+		let mut config = self.options.ws_config.clone();
+		if self.options.ws_url != MexcWsUrl::None {
+			config.base_url = Some(Url::parse(self.options.ws_url.as_str()).expect("urls are hardcoded and should be valid"));
 		}
 		config
 	}
-
-	fn handle_message(&mut self, message: WebSocketMessage) -> Vec<WebSocketMessage> {
-		match message {
-			WebSocketMessage::Text(message) =>
-				if let Ok(message) = serde_json::from_str(&message) {
-					(self.message_handler)(message);
-				} else {
-					tracing::debug!("Invalid JSON message received");
-				},
-			WebSocketMessage::Binary(_) => tracing::debug!("Unexpected binary message received"),
-			WebSocketMessage::Ping(_) | WebSocketMessage::Pong(_) => (),
+}
+/// Enum that represents the base url of the MEXC Ws API
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum MexcWsUrl {
+	Spot,
+	SpotTest,
+	Futures,
+	#[default]
+	None,
+}
+impl MexcWsUrl {
+	/// The URL that this variant represents
+	pub fn as_str(&self) -> &'static str {
+		match self {
+			Self::Spot => "wss://stream.mexc.com/ws",
+			Self::SpotTest => "wss://stream-testnet.mexc.com/ws",
+			Self::Futures => "wss://contract.mexc.com/ws",
+			Self::None => "",
 		}
-		vec![]
 	}
 }
+impl WsOption for MexcOption {
+	type WsHandler = MexcWsHandler;
+
+	fn ws_handler(options: Self::Options) -> Self::WsHandler {
+		MexcWsHandler::new(options)
+	}
+}
+//,}}}
 
 impl HandlerOptions for MexcOptions {
 	type OptionItem = MexcOption;
@@ -263,7 +255,7 @@ impl HandlerOptions for MexcOptions {
 	fn update(&mut self, option: Self::OptionItem) {
 		match option {
 			MexcOption::Default => (),
-			MexcOption::Key(v) => self.key = Some(v),
+			MexcOption::Pubkey(v) => self.pubkey = Some(v),
 			MexcOption::Secret(v) => self.secret = Some(v),
 			MexcOption::HttpUrl(v) => self.http_url = v,
 			MexcOption::HttpAuth(v) => self.http_auth = v,
@@ -274,30 +266,13 @@ impl HandlerOptions for MexcOptions {
 				} else {
 					self.recv_window = Some(v);
 				},
-			MexcOption::WebSocketUrl(v) => self.websocket_url = v,
-			MexcOption::WebSocketConfig(v) => self.websocket_config = v,
+			MexcOption::WsUrl(v) => self.ws_url = v,
+			MexcOption::WsConfig(v) => self.ws_config = v,
 		}
 	}
 
 	fn is_authenticated(&self) -> bool {
-		self.key.is_some() // some end points are satisfied with just the key, and it's really difficult to provide only a key without a secret from the clientside, so assume intent if it's missing.
-	}
-}
-
-impl Default for MexcOptions {
-	fn default() -> Self {
-		let mut websocket_config = WebSocketConfig::new();
-		websocket_config.refresh_after = time::Duration::from_secs(60 * 60 * 12);
-		websocket_config.ignore_duplicate_during_reconnection = true;
-		Self {
-			key: None,
-			secret: None,
-			http_url: MexcHttpUrl::None,
-			http_auth: MexcAuth::None,
-			recv_window: None,
-			websocket_url: MexcWebSocketUrl::None,
-			websocket_config,
-		}
+		self.pubkey.is_some() // some end points are satisfied with just the key, and it's really difficult to provide only a key without a secret from the clientside, so assume intent if it's missing.
 	}
 }
 
@@ -308,30 +283,11 @@ where
 {
 	type RequestHandler = MexcRequestHandler<'a, R>;
 
-	#[inline(always)]
 	fn request_handler(options: Self::Options) -> Self::RequestHandler {
 		MexcRequestHandler::<'a, R> { options, _phantom: PhantomData }
 	}
 }
 
-impl<H: FnMut(serde_json::Value) + Send + 'static> WebSocketOption<H> for MexcOption {
-	type WebSocketHandler = MexcWebSocketHandler;
-
-	#[inline(always)]
-	fn websocket_handler(handler: H, options: Self::Options) -> Self::WebSocketHandler {
-		MexcWebSocketHandler {
-			message_handler: Box::new(handler),
-			options,
-		}
-	}
-}
-
 impl HandlerOption for MexcOption {
 	type Options = MexcOptions;
-}
-
-impl Default for MexcOption {
-	fn default() -> Self {
-		Self::Default
-	}
 }

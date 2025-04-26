@@ -1,19 +1,20 @@
 // A module for communicating with the [Binance API](https://binance-docs.github.io/apidocs/spot/en/).
 
-use std::{
-	marker::PhantomData,
-	str::FromStr,
-	time::{self, SystemTime},
-};
+use std::{collections::HashSet, marker::PhantomData, str::FromStr, time::SystemTime};
 
-use chrono::{Duration, Utc};
-use generics::http::{ApiError, BuildError, HandleError};
+use chrono::{DateTime, Utc};
+use eyre::eyre;
+use generics::{
+	AuthError, UrlError,
+	http::{ApiError, BuildError, HandleError, *},
+	tokio_tungstenite::tungstenite,
+	ws::{ContentEvent, ResponseOrContent, Topic, WsConfig, WsDefinitionError, WsError, WsHandler},
+};
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
-use v_exchanges_api_generics::{http::*, websocket::*};
-use v_utils::prelude::*;
+use url::Url;
 
 use crate::traits::*;
 
@@ -25,10 +26,10 @@ where
 {
 	type Successful = R;
 
-	fn base_url(&self, is_test: bool) -> String {
+	fn base_url(&self, is_test: bool) -> Result<Url, UrlError> {
 		match is_test {
-			true => self.options.http_url.as_str_test().unwrap().to_owned(),
-			false => self.options.http_url.as_str().to_owned(),
+			true => self.options.http_url.url_testnet().ok_or_else(|| UrlError::MissingTestnet(self.options.http_url.url_mainnet())),
+			false => Ok(self.options.http_url.url_mainnet()),
 		}
 	}
 
@@ -41,8 +42,8 @@ where
 
 		if self.options.http_auth != BinanceAuth::None {
 			// https://binance-docs.github.io/apidocs/spot/en/#signed-trade-user_data-and-margin-endpoint-security
-			let key = self.options.key.as_deref().ok_or(AuthError::MissingApiKey)?;
-			builder = builder.header("X-MBX-APIKEY", key);
+			let pubkey = self.options.pubkey.as_deref().ok_or(AuthError::MissingPubkey)?;
+			builder = builder.header("X-MBX-APIKEY", pubkey);
 
 			if self.options.http_auth == BinanceAuth::Sign {
 				let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
@@ -68,7 +69,6 @@ where
 				return Ok(request);
 			}
 		}
-		//Ok(builder.build()?)
 		Ok(builder.build().expect("don't expect this to be reached by client, so fail fast for dev"))
 	}
 
@@ -100,10 +100,10 @@ where
 				};
 				let e = match retry_after_sec {
 					Some(s) => {
-						let until = Some(Utc::now() + Duration::seconds(s as i64));
+						let until = Some(Utc::now() + chrono::Duration::seconds(s as i64));
 						ApiError::IpTimeout { until }.into()
 					}
-					None => eyre!("Could't interpret Retry-After header").into(),
+					_ => eyre!("Could't interpret Retry-After header").into(),
 				};
 				return Err(e);
 			}
@@ -117,38 +117,169 @@ where
 	}
 }
 
-impl WebSocketHandler for BinanceWebSocketHandler {
-	fn websocket_config(&self) -> WebSocketConfig {
-		let mut config = self.options.websocket_config.clone();
-		if self.options.websocket_url != BinanceWebSocketUrl::None {
-			config.url_prefix = self.options.websocket_url.as_str().to_owned();
+// Ws stuff {{{
+#[derive(Clone, Debug)]
+pub struct BinanceWsHandler {
+	options: BinanceOptions,
+	/// Binance has a retarded `listen-key` system. This is needed only for that.
+	last_keep_alive: SystemTime,
+}
+impl BinanceWsHandler {
+	pub fn new(options: BinanceOptions) -> Self {
+		Self {
+			options,
+			last_keep_alive: SystemTime::UNIX_EPOCH, // semantically creation itself does nothing for refreshing the token. But refreshment timer on it will be set to 0 on creation, so that's when we'll set it to [now](SystemTime::now)
 		}
-		config
-	}
-
-	fn handle_message(&mut self, message: WebSocketMessage) -> Vec<WebSocketMessage> {
-		match message {
-			WebSocketMessage::Text(message) =>
-				if let Ok(message) = serde_json::from_str(&message) {
-					(self.message_handler)(message);
-				} else {
-					tracing::debug!("Invalid JSON message received");
-				},
-			WebSocketMessage::Binary(_) => tracing::debug!("Unexpected binary message received"),
-			WebSocketMessage::Ping(_) | WebSocketMessage::Pong(_) => (),
-		}
-		vec![]
 	}
 }
+impl WsHandler for BinanceWsHandler {
+	fn config(&self) -> Result<WsConfig, UrlError> {
+		let mut config = self.options.ws_config.clone();
+		match self.options.ws_url {
+			BinanceWsUrl::None => tracing::warn!(
+				"BinanceWsUrl was not set. Due to Binance shenanigans, any provided topics will now be ignored, and must be manually hardcoded into the provided url on creation of the websocket. However, recommended approach is to simply provide a BinanceOption::WsUrl."
+			),
+			_ => {
+				let mut streams = String::new();
+				config.topics = config.topics.union(&self.options.ws_topics).cloned().collect();
+				for (i, topic) in config.topics.iter().enumerate() {
+					if i > 0 {
+						streams.push('/');
+					}
+					streams.push_str(topic);
+				}
+				let base_url = match self.options.test {
+					true => self.options.ws_url.url_testnet().ok_or_else(|| UrlError::MissingTestnet(self.options.ws_url.url_mainnet()))?,
+					false => self.options.ws_url.url_mainnet(),
+				};
+				config.base_url = Some(base_url.join(&format!("stream?streams={streams}")).unwrap());
+			}
+		}
+		Ok(config)
+	}
+
+	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
+		if self.options.ws_config.auth {
+			//TODO: implement ws auth once I can acquire ed25519 keys: https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-api-general-info#log-in-with-api-key-signed
+
+			let pubkey = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
+			let secret = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
+
+			//TODO:
+			/*
+			match
+				user_data_stream => POST /api/v3/userDataStream
+				trade => need to sign each request (can't sign connection itself without ed25519), so do nothing here
+			*/
+		}
+
+		Ok(vec![])
+	}
+
+	fn handle_subscribe(&mut self, topics: HashSet<Topic>) -> eyre::Result<Vec<tungstenite::Message>, WsError> {
+		topics
+			.into_iter()
+			.map(|topic| {
+				let topic = match topic {
+					Topic::Trade(topic) => topic,
+					_ => return Err(WsError::Subscription("Binance only supports string topics".to_owned())),
+				};
+				todo!();
+			})
+			.collect::<Result<Vec<_>, _>>()
+	}
+
+	fn handle_jrpc(&mut self, jrpc: serde_json::Value) -> Result<ResponseOrContent, WsError> {
+		//TODO: handle listen key expiration \
+		//match jrpc["e"].as_str().expect("missing event type") { // matches with event_type
+		//	"listenKeyExpired" => todo!(),
+		//	_ => Ok(None),
+		//}
+		#[derive(serde::Deserialize)]
+		struct NamedStreamData {
+			pub stream: String,
+			pub data: serde_json::Value,
+		}
+		let (event_topic, data) = {
+			match serde_json::from_value::<NamedStreamData>(jrpc.clone()) {
+				Ok(NamedStreamData { stream, data }) => (stream, data),
+				Err(_) => ("".to_string(), jrpc),
+			}
+		};
+		assert!(data.is_object(), "data should be an object");
+
+		let (event_type, event_time, event_data) = {
+			//dbg: dirty impl
+			let mut event_data = data.as_object().unwrap().to_owned();
+			let event_type = data["e"].as_str().unwrap().to_owned();
+			event_data.remove("e");
+			let event_ts: i64 = data["E"].as_i64().unwrap();
+			dbg!(&event_ts);
+			let event_time = DateTime::<Utc>::from_timestamp_millis(event_ts).unwrap();
+			event_data.remove("E");
+			(event_type, event_time, event_data.into())
+		};
+
+		let content = ContentEvent {
+			data: event_data,
+			topic: event_topic,
+			time: event_time,
+			event_type,
+		};
+		Ok(ResponseOrContent::Content(content)) //dbg
+	}
+
+	// stream listen-key keepalive works for:
+	// - [x] binance spot
+	// - [?] binance perp
+
+	//	fn handle_post(&mut self) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
+	//	if SystemTime::now().duration_since(self.last_keep_alive).unwrap() > Duration::from_mins(30) {
+	//		//XXX: will fail if it's not a USER_DATA_STREAM //TODO: generalize to all binance streams
+	//		let msg_json = serde_json::json!({
+	//			"id": "815d5fce-0880-4287-a567-80badf004c74",
+	//			"method": "userDataStream.ping",
+	//			"params": {
+	//				"apiKey": self.options.pubkey.as_ref().unwrap()
+	//			}
+	//		});
+	//		return Ok(Some(vec![tungstenite::Message::Text(msg_json.to_string().into())]));
+	//	}
+	//	Ok(None)
+	//}
+	//if SystemTime::now().duration_since(self.last_keep_alive).unwrap() > Duration::from_mins(30) {
+	//	//XXX: will fail if it's not a USER_DATA_STREAM
+	//	//TODO send `PUT /api/v3/userDataStream`
+	//	let client = crate::Client::default();
+	//	.request(
+	//		&self.options,
+	//		"PUT",
+	//		"/api/v3/userDataStream",
+	//		None::<()>,
+	//	)
+	//}
+}
+impl WsOption for BinanceOption {
+	type WsHandler = BinanceWsHandler;
+
+	fn ws_handler(options: Self::Options) -> Self::WsHandler {
+		BinanceWsHandler::new(options)
+	}
+}
+//,}}}
 
 /// Options that can be set when creating handlers
+#[derive(Debug, Default)]
 pub enum BinanceOption {
-	/// [Default] variant, does nothing
-	Default,
+	#[default]
+	None,
 	/// API key
-	Key(String),
+	Pubkey(String),
 	/// Api secret
 	Secret(SecretString),
+	/// Use testnet
+	Test(bool),
+
 	/// Number of milliseconds the request is valid for. Only applicable for signed requests.
 	RecvWindow(u16),
 	/// Base url for HTTP requests
@@ -157,15 +288,16 @@ pub enum BinanceOption {
 	HttpAuth(BinanceAuth),
 
 	/// Base url for WebSocket connections
-	WebSocketUrl(BinanceWebSocketUrl),
+	WsUrl(BinanceWsUrl),
 	/// [WebSocketConfig] used for creating [WebSocketConnection]s
 	/// `url_prefix` will be overridden by [WebSocketUrl](Self::WebSocketUrl) unless `WebSocketUrl` is [BinanceWebSocketUrl::None].
-	/// By default, `refresh_after` is set to 12 hours and `ignore_duplicate_during_reconnection` is set to `true`.
-	WebSocketConfig(WebSocketConfig),
+	WsConfig(WsConfig),
+	/// See [WsConfig::topics]. Will be merged with those manually defined in [Self::WsConfig::topics], if any.
+	WsTopics(Vec<String>),
 }
 
 /// A `enum` that represents the base url of the Binance REST API.
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum BinanceHttpUrl {
 	/// `https://api.binance.com`
@@ -190,52 +322,47 @@ pub enum BinanceHttpUrl {
 	#[default]
 	None,
 }
-impl BinanceHttpUrl {
-	/// The URL that this variant represents.
-	#[inline(always)]
-	fn as_str(&self) -> &'static str {
+impl EndpointUrl for BinanceHttpUrl {
+	fn url_mainnet(&self) -> Url {
 		match self {
-			Self::Spot => "https://api.binance.com",
-			Self::Spot1 => "https://api1.binance.com",
-			Self::Spot2 => "https://api2.binance.com",
-			Self::Spot3 => "https://api3.binance.com",
-			Self::Spot4 => "https://api4.binance.com",
-			Self::SpotData => "https://data.binance.com",
-			Self::FuturesUsdM => "https://fapi.binance.com",
-			Self::FuturesCoinM => "https://dapi.binance.com",
-			Self::EuropeanOptions => "https://eapi.binance.com",
-			Self::None => "",
+			Self::Spot => Url::parse("https://api.binance.com").unwrap(),
+			Self::Spot1 => Url::parse("https://api1.binance.com").unwrap(),
+			Self::Spot2 => Url::parse("https://api2.binance.com").unwrap(),
+			Self::Spot3 => Url::parse("https://api3.binance.com").unwrap(),
+			Self::Spot4 => Url::parse("https://api4.binance.com").unwrap(),
+			Self::SpotData => Url::parse("https://data.binance.com").unwrap(),
+			Self::FuturesUsdM => Url::parse("https://fapi.binance.com").unwrap(),
+			Self::FuturesCoinM => Url::parse("https://dapi.binance.com").unwrap(),
+			Self::EuropeanOptions => Url::parse("https://eapi.binance.com").unwrap(),
+			Self::None => Url::parse("").unwrap(),
 		}
 	}
 
-	//TODO: impl more cleanly
-	#[inline(always)]
-	fn as_str_test(&self) -> Option<&'static str> {
+	fn url_testnet(&self) -> Option<Url> {
 		match self {
-			Self::Spot => Some("https://testnet.binance.vision"),
-			Self::Spot1 => Some("https://testnet.binance.vision"),
-			Self::Spot2 => Some("https://testnet.binance.vision"),
-			Self::Spot3 => Some("https://testnet.binance.vision"),
-			Self::Spot4 => Some("https://testnet.binance.vision"),
-			Self::SpotData => Some("https://testnet.binance.vision"),
-			Self::FuturesUsdM => Some("https://testnet.binancefuture.com"),
-			Self::FuturesCoinM => Some("https://testnet.binancefuture.com"),
+			Self::Spot => Some(Url::parse("https://testnet.binance.vision").unwrap()),
+			Self::Spot1 => Some(Url::parse("https://testnet.binance.vision").unwrap()),
+			Self::Spot2 => Some(Url::parse("https://testnet.binance.vision").unwrap()),
+			Self::Spot3 => Some(Url::parse("https://testnet.binance.vision").unwrap()),
+			Self::Spot4 => Some(Url::parse("https://testnet.binance.vision").unwrap()),
+			Self::SpotData => Some(Url::parse("https://testnet.binance.vision").unwrap()),
+			Self::FuturesUsdM => Some(Url::parse("https://testnet.binancefuture.com").unwrap()),
+			Self::FuturesCoinM => Some(Url::parse("https://testnet.binancefuture.com").unwrap()),
 			Self::EuropeanOptions => None,
-			Self::None => Some(""),
+			Self::None => Some(Url::parse("").unwrap()),
 		}
 	}
 }
 
 /// A `enum` that represents the base url of the Binance WebSocket API
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
-#[non_exhaustive]
-pub enum BinanceWebSocketUrl {
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum BinanceWsUrl {
+	/// Evaluated to whatever spot url is estimated to be currently preferrable.
+	Spot,
 	/// `wss://stream.binance.com:9443`
 	Spot9443,
 	/// `wss://stream.binance.com:443`
 	Spot443,
-	/// `wss://testnet.binance.vision`
-	SpotTest,
 	/// `wss://data-stream.binance.com`
 	SpotData,
 	/// `wss://ws-api.binance.com:443`
@@ -248,21 +375,46 @@ pub enum BinanceWebSocketUrl {
 	FuturesUsdMAuth,
 	/// `wss://dstream.binance.com`
 	FuturesCoinM,
-	/// `wss://stream.binancefuture.com`
-	FuturesUsdMTest,
-	/// `wss://dstream.binancefuture.com`
-	FuturesCoinMTest,
 	/// `wss://nbstream.binance.com`
 	EuropeanOptions,
 	/// The url will not be modified by [BinanceRequestHandler]
 	#[default]
 	None,
 }
+impl EndpointUrl for BinanceWsUrl {
+	// Can't impl [ToOwned], as there is a blanket impl of it on everything with [Clone]
+	fn url_mainnet(&self) -> url::Url {
+		match self {
+			Self::Spot => Url::parse("wss://stream.binance.com:9443").unwrap(), //TODO: actually have some metric to select the best url here
+			Self::Spot9443 => Url::parse("wss://stream.binance.com:9443").unwrap(),
+			Self::Spot443 => Url::parse("wss://stream.binance.com:443").unwrap(),
+			Self::SpotData => Url::parse("wss://data-stream.binance.com").unwrap(),
+			Self::WebSocket443 => Url::parse("wss://ws-api.binance.com:443").unwrap(),
+			Self::WebSocket9443 => Url::parse("wss://ws-api.binance.com:9443").unwrap(),
+			Self::FuturesUsdM => Url::parse("wss://fstream.binance.com").unwrap(),
+			Self::FuturesUsdMAuth => Url::parse("wss://fstream-auth.binance.com").unwrap(),
+			Self::FuturesCoinM => Url::parse("wss://dstream.binance.com").unwrap(),
+			Self::EuropeanOptions => Url::parse("wss://nbstream.binance.com").unwrap(),
+			Self::None => Url::parse("").unwrap(),
+		}
+	}
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+	fn url_testnet(&self) -> Option<url::Url> {
+		match self {
+			Self::Spot => Some(Url::parse("wss://testnet.binance.vision").unwrap()),
+			Self::Spot9443 => Some(Url::parse("wss://testnet.binance.vision:9443").unwrap()),
+			Self::Spot443 => Some(Url::parse("wss://testnet.binance.vision:443").unwrap()),
+			Self::FuturesUsdM => Some(Url::parse("wss://stream.binancefuture.com").unwrap()),
+			Self::FuturesCoinM => Some(Url::parse("wss://dstream.binancefuture.com").unwrap()),
+			Self::SpotData | Self::WebSocket443 | Self::WebSocket9443 | Self::FuturesUsdMAuth | Self::EuropeanOptions | Self::None => None,
+		}
+	}
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum BinanceAuth {
 	Sign,
-	Key,
+	Key, //Q: Not sure if anything uses it.
 	#[default]
 	None,
 }
@@ -280,39 +432,11 @@ pub struct BinanceRequestHandler<'a, R: DeserializeOwned> {
 	_phantom: PhantomData<&'a R>,
 }
 
-/// A `struct` that implements [WebSocketHandler]
-pub struct BinanceWebSocketHandler {
-	message_handler: Box<dyn FnMut(serde_json::Value) + Send>,
-	options: BinanceOptions,
-}
-
-impl BinanceWebSocketUrl {
-	/// The URL that this variant represents.
-	#[inline(always)]
-	pub fn as_str(&self) -> &'static str {
-		match self {
-			Self::Spot9443 => "wss://stream.binance.com:9443",
-			Self::Spot443 => "wss://stream.binance.com:443",
-			Self::SpotTest => "wss://testnet.binance.vision",
-			Self::SpotData => "wss://data-stream.binance.com",
-			Self::WebSocket443 => "wss://ws-api.binance.com:443",
-			Self::WebSocket9443 => "wss://ws-api.binance.com:9443",
-			Self::FuturesUsdM => "wss://fstream.binance.com",
-			Self::FuturesUsdMAuth => "wss://fstream-auth.binance.com",
-			Self::FuturesCoinM => "wss://dstream.binance.com",
-			Self::FuturesUsdMTest => "wss://stream.binancefuture.com",
-			Self::FuturesCoinMTest => "wss://dstream.binancefuture.com",
-			Self::EuropeanOptions => "wss://nbstream.binance.com",
-			Self::None => "",
-		}
-	}
-}
-
 /// A `struct` that represents a set of [BinanceOption] s.
-#[derive(Clone, derive_more::Debug)]
+#[derive(Clone, derive_more::Debug, Default)]
 pub struct BinanceOptions {
-	/// see [BinanceOption::Key]
-	pub key: Option<String>,
+	/// see [BinanceOption::Pubkey]
+	pub pubkey: Option<String>,
 	/// see [BinanceOption::Secret]
 	#[debug("[REDACTED]")]
 	pub secret: Option<SecretString>,
@@ -322,10 +446,12 @@ pub struct BinanceOptions {
 	pub http_url: BinanceHttpUrl,
 	/// see [BinanceOption::HttpAuth]
 	pub http_auth: BinanceAuth,
-	/// see [BinanceOption::WebSocketUrl]
-	pub websocket_url: BinanceWebSocketUrl,
-	/// see [BinanceOption::WebSocketConfig]
-	pub websocket_config: WebSocketConfig,
+	/// see [BinanceOption::WsUrl]
+	pub ws_url: BinanceWsUrl,
+	/// see [BinanceOption::WsConfig]
+	pub ws_config: WsConfig,
+	/// see [BinanceOption::WsTopics]
+	pub ws_topics: HashSet<String>,
 	/// see [BinanceOption::Test]
 	pub test: bool,
 }
@@ -334,36 +460,21 @@ impl HandlerOptions for BinanceOptions {
 
 	fn update(&mut self, option: Self::OptionItem) {
 		match option {
-			Self::OptionItem::Default => (),
-			Self::OptionItem::Key(v) => self.key = Some(v),
+			Self::OptionItem::None => (),
+			Self::OptionItem::Pubkey(v) => self.pubkey = Some(v),
 			Self::OptionItem::RecvWindow(v) => self.recv_window = Some(v),
+			Self::OptionItem::Test(v) => self.test = v,
 			Self::OptionItem::Secret(v) => self.secret = Some(v),
 			Self::OptionItem::HttpUrl(v) => self.http_url = v,
 			Self::OptionItem::HttpAuth(v) => self.http_auth = v,
-			Self::OptionItem::WebSocketUrl(v) => self.websocket_url = v,
-			Self::OptionItem::WebSocketConfig(v) => self.websocket_config = v,
+			Self::OptionItem::WsUrl(v) => self.ws_url = v,
+			Self::OptionItem::WsConfig(v) => self.ws_config = v,
+			Self::OptionItem::WsTopics(v) => self.ws_topics = v.into_iter().collect(),
 		}
 	}
 
 	fn is_authenticated(&self) -> bool {
-		self.key.is_some() // some end points are satisfied with just the key, and it's really difficult to provide only a key without a secret from the clientside, so assume intent if it's missing.
-	}
-}
-impl Default for BinanceOptions {
-	fn default() -> Self {
-		let mut websocket_config = WebSocketConfig::new();
-		websocket_config.refresh_after = time::Duration::from_secs(60 * 60 * 12);
-		websocket_config.ignore_duplicate_during_reconnection = true;
-		Self {
-			key: None,
-			secret: None,
-			recv_window: None,
-			http_url: Default::default(),
-			http_auth: Default::default(),
-			websocket_url: Default::default(),
-			websocket_config,
-			test: false,
-		}
+		self.pubkey.is_some() // some end points are satisfied with just the key, and it's really difficult to provide only a key without a secret from the clientside, so assume intent if it's missing.
 	}
 }
 
@@ -374,21 +485,8 @@ where
 {
 	type RequestHandler = BinanceRequestHandler<'a, R>;
 
-	#[inline(always)]
 	fn request_handler(options: Self::Options) -> Self::RequestHandler {
 		BinanceRequestHandler::<'a, R> { options, _phantom: PhantomData }
-	}
-}
-
-impl<H: FnMut(serde_json::Value) + Send + 'static> WebSocketOption<H> for BinanceOption {
-	type WebSocketHandler = BinanceWebSocketHandler;
-
-	#[inline(always)]
-	fn websocket_handler(handler: H, options: Self::Options) -> Self::WebSocketHandler {
-		BinanceWebSocketHandler {
-			message_handler: Box::new(handler),
-			options,
-		}
 	}
 }
 
@@ -396,12 +494,7 @@ impl HandlerOption for BinanceOption {
 	type Options = BinanceOptions;
 }
 
-impl Default for BinanceOption {
-	fn default() -> Self {
-		Self::Default
-	}
-}
-
+// Error Codes {{{
 #[derive(Clone, Debug, Deserialize)]
 pub struct BinanceError {
 	pub code: BinanceErrorCode,
@@ -414,7 +507,7 @@ impl From<BinanceError> for ApiError {
 	}
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(from = "i32")]
 pub enum BinanceErrorCode {
 	// 10xx - General Server/Network
@@ -608,9 +701,10 @@ impl From<i32> for BinanceErrorCode {
 			-2026 => Self::OrderArchived(code),
 
 			code => {
-				warn!("Encountered unknown Binance error code: {code}");
+				tracing::warn!("Encountered unknown Binance error code: {code}");
 				Self::Other(code)
 			}
 		}
 	}
 }
+//,}}}

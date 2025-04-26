@@ -14,7 +14,7 @@ pub async fn price(client: &Client, pair: Pair) -> ExchangeResult<f64> {
 }
 
 #[allow(unused)]
-#[derive(Clone, Debug, Default, derive_new::new, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, derive_new::new)]
 struct PriceResponse {
 	pub code: i32,
 	pub data: PriceData,
