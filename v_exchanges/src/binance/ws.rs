@@ -1,12 +1,10 @@
 use adapters::{
 	Client,
-	binance::{BinanceOption, BinanceWsUrl},
 	generics::ws::WsError,
 };
 use chrono::DateTime;
 use serde_with::{DisplayFromStr, serde_as};
 use tokio::sync::mpsc;
-use v_utils::trades::Pair;
 
 use crate::{Symbol, TradeEvent};
 

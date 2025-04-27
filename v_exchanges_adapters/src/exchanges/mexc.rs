@@ -3,11 +3,12 @@
 use std::{marker::PhantomData, str::FromStr, time::SystemTime};
 
 use chrono::Utc;
-use generics::{AuthError, reqwest::Url};
+use generics::{AuthError, UrlError};
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
+use url::Url;
 use v_exchanges_api_generics::{http::*, ws::*};
 use v_utils::prelude::*;
 
@@ -25,6 +26,8 @@ pub enum MexcOption {
 	Pubkey(String),
 	/// Api secret
 	Secret(SecretString),
+	/// Whether to make all requests to the testnet
+	Testnet(bool),
 	/// Base url for HTTP requests
 	HttpUrl(MexcHttpUrl),
 	/// Authentication type for HTTP requests
@@ -35,6 +38,8 @@ pub enum MexcOption {
 	WsUrl(MexcWsUrl),
 	/// WsConfig used for creating WsConnections
 	WsConfig(WsConfig),
+	/// Topics to subscribe to on Ws connections
+	WsTopics(Vec<String>),
 }
 
 /// A struct that represents a set of MexcOptions
@@ -45,6 +50,8 @@ pub struct MexcOptions {
 	/// see [MexcOption::Secret]
 	#[debug("[REDACTED]")]
 	pub secret: Option<SecretString>,
+	/// see [MexcOption::Testnet]
+	pub testnet: bool,
 	/// see [MexcOption::HttpUrl]
 	pub http_url: MexcHttpUrl,
 	/// see [MexcOption::HttpAuth]
@@ -55,6 +62,8 @@ pub struct MexcOptions {
 	pub ws_url: MexcWsUrl,
 	/// see [MexcOption::WsConfig]
 	pub ws_config: WsConfig,
+	/// see [MexcOption::WsTopics]
+	pub ws_topics: HashSet<String>,
 }
 
 /// Enum that represents the base url of the MEXC REST API
@@ -62,19 +71,24 @@ pub struct MexcOptions {
 #[non_exhaustive]
 pub enum MexcHttpUrl {
 	Spot,
-	SpotTest,
 	Futures,
 	#[default]
 	None,
 }
-impl MexcHttpUrl {
-	/// The URL that this variant represents
-	fn as_str(&self) -> &'static str {
+impl EndpointUrl for MexcHttpUrl {
+	fn url_mainnet(&self) -> Url {
 		match self {
-			Self::Spot => "https://api.mexc.com",
-			Self::SpotTest => "https://api-testnet.mexc.com",
-			Self::Futures => "https://contract.mexc.com",
-			Self::None => "",
+			Self::Spot => Url::parse("https://api.mexc.com").unwrap(),
+			Self::Futures => Url::parse("https://contract.mexc.com").unwrap(),
+			Self::None => Url::parse("").unwrap(),
+		}
+	}
+
+	fn url_testnet(&self) -> Option<Url> {
+		match self {
+			Self::Spot => Some(Url::parse("https://api-testnet.mexc.com").unwrap()),
+			Self::Futures => Some(Url::parse("https://contract-testnet.mexc.com").unwrap()),
+			Self::None => Some(Url::parse("").unwrap()),
 		}
 	}
 }
@@ -111,10 +125,10 @@ where
 {
 	type Successful = R;
 
-	fn base_url(&self, is_test: bool) -> String {
+	fn base_url(&self, is_test: bool) -> Result<Url, UrlError> {
 		match is_test {
-			true => unimplemented!(),
-			false => self.options.http_url.as_str().to_owned(),
+			true => self.options.http_url.url_testnet().ok_or_else(|| UrlError::MissingTestnet(self.options.http_url.url_mainnet())),
+			false => Ok(self.options.http_url.url_mainnet()),
 		}
 	}
 
@@ -211,12 +225,24 @@ pub struct MexcWsHandler {
 	options: MexcOptions,
 }
 impl WsHandler for MexcWsHandler {
-	fn config(&self) -> WsConfig {
+	fn config(&self) -> Result<WsConfig, UrlError> {
 		let mut config = self.options.ws_config.clone();
 		if self.options.ws_url != MexcWsUrl::None {
-			config.base_url = Some(Url::parse(self.options.ws_url.as_str()).expect("urls are hardcoded and should be valid"));
+			config.base_url = match self.options.testnet {
+				true => Some(self.options.ws_url.url_testnet().ok_or_else(|| UrlError::MissingTestnet(self.options.ws_url.url_mainnet()))?),
+				false => Some(self.options.ws_url.url_mainnet()),
+			}
 		}
-		config
+		config.topics = config.topics.union(&self.options.ws_topics).cloned().collect();
+		Ok(config)
+	}
+
+	fn handle_jrpc(&mut self, jrpc: serde_json::Value) -> Result<ResponseOrContent, WsError> {
+		todo!();
+	}
+
+	fn handle_subscribe(&mut self, topics: HashSet<Topic>) -> Result<Vec<generics::tokio_tungstenite::tungstenite::Message>, WsError> {
+		todo!()
 	}
 }
 /// Enum that represents the base url of the MEXC Ws API
@@ -224,19 +250,24 @@ impl WsHandler for MexcWsHandler {
 #[non_exhaustive]
 pub enum MexcWsUrl {
 	Spot,
-	SpotTest,
 	Futures,
 	#[default]
 	None,
 }
-impl MexcWsUrl {
-	/// The URL that this variant represents
-	pub fn as_str(&self) -> &'static str {
+impl EndpointUrl for MexcWsUrl {
+	fn url_mainnet(&self) -> Url {
 		match self {
-			Self::Spot => "wss://stream.mexc.com/ws",
-			Self::SpotTest => "wss://stream-testnet.mexc.com/ws",
-			Self::Futures => "wss://contract.mexc.com/ws",
-			Self::None => "",
+			Self::Spot => Url::parse("wss://stream.mexc.com/ws").unwrap(),
+			Self::Futures => Url::parse("wss://contract.mexc.com/ws").unwrap(),
+			Self::None => Url::parse("").unwrap(),
+		}
+	}
+
+	fn url_testnet(&self) -> Option<Url> {
+		match self {
+			Self::Spot => Some(Url::parse("wss://stream-testnet.mexc.com/ws").unwrap()),
+			Self::Futures => Some(Url::parse("wss://contract-testnet.mexc.com/ws").unwrap()),
+			Self::None => None,
 		}
 	}
 }
@@ -257,6 +288,7 @@ impl HandlerOptions for MexcOptions {
 			MexcOption::Default => (),
 			MexcOption::Pubkey(v) => self.pubkey = Some(v),
 			MexcOption::Secret(v) => self.secret = Some(v),
+			MexcOption::Testnet(v) => self.testnet = v,
 			MexcOption::HttpUrl(v) => self.http_url = v,
 			MexcOption::HttpAuth(v) => self.http_auth = v,
 			MexcOption::RecvWindow(v) =>
@@ -268,6 +300,7 @@ impl HandlerOptions for MexcOptions {
 				},
 			MexcOption::WsUrl(v) => self.ws_url = v,
 			MexcOption::WsConfig(v) => self.ws_config = v,
+			MexcOption::WsTopics(v) => self.ws_topics = v.into_iter().collect(),
 		}
 	}
 

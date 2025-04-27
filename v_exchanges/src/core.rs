@@ -27,11 +27,8 @@ use crate::define_str_enum;
 /// # Other
 /// - has too many methods, so for dev purposes most default to `unimplemented!()`.
 #[async_trait::async_trait]
-pub trait Exchange: std::fmt::Debug + Send + Sync {
+pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Client> + std::ops::DerefMut {
 	fn name(&self) -> ExchangeName;
-	#[doc(hidden)]
-	/// Only need for the auto-impls of config setters
-	fn __client_mut(&mut self) -> &mut Client;
 	// Config {{{
 	fn auth(&mut self, pubkey: String, secret: SecretString);
 	/// Set number of **milliseconds** the request is valid for. Recv Window of over a minute does not make sense, thus it's expressed as u16.
@@ -39,19 +36,19 @@ pub trait Exchange: std::fmt::Debug + Send + Sync {
 	#[deprecated(note = "This shouldn't be a global setting, but a per-request one. Use `recv_window` in the request instead.")]
 	fn set_recv_window(&mut self, recv_window: u16);
 	fn set_timeout(&mut self, timeout: std::time::Duration) {
-		self.__client_mut().client.config.timeout = timeout;
+		self.client.config.timeout = timeout;
 	}
 	fn set_retry_cooldown(&mut self, cooldown: std::time::Duration) {
-		self.__client_mut().client.config.retry_cooldown = cooldown;
+		self.client.config.retry_cooldown = cooldown;
 	}
 	fn set_max_tries(&mut self, max: u8) {
-		self.__client_mut().client.config.max_tries = max;
+		self.client.config.max_tries = max;
 	}
 	fn set_use_testnes(&mut self, b: bool) {
-		self.__client_mut().client.config.use_testnet = b;
+		self.client.config.use_testnet = b;
 	}
 	fn set_cache_testnet_calls(&mut self, duration: Option<std::time::Duration>) {
-		self.__client_mut().client.config.cache_testnet_calls = duration;
+		self.client.config.cache_testnet_calls = duration;
 	}
 	//DO: same for other fields in [RequestConfig](v_exchanges_api_generics::http::RequestConfig)
 	//,}}}

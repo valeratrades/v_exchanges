@@ -1,17 +1,14 @@
 mod account;
 mod market;
 
-use std::collections::BTreeMap;
-
 use adapters::bybit::BybitOption;
-use derive_more::{Display, FromStr};
 use secrecy::SecretString;
 use v_exchanges_adapters::Client;
-use v_utils::trades::{Asset, Pair, Timeframe};
+use v_utils::trades::{Asset, Timeframe};
 
 use crate::{
 	Balances, ExchangeName, ExchangeResult, Instrument, Symbol,
-	core::{AssetBalance, Exchange, ExchangeInfo, Klines, RequestRange},
+	core::{AssetBalance, Exchange, Klines, RequestRange},
 };
 
 #[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
@@ -22,10 +19,6 @@ pub struct Bybit(pub Client);
 impl Exchange for Bybit {
 	fn name(&self) -> ExchangeName {
 		ExchangeName::Bybit
-	}
-
-	fn __client_mut(&mut self) -> &mut Client {
-		&mut self.0
 	}
 
 	fn auth(&mut self, pubkey: String, secret: SecretString) {
@@ -60,4 +53,4 @@ impl Exchange for Bybit {
 	}
 }
 
-crate::define_provider_timeframe!(BybitTimeframe, ["1", "3", "5", "15", "30", "60", "120", "240", "360", "720", "D", "W", "M"], "Bybit");
+crate::define_provider_timeframe!(BybitTimeframe, ["1", "3", "5", "15", "30", "60", "120", "240", "360", "720", "D", "W", "M"]);

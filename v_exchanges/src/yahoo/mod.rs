@@ -63,4 +63,4 @@ pub async fn vix_change(tf: YahooTimeframe, n: u8) -> Result<NowThen> {
 	Ok(NowThen::new(now.close, then.close).add_duration((now.timestamp - then.timestamp).to_std().unwrap()))
 }
 
-crate::define_provider_timeframe!(YahooTimeframe, ["1m", "2m", "5m", "15m", "30m", "60m", "1h", "1d", "5d", "1wk", "1mo"], "Yahoo");
+crate::define_provider_timeframe!(YahooTimeframe, ["1m", "2m", "5m", "15m", "30m", "60m", "1h", "1d", "5d", "1wk", "1mo"]);

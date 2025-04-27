@@ -1,9 +1,8 @@
 #![feature(try_blocks)]
-use std::{collections::HashSet, env, vec};
+use std::{env, vec};
 
 use futures_util::StreamExt;
 //use futures_util::StreamExt;
-use v_exchanges_adapters::generics::ws::WsConnection;
 
 fn main() {
 	v_utils::clientside!();

@@ -1,17 +1,14 @@
 use std::{
 	collections::HashSet,
-	pin::Pin,
-	task::{Context, Poll},
 	time::{Duration, SystemTime},
 	vec,
 };
 
 use chrono::{DateTime, Utc};
 use eyre::{Result, bail};
-use futures_util::{SinkExt as _, Stream, StreamExt as _};
-use pin_project_lite::pin_project;
+use futures_util::{SinkExt as _, StreamExt as _};
 use reqwest::Url;
-use tokio::{net::TcpStream, time::timeout};
+use tokio::net::TcpStream;
 use tokio_tungstenite::{
 	MaybeTlsStream, WebSocketStream,
 	tungstenite::{self, Bytes},
