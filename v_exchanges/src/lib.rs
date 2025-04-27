@@ -4,6 +4,7 @@
 #![feature(try_blocks)]
 
 pub extern crate v_exchanges_adapters as adapters;
+pub use std::str::FromStr as _; // it's very annoying to have to manually bring it into the scope every single time. Putting this into preludes of all libraries with any exposed `FromStr` impls at this point.
 
 pub mod core;
 

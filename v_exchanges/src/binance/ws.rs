@@ -1,7 +1,4 @@
-use adapters::{
-	Client,
-	generics::ws::WsError,
-};
+use adapters::{Client, generics::ws::WsError};
 use chrono::DateTime;
 use serde_with::{DisplayFromStr, serde_as};
 use tokio::sync::mpsc;
