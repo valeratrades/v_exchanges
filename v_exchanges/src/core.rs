@@ -371,7 +371,7 @@ define_str_enum! {
 	}
 }
 impl ExchangeName {
-	pub fn build_client(&self) -> Box<dyn Exchange> {
+	pub fn init_client(&self) -> Box<dyn Exchange> {
 		match self {
 			#[cfg(feature = "binance")]
 			Self::Binance => Box::new(crate::Binance(Client::default())),

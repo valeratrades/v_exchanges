@@ -88,13 +88,13 @@ name = "ws"
 path = "../examples/ws.rs"
 
 [[example]]
-name = "specify_exchange_from_cli"
-path = "../examples/specify_exchange_from_cli.rs"
+name = "cli"
+path = "../examples/cli.rs"
 
 [[example]]
-name = "binance_market_futures"
+name = "binance_market_perp"
 required-features = ["binance"]
-path = "../examples/binance/market_futures.rs"
+path = "../examples/binance/market_perp.rs"
 
 [[example]]
 name = "binance_market_spot"

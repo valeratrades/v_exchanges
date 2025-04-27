@@ -6,7 +6,7 @@ use v_exchanges::prelude::*;
 async fn main() {
 	v_utils::clientside!();
 
-	let client = ExchangeName::Binance.build_client();
+	let client = ExchangeName::Binance.init_client();
 	let symbol = Symbol::from_str("BTC-USDT").unwrap(); // with current impl assumes spot for Instrument (2025/04/27). Equivalent to `Symbol::new(("BTC", "USDT").into(), Instrument::Spot)`
 
 	let spot_klines = client.klines(symbol, "1m".into(), 2.into()).await.unwrap();

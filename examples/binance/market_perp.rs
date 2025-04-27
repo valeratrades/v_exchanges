@@ -6,7 +6,7 @@ use v_exchanges::prelude::*;
 async fn main() {
 	v_utils::clientside!();
 
-	let mut binance = ExchangeName::Binance.build_client();
+	let mut binance = ExchangeName::Binance.init_client();
 	let symbol = Symbol::from_str("BTC-USDT.P").unwrap();
 	binance.set_max_tries(3);
 
