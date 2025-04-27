@@ -38,15 +38,15 @@ impl Exchange for Binance {
 
 	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
 		match instrument {
-			Instrument::Perp => perp::general::exchange_info(&self).await,
-			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument })),
+			Instrument::Perp => perp::general::exchange_info(self).await,
+			_ => unimplemented!(),
 		}
 	}
 
 	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
 		match symbol.instrument {
-			Instrument::Spot | Instrument::Margin => market::klines(&self, symbol, tf.try_into()?, range).await,
-			Instrument::Perp => market::klines(&self, symbol, tf.try_into()?, range).await,
+			Instrument::Spot | Instrument::Margin => market::klines(self, symbol, tf.try_into()?, range).await,
+			Instrument::Perp => market::klines(self, symbol, tf.try_into()?, range).await,
 			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented {
 				exchange: self.name(),
 				instrument: symbol.instrument,
@@ -56,16 +56,16 @@ impl Exchange for Binance {
 
 	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		match instrument {
-			Instrument::Spot => spot::market::prices(&self, pairs).await,
-			Instrument::Perp => perp::market::prices(&self, pairs).await,
+			Instrument::Spot | Instrument::Margin => spot::market::prices(self, pairs).await,
+			Instrument::Perp => perp::market::prices(self, pairs).await,
 			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument })),
 		}
 	}
 
 	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
 		match symbol.instrument {
-			Instrument::Spot => spot::market::price(&self, symbol.pair).await,
-			Instrument::Perp => perp::market::price(&self, symbol.pair).await,
+			Instrument::Spot | Instrument::Margin => spot::market::price(self, symbol.pair).await,
+			Instrument::Perp => perp::market::price(self, symbol.pair).await,
 			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented {
 				exchange: self.name(),
 				instrument: symbol.instrument,
@@ -76,7 +76,7 @@ impl Exchange for Binance {
 	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, instrument: Instrument) -> ExchangeResult<AssetBalance> {
 		match instrument {
 			Instrument::Perp => perp::account::asset_balance(self, asset, recv_window).await,
-			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument })),
+			_ => unimplemented!(),
 		}
 	}
 
@@ -84,16 +84,16 @@ impl Exchange for Binance {
 		match instrument {
 			Instrument::Perp => {
 				let prices = self.prices(None, instrument).await?;
-				perp::account::balances(&self, recv_window, &prices).await
+				perp::account::balances(self, recv_window, &prices).await
 			}
-			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument })),
+			_ => unimplemented!(),
 		}
 	}
 
 	async fn ws_trades(&self, symbol: Symbol) -> ExchangeResult<mpsc::Receiver<Result<crate::core::TradeEvent, WsError>>> {
 		match symbol.instrument {
-			Instrument::Perp => Ok(ws::trades(&self, symbol).await),
-			Instrument::Spot | Instrument::Margin => Ok(ws::trades(&self, symbol).await),
+			Instrument::Perp => Ok(ws::trades(self, symbol).await),
+			Instrument::Spot | Instrument::Margin => Ok(ws::trades(self, symbol).await),
 			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented {
 				exchange: self.name(),
 				instrument: symbol.instrument,

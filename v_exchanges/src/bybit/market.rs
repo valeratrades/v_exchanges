@@ -12,17 +12,17 @@ use v_utils::{
 
 use super::BybitTimeframe;
 use crate::{
-	AbsMarket, ExchangeResult,
+	ExchangeName, ExchangeResult, Symbol,
 	core::{Klines, RequestRange},
 };
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: BybitTimeframe, range: RequestRange, am: AbsMarket) -> ExchangeResult<Klines> {
+pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitTimeframe, range: RequestRange) -> ExchangeResult<Klines> {
 	range.ensure_allowed(1..=1000, &tf)?;
-	let range_json = range.serialize(am);
+	let range_json = range.serialize(ExchangeName::Bybit);
 	let base_params = filter_nulls(json!({
 		"category": "linear", // can be ["linear", "inverse", "spot"] afaiu, could drive some generics with this later, but for now hardcode
-		"symbol": pair.fmt_bybit(),
+		"symbol": symbol.pair.fmt_bybit(),
 		"interval": tf.to_string(),
 	}));
 
