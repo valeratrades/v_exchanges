@@ -1,11 +1,14 @@
 use std::collections::{BTreeMap, VecDeque};
 
 use adapters::{
-	generics::{http::RequestError, ws::{Topic, WsError}}, Client
+	Client,
+	generics::{
+		http::RequestError,
+		ws::{Topic, WsError},
+	},
 };
 use chrono::{DateTime, TimeDelta, Utc};
 use derive_more::{Deref, DerefMut};
-use crate::define_str_enum;
 use secrecy::SecretString;
 use serde_json::json;
 use tokio::sync::mpsc;
@@ -14,6 +17,8 @@ use v_utils::{
 	trades::{Asset, Kline, Pair, Timeframe, Usd},
 	utils::filter_nulls,
 };
+
+use crate::define_str_enum;
 
 /// Main trait for all standardized exchange interactions
 ///
@@ -126,9 +131,9 @@ pub struct UnsupportedTimeframeError {
 pub enum MethodError {
 	/// Means that it's **not expected** to be implemented, not only that it's not implemented now. For things that are yet to be implemented I just put `unimplemented!()`.
 	#[error("Method not implemented for the requested exchange and instrument: ({exchange}, {instrument})")]
-	MethodNotImplemented{exchange: ExchangeName, instrument: Instrument},
+	MethodNotImplemented { exchange: ExchangeName, instrument: Instrument },
 	#[error("Requested exchange does not support the method for chosen instrument: ({exchange}, {instrument})")]
-	MethodNotSupported{exchange: ExchangeName, instrument: Instrument},
+	MethodNotSupported { exchange: ExchangeName, instrument: Instrument },
 }
 //,}}}
 
@@ -357,7 +362,7 @@ pub struct PairInfo {
 // Ticker {{{
 
 define_str_enum! {
-	#[derive(Clone, Debug, derive_more::From, PartialEq, Eq)]
+	#[derive(Clone, Debug, Eq, derive_more::From, PartialEq)]
 	#[non_exhaustive]
 	pub enum ExchangeName {
 		Binance => "binance",
@@ -383,9 +388,10 @@ impl ExchangeName {
 }
 
 define_str_enum! {
-	#[derive(Clone, Debug, derive_more::From, PartialEq, Eq)]
+	#[derive(Clone, Copy, Debug, Default, Eq, derive_more::From, PartialEq)]
 	#[non_exhaustive]
 	pub enum Instrument {
+		#[default]
 		Spot => "",
 		Perp => ".P",
 		Margin => ".M", //Q: do we care for being able to parse spot/margin diff from ticker defs?
@@ -417,6 +423,7 @@ impl std::str::FromStr for Ticker {
 	}
 }
 
+#[derive(Clone, Copy, Debug, Default, derive_new::new)]
 pub struct Symbol {
 	pub pair: Pair,
 	pub instrument: Instrument,

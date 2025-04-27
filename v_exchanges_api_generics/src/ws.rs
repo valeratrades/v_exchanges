@@ -78,14 +78,14 @@ pub trait WsHandler {
 	//}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub enum ResponseOrContent {
 	/// Response to a message sent to the server.
 	Response(Vec<tungstenite::Message>),
 	/// Content received from the server.
 	Content(ContentEvent),
 }
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct ContentEvent {
 	pub data: serde_json::Value,
 	pub topic: String,
@@ -93,7 +93,7 @@ pub struct ContentEvent {
 	pub event_type: String,
 }
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Clone, Debug, Eq)]
 pub struct TopicInterpreter<T> {
 	/// Only one interpreter for this name is allowed to exist // enforced through `Hash` impl defined over `event_name` only
 	pub event_name: String,
@@ -375,7 +375,7 @@ impl<H: WsHandler> WsConnection<H> {
 /// Configuration for [WsHandler].
 ///
 /// Should be returned by [WsHandler::ws_config()].
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct WsConfig {
 	/// Whether the connection should be authenticated. Normally implemented through a "listen key"
 	pub auth: bool,
@@ -462,7 +462,7 @@ pub enum WsDefinitionError {
 //	base_url: Url,
 //}
 
-#[derive(Clone, Debug, derive_more::Display, serde::Serialize, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, derive_more::Display, Eq, Hash, PartialEq, serde::Serialize)]
 pub enum Topic {
 	String(String),
 	Trade(serde_json::Value),

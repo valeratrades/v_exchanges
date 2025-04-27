@@ -420,14 +420,14 @@ impl WsHandler for BybitWsHandler {
 	#[instrument(skip_all, fields(jrpc = ?format_args!("{:#?}", jrpc)))]
 	fn handle_jrpc(&mut self, jrpc: serde_json::Value) -> Result<ResponseOrContent, WsError> {
 		//TODO!!!!!!!!!!!: tell serde that enum name is not part of it
-		#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+		#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 		#[serde(untagged)]
 		enum BybitResponse {
 			Feedback(FeedbackResponse),
 			Content(ContentResponse),
 		}
 		//HACK: this ignores differences of `Option` endpoints: https://bybit-exchange.github.io/docs/v5/ws/connect#:~:text=Linear/Inverse-,Option,-%7B%0A%20%20%20%20%22success%22%3A%20true%2C%0A%20%20%20%20%22conn_id
-		#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+		#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 		struct FeedbackResponse {
 			success: bool,
 			ret_msg: String,
@@ -436,14 +436,14 @@ impl WsHandler for BybitWsHandler {
 			req_id: Option<String>,
 			conn_id: String,
 		}
-		#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+		#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 		#[serde(rename_all = "lowercase")]
 		enum Operation {
 			Auth,
 			Subscribe,
 			Unsubscribe,
 		}
-		#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+		#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 		pub struct ContentResponse {
 			pub data: serde_json::Value,
 			pub topic: String,
