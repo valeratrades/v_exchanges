@@ -10,7 +10,12 @@ use v_utils::{
 };
 
 use super::Binance;
-use crate::{ExchangeError, ExchangeName, ExchangeResult, core::RequestRange, other_types::Lsrs, utils::join_params};
+use crate::{
+	ExchangeError, ExchangeName, ExchangeResult,
+	core::RequestRange,
+	other_types::{Lsr, Lsrs},
+	utils::join_params,
+};
 
 #[derive(Clone, Debug, Display, FromStr)]
 pub enum LsrWho {
@@ -41,7 +46,7 @@ impl Binance {
 		let r: serde_json::Value = self.get(&format!("/futures/data/{ending}"), &params, options).await?;
 		let r: Vec<LsrResponse> = serde_json::from_value(r).unwrap();
 		Ok(Lsrs {
-			values: r.into_iter().map(LsrResponse::from).collect(),
+			values: r.into_iter().map(Lsr::from).collect(),
 			pair,
 		})
 	}
