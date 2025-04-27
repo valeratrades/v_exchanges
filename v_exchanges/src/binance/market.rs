@@ -6,31 +6,31 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
-use v_utils::trades::{Kline, Ohlc, Pair};
+use v_utils::trades::{Kline, Ohlc};
 
 use super::BinanceTimeframe;
 use crate::{
-	ExchangeError, MarketTrait as _,
-	binance::Market,
+	ExchangeError, ExchangeName, Instrument, Symbol,
 	core::{Klines, RequestRange},
 	utils::join_params,
 };
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, pair: Pair, tf: BinanceTimeframe, range: RequestRange, market: Market) -> Result<Klines, ExchangeError> {
+pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BinanceTimeframe, range: RequestRange) -> Result<Klines, ExchangeError> {
 	//TODO: test if embedding params into the url works more consistently (comp number of pairs axum-site is ablle ot get)
 	range.ensure_allowed(1..=1000, tf.as_ref())?;
-	let range_params = range.serialize(market.abs_market());
+	let range_params = range.serialize(ExchangeName::Binance);
 	let base_params = json!({
-		"symbol": pair.fmt_binance(),
+		"symbol": symbol.pair.fmt_binance(),
 		"interval": tf.to_string(),
 	});
 	let params = join_params(base_params, range_params);
 
-	let (endpoint_prefix, base_url) = match market {
-		Market::Spot => ("/api/v3", BinanceHttpUrl::Spot),
-		Market::Perp => ("/fapi/v1", BinanceHttpUrl::FuturesUsdM),
-		Market::Marg => unimplemented!(),
+	let (endpoint_prefix, base_url) = match symbol.instrument {
+		Instrument::Spot => ("/api/v3", BinanceHttpUrl::Spot),
+		Instrument::Perp => ("/fapi/v1", BinanceHttpUrl::FuturesUsdM),
+		Instrument::Margin => todo!(),
+		_ => unimplemented!(),
 	};
 
 	let kline_responses: Vec<KlineResponse> = client.get(&format!("{endpoint_prefix}/klines"), &params, [BinanceOption::HttpUrl(base_url)]).await?;

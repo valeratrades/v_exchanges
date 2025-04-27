@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, str::FromStr as _};
 
 use v_exchanges::prelude::*;
 
@@ -6,25 +6,22 @@ use v_exchanges::prelude::*;
 async fn main() {
 	v_utils::clientside!();
 
-	let m: AbsMarket = "Binance/Futures".into();
-	let mut c = m.client();
-	c.set_max_tries(3);
+	let mut binance = ExchangeName::Binance.build_client();
+	let symbol = Symbol::from_str("BTC-USDT.P").unwrap();
+	binance.set_max_tries(3);
 
-	println!("market: {m}");
-	println!("source client: {}", c.source_market());
-
-	let exchange_info = c.exchange_info(m).await.unwrap();
+	let exchange_info = binance.exchange_info(symbol.instrument).await.unwrap();
 	dbg!(&exchange_info.pairs.iter().take(2).collect::<Vec<_>>());
 
-	let klines = c.klines(("BTC", "USDT").into(), "1m".into(), 2.into(), m).await.unwrap();
-	let price = c.price(("BTC", "USDT").into(), m).await.unwrap();
+	let klines = binance.klines(symbol, "1m".into(), 2.into()).await.unwrap();
+	let price = binance.price(symbol).await.unwrap();
 	dbg!(&klines, price);
 
 	if let (Ok(key), Ok(secret)) = (env::var("BINANCE_TIGER_READ_KEY"), env::var("BINANCE_TIGER_READ_SECRET")) {
-		c.auth(key, secret.into());
-		let balance_usdt = c.asset_balance("USDT".into(), Some(10_000), m).await.unwrap();
+		binance.auth(key, secret.into());
+		let balance_usdt = binance.asset_balance("USDT".into(), Some(10_000), symbol.instrument).await.unwrap();
 		dbg!(&balance_usdt);
-		let balances = c.balances(Some(10_000), m).await.unwrap();
+		let balances = binance.balances(Some(10_000), symbol.instrument).await.unwrap();
 		dbg!(&balances);
 	} else {
 		eprintln!("BINANCE_TIGER_READ_KEY or BINANCE_TIGER_READ_SECRET is missing, skipping private API methods.");

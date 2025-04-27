@@ -8,7 +8,7 @@ use generics::{
 	AuthError, UrlError,
 	http::{ApiError, BuildError, HandleError, *},
 	tokio_tungstenite::tungstenite,
-	ws::{ContentEvent, ResponseOrContent, Topic, WsConfig, WsDefinitionError, WsError, WsHandler},
+	ws::{ContentEvent, ResponseOrContent, Topic, WsConfig, WsError, WsHandler},
 };
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};

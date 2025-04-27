@@ -2,7 +2,10 @@ use std::collections::{BTreeMap, VecDeque};
 
 use adapters::{
 	Client,
-	generics::{http::RequestError, ws::WsError},
+	generics::{
+		http::RequestError,
+		ws::{Topic, WsError},
+	},
 };
 use chrono::{DateTime, TimeDelta, Utc};
 use derive_more::{Deref, DerefMut};
@@ -15,6 +18,8 @@ use v_utils::{
 	utils::filter_nulls,
 };
 
+use crate::define_str_enum;
+
 /// Main trait for all standardized exchange interactions
 ///
 /// Each **private** method allows to specify `recv_window`.
@@ -22,19 +27,8 @@ use v_utils::{
 /// # Other
 /// - has too many methods, so for dev purposes most default to `unimplemented!()`.
 #[async_trait::async_trait]
-pub trait Exchange: std::fmt::Debug + Send + Sync {
-	// dev {{{
-	/// will always be `Some` when created from `AbsMarket`. When creating client manually could lead to weird errors from this method being used elsewhere, like displaying a `AbsMarket` object.
-	fn source_market(&self) -> AbsMarket;
-	fn exchange_name(&self) -> &'static str {
-		self.source_market().exchange_name()
-	}
-	#[doc(hidden)]
-	fn __client_mut(&mut self) -> &mut Client;
-	#[doc(hidden)]
-	fn __client(&self) -> &Client;
-	//,}}}
-
+pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Client> + std::ops::DerefMut {
+	fn name(&self) -> ExchangeName;
 	// Config {{{
 	fn auth(&mut self, pubkey: String, secret: SecretString);
 	/// Set number of **milliseconds** the request is valid for. Recv Window of over a minute does not make sense, thus it's expressed as u16.
@@ -42,46 +36,52 @@ pub trait Exchange: std::fmt::Debug + Send + Sync {
 	#[deprecated(note = "This shouldn't be a global setting, but a per-request one. Use `recv_window` in the request instead.")]
 	fn set_recv_window(&mut self, recv_window: u16);
 	fn set_timeout(&mut self, timeout: std::time::Duration) {
-		self.__client_mut().client.config.timeout = timeout;
+		self.client.config.timeout = timeout;
 	}
 	fn set_retry_cooldown(&mut self, cooldown: std::time::Duration) {
-		self.__client_mut().client.config.retry_cooldown = cooldown;
+		self.client.config.retry_cooldown = cooldown;
 	}
 	fn set_max_tries(&mut self, max: u8) {
-		self.__client_mut().client.config.max_tries = max;
+		self.client.config.max_tries = max;
 	}
 	fn set_use_testnes(&mut self, b: bool) {
-		self.__client_mut().client.config.use_testnet = b;
+		self.client.config.use_testnet = b;
 	}
 	fn set_cache_testnet_calls(&mut self, duration: Option<std::time::Duration>) {
-		self.__client_mut().client.config.cache_testnet_calls = duration;
+		self.client.config.cache_testnet_calls = duration;
 	}
 	//DO: same for other fields in [RequestConfig](v_exchanges_api_generics::http::RequestConfig)
 	//,}}}
 
-	async fn exchange_info(&self, m: AbsMarket) -> ExchangeResult<ExchangeInfo> {
+	#[allow(unused_variables)]
+	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
 		unimplemented!();
 	}
 
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
-	async fn klines(&self, pair: Pair, tf: Timeframe, range: RequestRange, m: AbsMarket) -> ExchangeResult<Klines> {
+	#[allow(unused_variables)]
+	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
 		unimplemented!();
 	}
 
 	/// If no pairs are specified, returns for all;
-	async fn prices(&self, pairs: Option<Vec<Pair>>, m: AbsMarket) -> ExchangeResult<BTreeMap<Pair, f64>> {
+	#[allow(unused_variables)]
+	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		unimplemented!();
 	}
-	async fn price(&self, pair: Pair, m: AbsMarket) -> ExchangeResult<f64> {
+	#[allow(unused_variables)]
+	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
 		unimplemented!();
 	}
 
 	/// balance of a specific asset. Does not guarantee provision of USD values.
-	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, m: AbsMarket) -> ExchangeResult<AssetBalance> {
+	#[allow(unused_variables)]
+	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, instrument: Instrument) -> ExchangeResult<AssetBalance> {
 		unimplemented!();
 	}
 	/// vec of _non-zero_ balances exclusively. Provides USD values.
-	async fn balances(&self, recv_window: Option<u16>, m: AbsMarket) -> ExchangeResult<Balances> {
+	#[allow(unused_variables)]
+	async fn balances(&self, recv_window: Option<u16>, instrument: Instrument) -> ExchangeResult<Balances> {
 		unimplemented!();
 	}
 
@@ -92,24 +92,19 @@ pub trait Exchange: std::fmt::Debug + Send + Sync {
 	//? could implement many things that are _explicitly_ combinatorial. I can imagine several cases, where knowing that say the specified limit for the klines is wayyy over the max and that you may be opting into a long wait by calling it, could be useful.
 
 	// Start a websocket connection for individual trades
+	#[allow(unused_variables)]
 	async fn ws_trades(
 		&self,
-		pair: Pair,
-		m: AbsMarket,
+		symbol: Symbol,
 	) -> ExchangeResult<
 		mpsc::Receiver<
 			Result<
-				crate::ws_types::TradeEvent,
+				crate::core::TradeEvent,
 				WsError, /*The key could get out of the date while the connection is ongoing, and then the next attempt to reconnect will fail. Thus must encapsulate received type in WsError.*/
 			>,
 		>,
 	> {
 		unimplemented!();
-	}
-}
-impl std::fmt::Display for dyn Exchange {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", self.exchange_name())
 	}
 }
 
@@ -118,7 +113,7 @@ pub type ExchangeResult<T> = Result<T, ExchangeError>;
 #[derive(Debug, derive_more::Display, Error, derive_more::From)]
 pub enum ExchangeError {
 	Request(RequestError),
-	Exchange(WrongExchangeError),
+	Method(MethodError),
 	Timeframe(UnsupportedTimeframeError),
 	Range(RequestRangeError),
 	Other(Report),
@@ -129,137 +124,13 @@ pub struct UnsupportedTimeframeError {
 	provided: Timeframe,
 	allowed: Vec<Timeframe>,
 }
-//,}}}
-
-// AbsMarket {{{
-#[derive(derive_more::Debug, thiserror::Error, derive_new::new)]
-pub struct WrongExchangeError {
-	correct: &'static str,
-	provided: AbsMarket,
-}
-impl std::fmt::Display for WrongExchangeError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(
-			f,
-			"Wrong exchange provided. Accessible object: {:?}, provided \"abs market path\": {}",
-			self.correct, self.provided
-		)
-	}
-}
-
-pub trait MarketTrait {
-	fn client(&self, source_market: AbsMarket) -> Box<dyn Exchange>;
-	fn client_authenticated(&self, key: String, secret: SecretString, source_market: AbsMarket) -> Box<dyn Exchange> {
-		let mut client = self.client(source_market);
-		client.auth(key, secret);
-		client
-	}
-	fn abs_market(&self) -> AbsMarket;
-}
-
-//Q: potentially rename to `ExchangeMarket` for 1:1 meaning mapping to the contents?
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug)]
-pub enum AbsMarket {
-	#[cfg(feature = "binance")]
-	Binance(crate::binance::Market),
-	#[cfg(feature = "bybit")]
-	Bybit(crate::bybit::Market),
-	#[cfg(feature = "mexc")]
-	Mexc(crate::mexc::Market),
-}
-impl AbsMarket {
-	pub fn client(&self) -> Box<dyn Exchange> {
-		match self {
-			#[cfg(feature = "binance")]
-			Self::Binance(m) => m.client(*self),
-			#[cfg(feature = "bybit")]
-			Self::Bybit(m) => m.client(*self),
-			#[cfg(feature = "mexc")]
-			Self::Mexc(m) => m.client(*self),
-		}
-	}
-
-	//Q: more I think about it, more this seems redundant / stupid according to Tiger Style
-	pub fn client_authenticated(&self, key: String, secret: SecretString) -> Box<dyn Exchange> {
-		match self {
-			#[cfg(feature = "binance")]
-			Self::Binance(m) => m.client_authenticated(key, secret, *self),
-			#[cfg(feature = "bybit")]
-			Self::Bybit(m) => m.client_authenticated(key, secret, *self),
-			#[cfg(feature = "mexc")]
-			Self::Mexc(m) => m.client_authenticated(key, secret, *self),
-		}
-	}
-
-	pub fn exchange_name(&self) -> &'static str {
-		match self {
-			#[cfg(feature = "binance")]
-			Self::Binance(_) => "Binance",
-			#[cfg(feature = "bybit")]
-			Self::Bybit(_) => "Bybit",
-			#[cfg(feature = "mexc")]
-			Self::Mexc(_) => "Mexc",
-		}
-	}
-}
-impl std::fmt::Display for AbsMarket {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			#[cfg(feature = "binance")]
-			Self::Binance(m) => write!(f, "{}/{}", self.exchange_name(), m),
-			#[cfg(feature = "bybit")]
-			Self::Bybit(m) => write!(f, "{}/{}", self.exchange_name(), m),
-			#[cfg(feature = "mexc")]
-			Self::Mexc(m) => write!(f, "{}/{}", self.exchange_name(), m),
-		}
-	}
-}
-
-impl std::str::FromStr for AbsMarket {
-	type Err = eyre::Error;
-
-	fn from_str(s: &str) -> Result<Self> {
-		let parts: Vec<&str> = s.split('/').collect();
-		if parts.len() != 2 {
-			bail!("Invalid market string: {s}\nMust be in the form of `Exchange/SubMarket`; eg `Binance/Futures`");
-		}
-		let exchange = parts[0];
-		let sub_market = parts[1];
-		match exchange {
-			#[cfg(feature = "binance")]
-			"Binance" => Ok(Self::Binance(sub_market.parse()?)),
-
-			#[cfg(feature = "bybit")]
-			"Bybit" => Ok(Self::Bybit({
-				match sub_market.parse() {
-					Ok(m) => m,
-					Err(e) => match sub_market.to_lowercase() == "futures" {
-						true => crate::bybit::Market::Linear,
-						false => bail!(e),
-					},
-				}
-			})),
-			#[cfg(feature = "mexc")]
-			"Mexc" => Ok(Self::Mexc(sub_market.parse()?)),
-			_ => bail!("Invalid market string: {}", s),
-		}
-	}
-}
-impl From<AbsMarket> for String {
-	fn from(value: AbsMarket) -> Self {
-		value.to_string()
-	}
-}
-impl From<String> for AbsMarket {
-	fn from(value: String) -> Self {
-		value.parse().unwrap()
-	}
-}
-impl From<&str> for AbsMarket {
-	fn from(value: &str) -> Self {
-		value.parse().unwrap()
-	}
+#[derive(Debug, thiserror::Error, derive_new::new)]
+pub enum MethodError {
+	/// Means that it's **not expected** to be implemented, not only that it's not implemented now. For things that are yet to be implemented I just put `unimplemented!()`.
+	#[error("Method not implemented for the requested exchange and instrument: ({exchange}, {instrument})")]
+	MethodNotImplemented { exchange: ExchangeName, instrument: Instrument },
+	#[error("Requested exchange does not support the method for chosen instrument: ({exchange}, {instrument})")]
+	MethodNotSupported { exchange: ExchangeName, instrument: Instrument },
 }
 //,}}}
 
@@ -334,14 +205,12 @@ impl RequestRange {
 		Ok(())
 	}
 
-	//XXX
-	//TODO!!!!!!!!!: MUST be generic over Market. But with current Market representation is impossible.
-	pub fn serialize(&self, am: AbsMarket) -> serde_json::Value {
-		match am {
+	pub fn serialize(&self, exchange: ExchangeName) -> serde_json::Value {
+		match exchange {
 			#[cfg(feature = "binance")]
-			AbsMarket::Binance(_) => self.serialize_common(),
+			ExchangeName::Binance => self.serialize_common(),
 			#[cfg(feature = "bybit")]
-			AbsMarket::Bybit(_) => self.serialize_common(),
+			ExchangeName::Bybit => self.serialize_common(),
 			_ => unimplemented!(),
 		}
 	}
@@ -486,3 +355,147 @@ pub struct PairInfo {
 	pub price_precision: u8,
 }
 //,}}}
+
+// Ticker {{{
+
+define_str_enum! {
+	#[derive(Clone, Debug, Eq, derive_more::From, PartialEq)]
+	#[non_exhaustive]
+	pub enum ExchangeName {
+		Binance => "binance",
+		Bybit => "bybit",
+		Mexc => "mexc",
+		BitFlyer => "bitflyer",
+		Coincheck => "coincheck",
+		Yahoo => "yahook",
+	}
+}
+impl ExchangeName {
+	pub fn build_client(&self) -> Box<dyn Exchange> {
+		match self {
+			#[cfg(feature = "binance")]
+			Self::Binance => Box::new(crate::Binance(Client::default())),
+			#[cfg(feature = "bybit")]
+			Self::Bybit => Box::new(crate::Bybit(Client::default())),
+			#[cfg(feature = "mexc")]
+			Self::Mexc => Box::new(crate::Mexc(Client::default())),
+			_ => unimplemented!(),
+		}
+	}
+}
+
+define_str_enum! {
+	#[derive(Clone, Copy, Debug, Default, Eq, derive_more::From, PartialEq)]
+	#[non_exhaustive]
+	pub enum Instrument {
+		#[default]
+		Spot => "",
+		Perp => ".P",
+		Margin => ".M", //Q: do we care for being able to parse spot/margin diff from ticker defs?
+		PerpInverse => ".PERP_INVERSE",
+		Options => ".OPTIONS",
+	}
+}
+
+pub struct Ticker {
+	pub symbol: Symbol,
+	pub exchange_name: ExchangeName,
+}
+
+impl std::fmt::Display for Ticker {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}:{}", self.exchange_name, self.symbol)
+	}
+}
+
+impl std::str::FromStr for Ticker {
+	type Err = eyre::Report;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		let (exchange_str, symbol_str) = s.split_once(':').ok_or_else(|| eyre::eyre!("Invalid ticker format"))?;
+		let exchange_name = ExchangeName::from_str(exchange_str)?;
+		let symbol = Symbol::from_str(symbol_str)?;
+
+		Ok(Ticker { symbol, exchange_name })
+	}
+}
+
+#[derive(Clone, Copy, Debug, Default, derive_new::new)]
+pub struct Symbol {
+	pub pair: Pair,
+	pub instrument: Instrument,
+}
+
+impl std::fmt::Display for Symbol {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}{}", self.pair, self.instrument)
+	}
+}
+
+impl std::str::FromStr for Symbol {
+	type Err = eyre::Report;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		let (pair_str, instrument_ticker_str) = s.split_once('.').map(|(p, i)| (p, format!(".{i}"))).unwrap_or((s, "".to_owned()));
+		let pair = Pair::from_str(pair_str)?;
+		let instrument = Instrument::from_str(&instrument_ticker_str)?;
+
+		Ok(Symbol { pair, instrument })
+	}
+}
+//,}}}
+
+// Websocket {{{
+#[async_trait::async_trait]
+pub trait ExchangeStream {
+	type Content;
+	type Topic;
+
+	async fn next(&mut self) -> Option<Result<Self::Content, WsError>>;
+	async fn subscribe(&mut self, topics: Vec<Topic>) -> Result<(), WsError>;
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct TradeEvent {
+	pub time: DateTime<Utc>,
+	pub qty_asset: f64,
+	pub price: f64,
+}
+
+//dbg: placeholder, ignore contents
+pub struct BookSnapshot {
+	pub time: DateTime<Utc>,
+	pub asks: Vec<(f64, f64)>,
+	pub bids: Vec<(f64, f64)>,
+}
+//dbg: placeholder, ignore contents
+pub struct BookDelta {
+	pub time: DateTime<Utc>,
+	pub asks: Vec<(f64, f64)>,
+	pub bids: Vec<(f64, f64)>,
+}
+//,}}}
+
+mod test {
+	#[test]
+	fn display() {
+		let symbol = super::Symbol {
+			pair: super::Pair::new("BTC", "USDT"),
+			instrument: super::Instrument::Perp,
+		};
+		let ticker = super::Ticker {
+			symbol,
+			exchange_name: super::ExchangeName::Bybit,
+		};
+		assert_eq!(ticker.to_string(), "bybit:BTC-USDT.P");
+	}
+
+	#[test]
+	fn from_str() {
+		let ticker_str = "bybit:BTC-USDT.P";
+		let ticker: super::Ticker = ticker_str.parse().unwrap();
+		assert_eq!(ticker.symbol.pair, super::Pair::new("BTC", "USDT"));
+		assert_eq!(ticker.symbol.instrument, super::Instrument::Perp);
+		assert_eq!(ticker.exchange_name, super::ExchangeName::Bybit);
+	}
+}

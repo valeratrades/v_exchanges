@@ -59,8 +59,7 @@ hex = "*"
 #,}}}
 
 [features]
-#default = ["major", "data"]
-default = ["bybit", "binance"] #dbg
+default = ["major", "data"]
 
 full = ["major", "data", "bitflyer", "coincheck"]
 major = ["binance", "bybit", "mexc"]

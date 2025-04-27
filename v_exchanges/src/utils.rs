@@ -25,7 +25,7 @@ pub fn usd_value(underlying: f64, asset: Asset, prices: &BTreeMap<Pair, f64>) ->
 
 #[macro_export]
 macro_rules! define_provider_timeframe {
-	($struct_name:ident, $timeframes:expr, $provider_name:expr) => {
+	($struct_name:ident, $timeframes:expr) => {
 		#[derive(derive_more::AsRef, Clone, Copy, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
 		pub struct $struct_name(v_utils::trades::Timeframe);
 
@@ -60,4 +60,36 @@ macro_rules! define_provider_timeframe {
 			}
 		}
 	};
+}
+
+//MOVE: to v_utils
+#[macro_export]
+macro_rules! define_str_enum {
+  ($(#[$meta:meta])* $vis:vis enum $name:ident {
+    $($(#[$variant_meta:meta])* $variant:ident => $str:expr),* $(,)?
+  }) => {
+    $(#[$meta])*
+    $vis enum $name {
+      $($(#[$variant_meta])* $variant),*
+    }
+
+    impl std::fmt::Display for $name {
+      fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+          $(Self::$variant => write!(f, "{}", $str)),*
+        }
+      }
+    }
+
+    impl std::str::FromStr for $name {
+      type Err = eyre::Report;
+
+      fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+          $($str => Ok(Self::$variant)),*,
+          _ => bail!("Invalid {} string: {}", stringify!($name).to_lowercase(), s),
+        }
+      }
+    }
+  };
 }

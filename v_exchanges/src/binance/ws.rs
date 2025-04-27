@@ -1,19 +1,17 @@
 use adapters::{
 	Client,
-	binance::{BinanceOption, BinanceWsUrl},
 	generics::ws::WsError,
 };
 use chrono::DateTime;
 use serde_with::{DisplayFromStr, serde_as};
 use tokio::sync::mpsc;
-use v_utils::trades::Pair;
 
-use super::Market;
-use crate::ws_types::TradeEvent;
+use crate::{Symbol, TradeEvent};
 
 // trades {{{
-pub(crate) async fn trades(client: &Client, pair: Pair, m: Market) -> mpsc::Receiver<Result<TradeEvent, WsError>> {
-	todo!()
+//TODO!!!!!!!: switch to implementing the ExchangeStream trait
+pub async fn trades(client: &Client, symbol: Symbol) -> mpsc::Receiver<Result<TradeEvent, WsError>> {
+	todo!();
 	//let topic = format!("ws/{}@trade", pair.fmt_binance().to_lowercase());
 	//let base_url = match m {
 	//	Market::Perp => BinanceWsUrl::FuturesUsdM,
