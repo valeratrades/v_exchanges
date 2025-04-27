@@ -10,7 +10,7 @@ use v_utils::{
 };
 
 use super::Binance;
-use crate::{AbsMarket, ExchangeResult, core::RequestRange, utils::join_params};
+use crate::{ExchangeName, ExchangeResult, core::RequestRange, utils::join_params};
 
 #[derive(Clone, Debug, Display, FromStr)]
 pub enum LsrWho {
@@ -26,7 +26,7 @@ impl From<&str> for LsrWho {
 impl Binance {
 	pub async fn lsr(&self, pair: Pair, tf: Timeframe, range: RequestRange, who: LsrWho) -> ExchangeResult<Lsrs> {
 		range.ensure_allowed(0..=500, &tf)?;
-		let range_json = range.serialize(AbsMarket::Binance(crate::binance::Market::Perp));
+		let range_json = range.serialize(ExchangeName::Binance);
 
 		let ending = match who {
 			LsrWho::Global => "globalLongShortAccountRatio",
@@ -37,10 +37,8 @@ impl Binance {
 			"period": tf,
 		});
 		let params = join_params(base_json, range_json);
-		let r: serde_json::Value = self
-			.client
-			.get(&format!("/futures/data/{ending}"), &params, [BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)])
-			.await?;
+		let options = [BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)];
+		let r: serde_json::Value = self.get(&format!("/futures/data/{ending}"), &params, options).await?;
 		let r: Vec<LsrResponse> = serde_json::from_value(r).unwrap();
 		Ok(Lsrs {
 			values: r.into_iter().map(|r| r.into()).collect(),

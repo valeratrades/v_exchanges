@@ -6,7 +6,6 @@
 pub extern crate v_exchanges_adapters as adapters;
 
 pub mod core;
-pub(crate) mod ws_types;
 
 pub mod prelude {
 	#[cfg(feature = "binance")]
@@ -27,7 +26,6 @@ pub mod prelude {
 }
 pub use prelude::*;
 
-pub mod types;
 pub(crate) mod utils;
 
 #[cfg(feature = "binance")]
