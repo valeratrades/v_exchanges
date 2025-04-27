@@ -1,13 +1,14 @@
-use v_exchanges::AbsMarket;
-use v_utils::prelude::*;
+use std::str::FromStr as _;
+
+use v_exchanges::prelude::*;
 
 #[tokio::main]
 async fn main() {
-	clientside!();
+	v_utils::clientside!();
 
-	let m: AbsMarket = "Binance/Spot".into();
-	let binance = m.client();
-	let mut rx = binance.ws_trades(("BTC", "USDT").into(), m).await.unwrap();
+	let binance = Binance::default();
+	let symbol = Symbol::from_str("BTCUSDT.P").unwrap();
+	let mut rx = binance.ws_trades(symbol).await.unwrap();
 
 	while let Some(trade_event) = rx.recv().await {
 		println!("{trade_event:?}");
