@@ -55,35 +55,44 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 
 	#[allow(unused_variables)]
 	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
-		unimplemented!();
+		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
 	#[allow(unused_variables)]
 	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
-		unimplemented!();
+		Err(ExchangeError::Method(MethodError::MethodNotSupported {
+			exchange: self.name(),
+			instrument: symbol.instrument,
+		}))
 	}
 
 	/// If no pairs are specified, returns for all;
 	#[allow(unused_variables)]
 	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
-		unimplemented!();
-	}
-	#[allow(unused_variables)]
-	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
-		unimplemented!();
+		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 
+	#[allow(unused_variables)]
+	async fn price(&self, symbol: Symbol) -> Result<f64, ExchangeError> {
+		Err(ExchangeError::Method(MethodError::MethodNotSupported {
+			exchange: self.name(),
+			instrument: symbol.instrument,
+		}))
+	}
+
+	// Authenticated {{{
 	/// balance of a specific asset. Does not guarantee provision of USD values.
 	#[allow(unused_variables)]
 	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, instrument: Instrument) -> ExchangeResult<AssetBalance> {
-		unimplemented!();
+		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 	/// vec of _non-zero_ balances exclusively. Provides USD values.
 	#[allow(unused_variables)]
 	async fn balances(&self, recv_window: Option<u16>, instrument: Instrument) -> ExchangeResult<Balances> {
-		unimplemented!();
+		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
+	//,}}}
 
 	//? potentially `total_balance`? Would return precompiled USDT-denominated balance of a (bybit::wallet/binance::account)
 	// balances are defined for each margin type: [futures_balance, spot_balance, margin_balance], but note that on some exchanges, (like bybit), some of these may point to the same exact call
@@ -91,6 +100,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 
 	//? could implement many things that are _explicitly_ combinatorial. I can imagine several cases, where knowing that say the specified limit for the klines is wayyy over the max and that you may be opting into a long wait by calling it, could be useful.
 
+	// Websocket {{{
 	// Start a websocket connection for individual trades
 	#[allow(unused_variables)]
 	async fn ws_trades(
@@ -106,6 +116,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	> {
 		unimplemented!();
 	}
+	//,}}}
 }
 
 // Exchange Error {{{

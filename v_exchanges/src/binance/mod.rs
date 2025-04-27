@@ -5,6 +5,7 @@ mod market;
 mod spot;
 mod ws;
 use adapters::{Client, binance::BinanceOption, generics::ws::WsError};
+use data::{LsrWho, Lsrs};
 use secrecy::SecretString;
 use tokio::sync::mpsc;
 use v_utils::trades::{Asset, Pair, Timeframe};
