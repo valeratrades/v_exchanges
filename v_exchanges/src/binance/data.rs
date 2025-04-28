@@ -11,7 +11,7 @@ use v_utils::{
 
 use super::Binance;
 use crate::{
-	ExchangeError, ExchangeName, ExchangeResult,
+	ExchangeError, ExchangeName,
 	core::RequestRange,
 	other_types::{Lsr, Lsrs},
 	utils::join_params,

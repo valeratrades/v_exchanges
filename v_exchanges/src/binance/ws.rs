@@ -1,14 +1,20 @@
-use adapters::{Client, generics::ws::WsError};
+use adapters::{
+	Client,
+	binance::{BinanceOption, BinanceWsHandler, BinanceWsUrl},
+	generics::ws::{WsConnection, WsError},
+};
 use chrono::DateTime;
 use serde_with::{DisplayFromStr, serde_as};
 use tokio::sync::mpsc;
+use v_utils::trades::Pair;
 
-use crate::{Symbol, TradeEvent};
+use crate::{ExchangeStream, Instrument, Symbol, TradeEvent};
 
 // trades {{{
 //TODO!!!!!!!: switch to implementing the ExchangeStream trait
 pub async fn trades(client: &Client, symbol: Symbol) -> mpsc::Receiver<Result<TradeEvent, WsError>> {
 	todo!();
+
 	//let topic = format!("ws/{}@trade", pair.fmt_binance().to_lowercase());
 	//let base_url = match m {
 	//	Market::Perp => BinanceWsUrl::FuturesUsdM,
@@ -49,9 +55,29 @@ pub async fn trades(client: &Client, symbol: Symbol) -> mpsc::Receiver<Result<Tr
 	//rx
 }
 
+pub struct TradesConnection {
+	connection: WsConnection<BinanceWsHandler>,
+}
+impl TradesConnection {
+	pub fn new(client: &Client, symbol: Symbol) -> Result<Self, WsError> {
+		let topic = format!("ws/{}@trade", symbol.pair.fmt_binance().to_lowercase());
+		let base_url = match symbol.instrument {
+			Instrument::Perp => BinanceWsUrl::FuturesUsdM,
+			Instrument::Spot | Instrument::Margin => BinanceWsUrl::Spot,
+			_ => unimplemented!(),
+		};
+		let connection = client.ws_connection(&topic, vec![BinanceOption::WsUrl(base_url)])?;
+		Ok(Self { connection })
+	}
+}
+impl ExchangeStream for TradesConnection {
+	type Item = TradeEvent;
+	type Topic = Pair;
+}
+
 #[serde_as]
 #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-pub struct TradeEventFuts {
+pub struct TradeEventPerp {
 	#[serde(rename = "T")]
 	timestamp: i64,
 	#[serde(rename = "X")]
@@ -69,8 +95,8 @@ pub struct TradeEventFuts {
 	#[serde(rename = "t")]
 	_trade_id: u64,
 }
-impl From<TradeEventFuts> for TradeEvent {
-	fn from(futs: TradeEventFuts) -> Self {
+impl From<TradeEventPerp> for TradeEvent {
+	fn from(futs: TradeEventPerp) -> Self {
 		Self {
 			time: DateTime::from_timestamp_millis(futs.timestamp).expect("Exchange responded with invalid timestamp"),
 			qty_asset: futs.qty_asset,

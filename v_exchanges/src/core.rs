@@ -106,15 +106,8 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	async fn ws_trades(
 		&self,
 		symbol: Symbol,
-	) -> ExchangeResult<
-		mpsc::Receiver<
-			Result<
-				crate::core::TradeEvent,
-				WsError, /*The key could get out of the date while the connection is ongoing, and then the next attempt to reconnect will fail. Thus must encapsulate received type in WsError.*/
-			>,
-		>,
-	> {
-		unimplemented!();
+	) -> ExchangeResult<Box<dyn ExchangeStream<Item = TradeEvent, Topic = Pair>>> {
+		Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument: symbol.instrument }))
 	}
 	//,}}}
 }
@@ -155,6 +148,7 @@ pub struct Oi {
 
 //Q: maybe add a `vectorize` method? Should add, question is really if it should be returning a) df b) all fields, including optional and oi c) t, o, h, l, c, v
 // probably should figure out rust-typed dataframes for this first
+/// Does not have any gaps in the data, (as klines are meant to be indexed naively when used). TODO: enforce this.
 #[derive(Clone, Debug, Default, Deref, DerefMut, derive_new::new)]
 pub struct Klines {
 	#[deref_mut]
@@ -171,20 +165,6 @@ impl Iterator for Klines {
 		self.v.pop_front()
 	}
 }
-
-//MOVE: v_utils (along with [Klines])
-//? not sure what to do about oi here
-/// [Kline]s series that is _guaranteed to not have any gaps in kline data_.
-#[derive(Clone, Debug, Default)]
-pub struct FullKlines(Klines);
-impl TryFrom<Klines> for FullKlines {
-	type Error = Report;
-
-	fn try_from(value: Klines) -> Result<Self> {
-		todo!();
-	}
-}
-//,}}}
 
 // RequestRange {{{
 #[derive(Clone, Copy, Debug)]
@@ -457,12 +437,13 @@ impl std::str::FromStr for Symbol {
 //,}}}
 
 // Websocket {{{
+/// Concerns itself with exact types.
 #[async_trait::async_trait]
 pub trait ExchangeStream {
-	type Content;
+	type Item;
 	type Topic;
 
-	async fn next(&mut self) -> Option<Result<Self::Content, WsError>>;
+	async fn next(&mut self) -> Option<Result<Self::Item, WsError>>;
 	async fn subscribe(&mut self, topics: Vec<Topic>) -> Result<(), WsError>;
 }
 
