@@ -4,12 +4,13 @@
 #![feature(try_blocks)]
 
 pub extern crate v_exchanges_adapters as adapters;
-pub use std::str::FromStr as _; // it's very annoying to have to manually bring it into the scope every single time. Putting this into preludes of all libraries with any exposed `FromStr` impls at this point.
 
 pub mod core;
 pub(crate) mod other_types;
 
 pub mod prelude {
+	pub use std::str::FromStr as _; // it's very annoying to have to manually bring it into the scope every single time. Putting this into preludes of all libraries with any exposed `FromStr` impls at this point.
+
 	#[cfg(feature = "binance")]
 	pub use crate::binance::Binance;
 	#[cfg(feature = "bitflyer")]
@@ -20,11 +21,11 @@ pub mod prelude {
 	pub use crate::bybit::Bybit;
 	#[cfg(feature = "coincheck")]
 	pub use crate::coincheck::Coincheck;
-	pub use crate::core::*;
 	#[cfg(feature = "mexc")]
 	pub use crate::mexc::Mexc;
 	#[cfg(feature = "data")]
 	pub use crate::yahoo::*;
+	pub use crate::{core::*, other_types::*};
 }
 pub use prelude::*;
 
