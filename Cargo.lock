@@ -2514,7 +2514,7 @@ checksum = "458f7a779bf54acc9f347480ac654f68407d3aab21269a6e3c9f922acd9e2da9"
 
 [[package]]
 name = "v_exchanges"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "async-trait",
  "cfg-if",
