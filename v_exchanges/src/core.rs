@@ -433,10 +433,10 @@ impl std::str::FromStr for Symbol {
 // Websocket {{{
 /// Concerns itself with exact types.
 #[async_trait::async_trait]
-pub trait ExchangeStream {
+pub trait ExchangeStream: Send + Sync {
 	type Item;
 
-	async fn next(&mut self) -> Result<Self::Item, WsError>;
+	async fn next(&mut self) -> eyre::Result<Self::Item, WsError>;
 }
 #[async_trait::async_trait]
 pub trait SubscribeOrder {
