@@ -12,7 +12,7 @@ pub async fn asset_balance(client: &Client, asset: Asset, recv_window: Option<u1
 	if let Some(rw) = recv_window {
 		options.push(MexcOption::RecvWindow(rw));
 	}
-	let endpoint = format!("/api/v1/private/account/asset/{}", asset);
+	let endpoint = format!("/api/v1/private/account/asset/{asset}");
 	let r: AssetBalanceResponse = client.get_no_query(&endpoint, options).await.unwrap();
 
 	Ok(r.data.into())

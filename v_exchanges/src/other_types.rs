@@ -1,16 +1,6 @@
-use adapters::binance::{BinanceHttpUrl, BinanceOption};
 use chrono::{DateTime, Utc};
-use derive_more::{Display, FromStr};
 use serde::Deserialize;
-use serde_json::json;
-use v_utils::{
-	Percent,
-	prelude::*,
-	trades::{Pair, Timeframe},
-};
-
-use super::Binance;
-use crate::{ExchangeName, ExchangeResult, core::RequestRange, utils::join_params};
+use v_utils::{Percent, prelude::*, trades::Pair};
 
 #[derive(Clone, Copy, Debug, Default, derive_more::Deref, derive_more::DerefMut, Deserialize, Serialize)]
 pub struct Lsr {

@@ -5,10 +5,9 @@ use adapters::{
 };
 use chrono::DateTime;
 use serde_with::{DisplayFromStr, serde_as};
-use tokio::sync::mpsc;
 use v_utils::trades::Pair;
 
-use crate::{ExchangeStream, Instrument, Symbol, TradeEvent};
+use crate::{ExchangeStream, Instrument, TradeEvent};
 
 // trades {{{
 #[derive(derive_more::Deref, derive_more::DerefMut)]
@@ -32,6 +31,7 @@ impl TradesConnection {
 		Ok(Self { connection, instrument })
 	}
 }
+#[async_trait::async_trait]
 impl ExchangeStream for TradesConnection {
 	type Item = TradeEvent;
 

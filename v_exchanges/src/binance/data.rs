@@ -1,5 +1,5 @@
 use adapters::binance::{BinanceHttpUrl, BinanceOption};
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 use derive_more::{Display, FromStr};
 use serde::Deserialize;
 use serde_json::json;

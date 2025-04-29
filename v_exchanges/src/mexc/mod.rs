@@ -4,17 +4,14 @@ mod market;
 use std::collections::BTreeMap;
 
 use adapters::mexc::MexcOption;
-use derive_more::{
-	Display, FromStr,
-	derive::{Deref, DerefMut},
-};
+use derive_more::derive::{Deref, DerefMut};
 use secrecy::SecretString;
 use v_exchanges_adapters::Client;
-use v_utils::trades::{Asset, Pair, Timeframe};
+use v_utils::trades::{Asset, Pair};
 
 use crate::{
-	Balances, ExchangeName, ExchangeResult, Instrument, Symbol, UnsupportedTimeframeError,
-	core::{AssetBalance, Exchange, ExchangeInfo, Klines, RequestRange},
+	Balances, ExchangeName, ExchangeResult, Instrument, Symbol,
+	core::{AssetBalance, Exchange},
 };
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]

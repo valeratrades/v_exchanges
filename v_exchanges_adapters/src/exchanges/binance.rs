@@ -182,7 +182,7 @@ impl WsHandler for BinanceWsHandler {
 			.filter_map(|topic| if let Topic::String(s) = topic { Some(s) } else { None })
 			.cloned()
 			.collect::<Vec<_>>();
-		let mut messages = {
+		let messages = {
 			let msg = serde_json::json!({
 				"method": "SUBSCRIBE",
 				"params": string_topics,

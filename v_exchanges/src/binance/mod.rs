@@ -4,13 +4,12 @@ use std::collections::BTreeMap;
 mod market;
 mod spot;
 mod ws;
-use adapters::{Client, binance::BinanceOption, generics::ws::WsError};
+use adapters::{Client, binance::BinanceOption};
 use secrecy::SecretString;
-use tokio::sync::mpsc;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::{
-	AssetBalance, Balances, DynExchangeStream, Exchange, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, Klines, MethodError, RequestRange, TradeEvent,
+	AssetBalance, Balances, Exchange, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Klines, MethodError, RequestRange, TradeEvent,
 	core::{Instrument, Symbol},
 };
 
@@ -86,11 +85,11 @@ impl Exchange for Binance {
 		}
 	}
 
-	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> Result<Box<DynExchangeStream<TradeEvent>>, ExchangeError> {
+	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = TradeEvent>>, ExchangeError> {
 		match instrument {
 			Instrument::Perp | Instrument::Spot | Instrument::Margin => {
 				let connection = ws::TradesConnection::new(self, pairs, instrument)?;
-				Ok(DynExchangeStream::boxed(connection))
+				Ok(Box::new(connection))
 			}
 			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument })),
 		}

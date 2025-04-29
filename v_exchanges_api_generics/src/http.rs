@@ -47,7 +47,7 @@ impl Client {
 			if let Some(query) = query {
 				request_builder = request_builder.query(query);
 			}
-			Span::current().record("request_builder", format!("{:?}", request_builder));
+			Span::current().record("request_builder", format!("{request_builder:?}"));
 
 			if config.use_testnet
 				&& let Some(cache_duration) = config.cache_testnet_calls

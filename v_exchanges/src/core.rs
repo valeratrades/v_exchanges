@@ -1,16 +1,13 @@
 use std::collections::{BTreeMap, VecDeque};
 
 use adapters::{
-	generics::{
-		http::RequestError,
-		ws::{Topic, WsError}, UrlError,
-	}, Client
+	Client,
+	generics::{http::RequestError, ws::WsError},
 };
 use chrono::{DateTime, TimeDelta, Utc};
 use derive_more::{Deref, DerefMut};
 use secrecy::SecretString;
 use serde_json::json;
-use tokio::sync::mpsc;
 use v_utils::{
 	prelude::*,
 	trades::{Asset, Kline, Pair, Timeframe, Usd},
@@ -102,11 +99,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	// Websocket {{{
 	// Start a websocket connection for individual trades
 	#[allow(unused_variables)]
-	fn ws_trades(
-		&self,
-		pairs: Vec<Pair>,
-		instrument: Instrument,
-	) ->  ExchangeResult<Box<DynExchangeStream<TradeEvent>>> {
+	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = TradeEvent>>> {
 		unimplemented!();
 	}
 	//,}}}
@@ -439,7 +432,7 @@ impl std::str::FromStr for Symbol {
 
 // Websocket {{{
 /// Concerns itself with exact types.
-#[dynosaur::dynosaur(pub DynExchangeStream)]
+#[async_trait::async_trait]
 pub trait ExchangeStream {
 	type Item;
 
