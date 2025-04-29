@@ -165,7 +165,7 @@ impl WsHandler for BinanceWsHandler {
 			let pubkey = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
 			let secret = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
 
-			//TODO:
+			//TODO!!!: auth for binance
 			/*
 			match
 				user_data_stream => POST /api/v3/userDataStream
@@ -176,17 +176,30 @@ impl WsHandler for BinanceWsHandler {
 		Ok(vec![])
 	}
 
-	fn handle_subscribe(&mut self, topics: HashSet<Topic>) -> eyre::Result<Vec<tungstenite::Message>, WsError> {
-		topics
+	fn handle_subscribe(&mut self, topics: HashSet<Topic>) -> Result<Vec<tungstenite::Message>, WsError> {
+		let string_topics = topics
+			.iter()
+			.filter_map(|topic| if let Topic::String(s) = topic { Some(s) } else { None })
+			.cloned()
+			.collect::<Vec<_>>();
+		let mut messages = {
+			let msg = serde_json::json!({
+				"method": "SUBSCRIBE",
+				"params": string_topics,
+				"id": rand::random::<u64>(),
+			});
+			vec![tungstenite::Message::Text(msg.to_string().into())]
+		};
+
+		let order_topics = topics
 			.into_iter()
-			.map(|topic| {
-				let topic = match topic {
-					Topic::Trade(topic) => topic,
-					_ => return Err(WsError::Subscription("Binance only supports string topics".to_owned())),
-				};
-				todo!();
-			})
-			.collect::<Result<Vec<_>, _>>()
+			.filter_map(|topic| if let Topic::Order(v) = topic { Some(v) } else { None })
+			.collect::<Vec<_>>();
+		for o in order_topics {
+			todo!();
+		}
+
+		Ok(messages)
 	}
 
 	fn handle_jrpc(&mut self, jrpc: serde_json::Value) -> Result<ResponseOrContent, WsError> {
@@ -214,7 +227,6 @@ impl WsHandler for BinanceWsHandler {
 			let event_type = data["e"].as_str().unwrap().to_owned();
 			event_data.remove("e");
 			let event_ts: i64 = data["E"].as_i64().unwrap();
-			dbg!(&event_ts);
 			let event_time = DateTime::<Utc>::from_timestamp_millis(event_ts).unwrap();
 			event_data.remove("E");
 			(event_type, event_time, event_data.into())

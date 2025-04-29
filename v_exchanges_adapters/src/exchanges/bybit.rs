@@ -411,7 +411,7 @@ impl WsHandler for BybitWsHandler {
 			.into_iter()
 			.map(|topic| match topic {
 				Topic::String(s) => s,
-				Topic::Trade(_) => todo!(),
+				Topic::Order(_) => todo!(),
 			})
 			.collect();
 		Ok(vec![tungstenite::Message::Text(json!({ "op": "subscribe", "args": topics }).to_string().into())])

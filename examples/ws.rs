@@ -1,16 +1,18 @@
 use std::str::FromStr as _;
 
-use v_exchanges::prelude::*;
+use v_exchanges::{core::ExchangeStream as _, prelude::*};
+use v_utils::trades::Pair;
 
 #[tokio::main]
 async fn main() {
 	v_utils::clientside!();
 
 	let binance = Binance::default();
-	let symbol = Symbol::from_str("BTCUSDT.P").unwrap();
-	let mut rx = binance.ws_trades(symbol).await.unwrap();
+	let pairs = vec![Pair::from_str("BTCUSDT").unwrap()];
+	let instrument = Instrument::Perp;
 
-	while let Some(trade_event) = rx.recv().await {
-		println!("{trade_event:?}");
+	let mut trades_connection = binance.ws_trades(pairs, instrument).unwrap();
+	while let Ok(trade_event) = trades_connection.next().await {
+		dbg!(&trade_event);
 	}
 }

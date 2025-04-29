@@ -1,11 +1,10 @@
 use std::collections::{BTreeMap, VecDeque};
 
 use adapters::{
-	Client,
 	generics::{
 		http::RequestError,
-		ws::{Topic, WsError},
-	},
+		ws::{Topic, WsError}, UrlError,
+	}, Client
 };
 use chrono::{DateTime, TimeDelta, Utc};
 use derive_more::{Deref, DerefMut};
@@ -74,7 +73,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	}
 
 	#[allow(unused_variables)]
-	async fn price(&self, symbol: Symbol) -> Result<f64, ExchangeError> {
+	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported {
 			exchange: self.name(),
 			instrument: symbol.instrument,
@@ -103,11 +102,12 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	// Websocket {{{
 	// Start a websocket connection for individual trades
 	#[allow(unused_variables)]
-	async fn ws_trades(
+	fn ws_trades(
 		&self,
-		symbol: Symbol,
-	) -> ExchangeResult<Box<dyn ExchangeStream<Item = TradeEvent, Topic = Pair>>> {
-		Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument: symbol.instrument }))
+		pairs: Vec<Pair>,
+		instrument: Instrument,
+	) ->  ExchangeResult<Box<DynExchangeStream<TradeEvent>>> {
+		unimplemented!();
 	}
 	//,}}}
 }
@@ -119,6 +119,7 @@ pub enum ExchangeError {
 	Request(RequestError),
 	Method(MethodError),
 	Timeframe(UnsupportedTimeframeError),
+	Ws(WsError),
 	Range(RequestRangeError),
 	Other(Report),
 }
@@ -438,13 +439,17 @@ impl std::str::FromStr for Symbol {
 
 // Websocket {{{
 /// Concerns itself with exact types.
-#[async_trait::async_trait]
+#[dynosaur::dynosaur(pub DynExchangeStream)]
 pub trait ExchangeStream {
 	type Item;
-	type Topic;
 
-	async fn next(&mut self) -> Option<Result<Self::Item, WsError>>;
-	async fn subscribe(&mut self, topics: Vec<Topic>) -> Result<(), WsError>;
+	async fn next(&mut self) -> Result<Self::Item, WsError>;
+}
+#[async_trait::async_trait]
+pub trait SubscribeOrder {
+	type Order;
+
+	async fn place_and_subscribe(&mut self, topics: Vec<Self::Order>) -> Result<(), WsError>;
 }
 
 #[derive(Clone, Debug, Default)]

@@ -136,7 +136,6 @@ impl WsConnectionStream {
 impl<H: WsHandler> WsConnection<H> {
 	#[allow(missing_docs)]
 	pub fn try_new(url_suffix: &str, handler: H) -> Result<Self, UrlError> {
-		// expects here are not expected to be seen by the user. Correctness should theoretically be checked at the moment of merging provided options; before this is ever constructed.
 		let config = handler.config()?;
 		let url = match &config.base_url {
 			Some(base_url) => base_url.join(url_suffix)?,
@@ -154,11 +153,11 @@ impl<H: WsHandler> WsConnection<H> {
 
 	/// The main interface. All ws operations are hidden, only thing getting through are the content messages or the lack thereof.
 	pub async fn next(&mut self) -> Result<ContentEvent, WsError> {
-		if let Some(inner) = &self.stream {
-			if inner.connected_since + self.config.refresh_after < SystemTime::now() {
-				tracing::info!("Refreshing connection, as `refresh_after` specified in WsConfig has elapsed ({:?})", self.config.refresh_after);
-				self.reconnect().await?;
-			}
+		if let Some(inner) = &self.stream
+			&& inner.connected_since + self.config.refresh_after < SystemTime::now()
+		{
+			tracing::info!("Refreshing connection, as `refresh_after` specified in WsConfig has elapsed ({:?})", self.config.refresh_after);
+			self.reconnect().await?;
 		}
 		if self.stream.is_none() {
 			self.connect().await?;
@@ -288,7 +287,7 @@ impl<H: WsHandler> WsConnection<H> {
 						panic!("received `tungstenite::Error::Protocol` from polling: {protocol_error:?}");
 					}
 					tungstenite::Error::WriteBufferFull(_) => unreachable!("can only get from writing"),
-					tungstenite::Error::Utf8 => panic!("received `tungstenite::Error::Utf8` from polling. Exchange is going crazy, moving away from it"),
+					tungstenite::Error::Utf8 => panic!("received `tungstenite::Error::Utf8` from polling. Exchange is going crazy, aborting"),
 					tungstenite::Error::AttackAttempt => {
 						tracing::warn!("received `tungstenite::Error::AttackAttempt` from polling. Don't have a reason to trust detection 100%, so just reconnecting.");
 						self.stream = None;
@@ -438,6 +437,8 @@ pub enum WsError {
 	Auth(AuthError),
 	Parse(serde_json::Error),
 	Subscription(String),
+	NetworkConnection,
+	Url(UrlError),
 	UnexpectedEvent(serde_json::Value),
 	Other(eyre::Report),
 }
@@ -462,5 +463,5 @@ pub enum WsDefinitionError {
 #[derive(Clone, Debug, derive_more::Display, Eq, Hash, PartialEq, serde::Serialize)]
 pub enum Topic {
 	String(String),
-	Trade(serde_json::Value),
+	Order(serde_json::Value),
 }

@@ -11,68 +11,45 @@ use v_utils::trades::Pair;
 use crate::{ExchangeStream, Instrument, Symbol, TradeEvent};
 
 // trades {{{
-//TODO!!!!!!!: switch to implementing the ExchangeStream trait
-pub async fn trades(client: &Client, symbol: Symbol) -> mpsc::Receiver<Result<TradeEvent, WsError>> {
-	todo!();
-
-	//let topic = format!("ws/{}@trade", pair.fmt_binance().to_lowercase());
-	//let base_url = match m {
-	//	Market::Perp => BinanceWsUrl::FuturesUsdM,
-	//	Market::Spot | Market::Marg => BinanceWsUrl::Spot,
-	//	_ => unimplemented!(),
-	//};
-	//let mut connection = client.ws_connection(&topic, vec![BinanceOption::WsUrl(base_url)]);
-	//let (tx, rx) = mpsc::channel::<Result<TradeEvent, WsError>>(256);
-	//
-	////SPAWN: can go around it with proper impl of futures_core::Stream, but that would require "unwrapping" async into the underlying state-machine on Poll in every instance of its utilization there
-	//tokio::spawn(async move {
-	//	loop {
-	//		let resp = connection.next().await;
-	//		static EXPECT_REASON: &str = "Fails if either a) exchange changed trade_event's serialization (unrecoverable), either b) exchange-communication layer failed to pick out an error response, which means we probably shouldn't run in production yet.\n";
-	//
-	//		let result_trade_event = resp.map(|msg| {
-	//			assert_eq!(msg["e"], "trade", "{EXPECT_REASON}");
-	//			match m {
-	//				Market::Perp => {
-	//					let initial = serde_json::from_value::<TradeEventFuts>(msg).expect(EXPECT_REASON);
-	//					TradeEvent::from(initial)
-	//				}
-	//				Market::Spot | Market::Marg => {
-	//					let initial = serde_json::from_value::<TradeEventSpot>(msg).expect(EXPECT_REASON);
-	//					TradeEvent::from(initial)
-	//				}
-	//				_ => unimplemented!(),
-	//			}
-	//		});
-	//
-	//		if tx.send(result_trade_event).await.is_err() {
-	//			tracing::debug!("Receiver dropped, dropping the connection");
-	//			break;
-	//		}
-	//	}
-	//});
-	//
-	//rx
-}
-
+#[derive(derive_more::Deref, derive_more::DerefMut)]
 pub struct TradesConnection {
+	#[deref]
+	#[deref_mut]
 	connection: WsConnection<BinanceWsHandler>,
+	instrument: Instrument,
 }
 impl TradesConnection {
-	pub fn new(client: &Client, symbol: Symbol) -> Result<Self, WsError> {
-		let topic = format!("ws/{}@trade", symbol.pair.fmt_binance().to_lowercase());
-		let base_url = match symbol.instrument {
+	pub fn new(client: &Client, pairs: Vec<Pair>, instrument: Instrument) -> Result<Self, WsError> {
+		let vec_topic_str = pairs.into_iter().map(|p| format!("{}@trade", p.fmt_binance().to_lowercase())).collect::<Vec<_>>();
+
+		let base_url = match instrument {
 			Instrument::Perp => BinanceWsUrl::FuturesUsdM,
 			Instrument::Spot | Instrument::Margin => BinanceWsUrl::Spot,
 			_ => unimplemented!(),
 		};
-		let connection = client.ws_connection(&topic, vec![BinanceOption::WsUrl(base_url)])?;
-		Ok(Self { connection })
+		let connection = client.ws_connection("", vec![BinanceOption::WsUrl(base_url), BinanceOption::WsTopics(vec_topic_str)])?;
+
+		Ok(Self { connection, instrument })
 	}
 }
 impl ExchangeStream for TradesConnection {
 	type Item = TradeEvent;
-	type Topic = Pair;
+
+	async fn next(&mut self) -> Result<Self::Item, WsError> {
+		let content_event = self.connection.next().await?;
+		let trade_event = match self.instrument {
+			Instrument::Perp => {
+				let interpreted_response = serde_json::from_value::<TradeEventPerp>(content_event.data).expect("Exchange responded with invalid trade event");
+				TradeEvent::from(interpreted_response)
+			}
+			Instrument::Spot | Instrument::Margin => {
+				let initial = serde_json::from_value::<TradeEventSpot>(content_event.data).expect("Exchange responded with invalid trade event");
+				TradeEvent::from(initial)
+			}
+			_ => unimplemented!(),
+		};
+		Ok(trade_event)
+	}
 }
 
 #[serde_as]

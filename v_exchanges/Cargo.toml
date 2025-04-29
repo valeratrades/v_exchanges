@@ -36,6 +36,7 @@ derive_more.workspace = true
 eyre.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+dynosaur.workspace = true
 serde_plain.workspace = true
 serde_with.workspace = true
 thiserror.workspace = true
@@ -43,7 +44,6 @@ tokio.workspace = true
 tracing.workspace = true
 v_utils.workspace = true 
 cfg-if.workspace = true
-#insta.workspace = true #dbg (for some reason is not loading in dev-dependencies rn
 secrecy.workspace = true
 
 [dev-dependencies]

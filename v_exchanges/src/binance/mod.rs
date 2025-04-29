@@ -10,7 +10,7 @@ use tokio::sync::mpsc;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::{
-	AssetBalance, Balances, Exchange, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, Klines, MethodError, RequestRange,
+	AssetBalance, Balances, DynExchangeStream, Exchange, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, Klines, MethodError, RequestRange, TradeEvent,
 	core::{Instrument, Symbol},
 };
 
@@ -86,14 +86,13 @@ impl Exchange for Binance {
 		}
 	}
 
-	async fn ws_trades(&self, symbol: Symbol) -> ExchangeResult<mpsc::Receiver<Result<crate::core::TradeEvent, WsError>>> {
-		match symbol.instrument {
-			Instrument::Perp => Ok(ws::trades(self, symbol).await),
-			Instrument::Spot | Instrument::Margin => Ok(ws::trades(self, symbol).await),
-			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented {
-				exchange: self.name(),
-				instrument: symbol.instrument,
-			})),
+	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> Result<Box<DynExchangeStream<TradeEvent>>, ExchangeError> {
+		match instrument {
+			Instrument::Perp | Instrument::Spot | Instrument::Margin => {
+				let connection = ws::TradesConnection::new(self, pairs, instrument)?;
+				Ok(DynExchangeStream::boxed(connection))
+			}
+			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument })),
 		}
 	}
 }
