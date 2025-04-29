@@ -15,6 +15,9 @@ license = "MIT"
 readme = "README.md"
 repository = "https://github.com/valeratrades/v_exchanges/tree/master/v_exchanges_adapters"
 
+[package.metadata.cargo-machete]
+ignored = ["derive-new", "thiserror"]
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
@@ -30,7 +33,6 @@ secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_urlencoded.workspace = true
-serde_with.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
@@ -39,7 +41,6 @@ v_exchanges_api_generics = { version = "^0.9.0", path = "../v_exchanges_api_gene
 v_utils.workspace = true
 
 rand = { version = "0.9.1", optional = true }
-smart-default = "0.7.1"
 
 [dev-dependencies]
 rust_decimal = { version = "1.37.1", features = ["serde-with-str", "serde-with-float"] }
