@@ -49,14 +49,6 @@ secrecy.workspace = true
 color-eyre = "^0.6.3"
 insta.workspace = true
 
-
-#dbg: ws dev {{{
-futures-util = "*"
-sha2 = "*"
-hmac = "*"
-hex = "*"
-#,}}}
-
 [features]
 default = ["major", "data"]
 
@@ -74,9 +66,6 @@ data = ["dep:reqwest"]
 [[example]]
 name = "test"
 path = "../examples/test.rs"
-[[example]]
-name = "test2"
-path = "../examples/test2.rs"
 
 [[example]]
 name = "spelled_out_request"

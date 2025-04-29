@@ -11,10 +11,10 @@ async fn main() {
 	mexc.auth(env::var("MEXC_READ_KEY").unwrap(), env::var("MEXC_READ_SECRET").unwrap().into());
 
 	let price = mexc.price(symbol).await.unwrap();
-	dbg!(&price);
+	println!("{price:?}");
 
 	let balances = mexc.balances(None, symbol.instrument).await.unwrap();
-	dbg!(&balances);
+	println!("{balances:?}");
 }
 
 #[cfg(test)]

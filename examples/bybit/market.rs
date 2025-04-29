@@ -10,9 +10,9 @@ async fn main() {
 	let symbol = Symbol::from_str("BTC-USDT.P").unwrap();
 
 	let klines = client.klines(symbol, "1m".into(), 2.into()).await.unwrap();
-	dbg!(&klines);
+	println!("{klines:?}");
 	let price = client.price(symbol).await.unwrap();
-	dbg!(&price);
+	println!("{price:?}");
 
 	if let (Ok(pubkey), Ok(secret)) = (env::var("BYBIT_TIGER_READ_PUBKEY"), env::var("BYBIT_TIGER_READ_SECRET")) {
 		client.auth(pubkey, secret.into());
@@ -28,10 +28,10 @@ async fn private(c: &dyn Exchange, symbol: Symbol) {
 	//	.unwrap();
 
 	let balances = c.balances(None, symbol.instrument).await.unwrap();
-	dbg!(&balances);
+	println!("{balances:?}");
 
 	let balance_usdc = c.asset_balance("USDC".into(), Some(5000), symbol.instrument).await.unwrap();
-	dbg!(&balance_usdc);
+	println!("{balance_usdc:?}");
 }
 
 #[cfg(test)]

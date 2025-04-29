@@ -238,7 +238,7 @@ impl WsHandler for BinanceWsHandler {
 			time: event_time,
 			event_type,
 		};
-		Ok(ResponseOrContent::Content(content)) //dbg
+		Ok(ResponseOrContent::Content(content))
 	}
 
 	// stream listen-key keepalive works for:

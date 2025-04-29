@@ -14,6 +14,7 @@ use v_exchanges::prelude::*;
 async fn main() {
 	let mut args_iter = std::env::args().skip(1);
 	//Ex: "binance:BTC-USDT.P"
+		let mut args_iter = std::env::args().skip(1);
 	let ticker: Ticker = match Ticker::from_str(&args_iter.next().unwrap()) {
 		Ok(m) => m,
 		Err(e) => {
@@ -23,8 +24,8 @@ async fn main() {
 	};
 	let client = ticker.exchange_name.init_client();
 
-	let klines = client.klines(ticker.symbol, "1m".into(), 2.into()).await.unwrap();
-	dbg!(&klines);
+	let klines: Klines = client.klines(ticker.symbol, "1m".into(), 2.into()).await.unwrap();
+	println!("{:#?}", klines.v);
 }
 ```
 if you try the following with different `Exchange`s and `Instruments` encoded into the passed ticker string, you can see that we get same well-defined type, irregardless of quirks and differences of each exchange we're interacting with.

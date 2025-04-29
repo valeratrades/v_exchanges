@@ -1,7 +1,6 @@
 #![feature(try_blocks)]
 use std::{env, vec};
 
-use hmac::Mac as _;
 use v_exchanges_adapters::bybit::{BybitOption, BybitWsUrlBase};
 
 fn main() {
@@ -13,10 +12,9 @@ fn main() {
 	});
 }
 
-//TODO: switch ot a private endpoint for Binance now
 async fn run() {
-	let pubkey = env::var("BINANCE_TIGER_FULL_PUBKEY").unwrap();
-	let secret = env::var("BINANCE_TIGER_FULL_SECRET").unwrap();
+	let pubkey = env::var("BYBIT_TIGER_FULL_PUBKEY").unwrap();
+	let secret = env::var("BYBIT_TIGER_FULL_SECRET").unwrap();
 
 	let client = v_exchanges_adapters::Client::default();
 	let topics = vec!["position".to_owned()];
