@@ -46,7 +46,7 @@ cfg-if.workspace = true
 secrecy.workspace = true
 
 [dev-dependencies]
-color-eyre = "^0.6.3"
+color-eyre = "^0.6.4"
 insta.workspace = true
 
 [features]
