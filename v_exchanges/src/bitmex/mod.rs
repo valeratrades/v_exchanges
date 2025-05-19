@@ -1,5 +1,5 @@
-use chrono::{DateTime, Utc};
 use eyre::{Result, bail};
+use jiff::Timestamp;
 use reqwest::Client;
 use serde::Deserialize;
 
@@ -32,14 +32,14 @@ impl Bitmex {
 
 #[derive(Clone, Debug, Default)]
 pub struct BvolPoint {
-	pub timestamp: DateTime<Utc>,
+	pub timestamp: Timestamp,
 	pub price: f64,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, derive_new::new)]
 #[serde(rename_all = "camelCase")]
 pub struct BvolResponse {
-	pub timestamp: DateTime<Utc>,
+	pub timestamp: Timestamp,
 	pub price: f64,
 	pub symbol: String,
 	pub side: String,

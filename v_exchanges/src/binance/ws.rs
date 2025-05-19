@@ -3,11 +3,11 @@ use adapters::{
 	binance::{BinanceOption, BinanceWsHandler, BinanceWsUrl},
 	generics::ws::{WsConnection, WsError},
 };
-use chrono::DateTime;
+use jiff::Timestamp;
 use serde_with::{DisplayFromStr, serde_as};
 use v_utils::trades::Pair;
 
-use crate::{ExchangeStream, Instrument, TradeEvent};
+use crate::{ExchangeStream, Instrument, Trade};
 
 // trades {{{
 #[derive(derive_more::Deref, derive_more::DerefMut)]
@@ -33,18 +33,18 @@ impl TradesConnection {
 }
 #[async_trait::async_trait]
 impl ExchangeStream for TradesConnection {
-	type Item = TradeEvent;
+	type Item = Trade;
 
 	async fn next(&mut self) -> Result<Self::Item, WsError> {
 		let content_event = self.connection.next().await?;
 		let trade_event = match self.instrument {
 			Instrument::Perp => {
 				let interpreted_response = serde_json::from_value::<TradeEventPerp>(content_event.data).expect("Exchange responded with invalid trade event");
-				TradeEvent::from(interpreted_response)
+				Trade::from(interpreted_response)
 			}
 			Instrument::Spot | Instrument::Margin => {
 				let initial = serde_json::from_value::<TradeEventSpot>(content_event.data).expect("Exchange responded with invalid trade event");
-				TradeEvent::from(initial)
+				Trade::from(initial)
 			}
 			_ => unimplemented!(),
 		};
@@ -72,10 +72,10 @@ pub struct TradeEventPerp {
 	#[serde(rename = "t")]
 	_trade_id: u64,
 }
-impl From<TradeEventPerp> for TradeEvent {
+impl From<TradeEventPerp> for Trade {
 	fn from(futs: TradeEventPerp) -> Self {
 		Self {
-			time: DateTime::from_timestamp_millis(futs.timestamp).expect("Exchange responded with invalid timestamp"),
+			time: Timestamp::from_millisecond(futs.timestamp).expect("Exchange responded with invalid timestamp"),
 			qty_asset: futs.qty_asset,
 			price: futs.price,
 		}
@@ -96,10 +96,10 @@ pub struct TradeEventSpot {
 	#[serde(rename = "s")]
 	_pair: String,
 }
-impl From<TradeEventSpot> for TradeEvent {
+impl From<TradeEventSpot> for Trade {
 	fn from(futs: TradeEventSpot) -> Self {
 		Self {
-			time: DateTime::from_timestamp_millis(futs.timestamp).expect("Exchange responded with invalid timestamp"),
+			time: Timestamp::from_millisecond(futs.timestamp).expect("Exchange responded with invalid timestamp"),
 			qty_asset: futs.qty_asset,
 			price: futs.price,
 		}

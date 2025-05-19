@@ -4,9 +4,9 @@ use std::{
 	vec,
 };
 
-use chrono::{DateTime, Utc};
 use eyre::{Result, bail};
 use futures_util::{SinkExt as _, StreamExt as _};
+use jiff::Timestamp;
 use reqwest::Url;
 use tokio::net::TcpStream;
 use tokio_tungstenite::{
@@ -86,7 +86,7 @@ pub enum ResponseOrContent {
 pub struct ContentEvent {
 	pub data: serde_json::Value,
 	pub topic: String,
-	pub time: DateTime<Utc>,
+	pub time: Timestamp,
 	pub event_type: String,
 }
 

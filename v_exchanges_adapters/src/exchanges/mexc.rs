@@ -2,9 +2,9 @@
 
 use std::{marker::PhantomData, str::FromStr, time::SystemTime};
 
-use chrono::Utc;
 use generics::{AuthError, UrlError};
 use hmac::{Hmac, Mac};
+use jiff::{SignedDuration, Timestamp};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
@@ -201,7 +201,7 @@ where
 				};
 				let e = match retry_after_sec {
 					Some(s) => {
-						let until = Some(Utc::now() + chrono::Duration::seconds(s as i64));
+						let until = Some(Timestamp::now() + SignedDuration::from_secs(s as i64));
 						ApiError::IpTimeout { until }.into()
 					}
 					None => eyre!("Could't interpret Retry-After header").into(),

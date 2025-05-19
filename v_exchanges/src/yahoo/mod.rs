@@ -1,5 +1,5 @@
-use chrono::{DateTime, Utc};
 use eyre::{Result, bail, eyre};
+use jiff::Timestamp;
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
 use serde_json::Value;
 use v_utils::{NowThen, trades::Close};
@@ -45,7 +45,7 @@ pub async fn vix(tf: YahooTimeframe, n: u8) -> Result<Vec<Close>> {
 			.zip(timestamps.iter())
 			.map(|(c, t)| Close {
 				close: c,
-				timestamp: DateTime::<Utc>::from_timestamp_millis(*t).unwrap(),
+				timestamp: Timestamp::from_millisecond(*t).unwrap(),
 			})
 			.collect()
 	};
@@ -60,7 +60,7 @@ pub async fn vix_change(tf: YahooTimeframe, n: u8) -> Result<NowThen> {
 	}
 	let now = vix_history.last().unwrap();
 	let then = vix_history.first().unwrap();
-	Ok(NowThen::new(now.close, then.close).add_duration((now.timestamp - then.timestamp).to_std().unwrap()))
+	Ok(NowThen::new(now.close, then.close).add_duration((now.timestamp - then.timestamp).try_into().unwrap()))
 }
 
 crate::define_provider_timeframe!(YahooTimeframe, ["1m", "2m", "5m", "15m", "30m", "60m", "1h", "1d", "5d", "1wk", "1mo"]);

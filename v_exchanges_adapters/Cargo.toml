@@ -23,7 +23,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-chrono.workspace = true
+jiff.workspace = true
 derive-new.workspace = true
 derive_more.workspace = true
 hex.workspace = true

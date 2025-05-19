@@ -1,6 +1,6 @@
 use adapters::binance::{BinanceHttpUrl, BinanceOption};
-use chrono::DateTime;
 use derive_more::{Display, FromStr};
+use jiff::Timestamp;
 use serde::Deserialize;
 use serde_json::json;
 use v_utils::{
@@ -63,7 +63,7 @@ pub struct LsrResponse {
 impl From<LsrResponse> for Lsr {
 	fn from(r: LsrResponse) -> Self {
 		Self {
-			time: DateTime::from_timestamp_millis(r.timestamp).unwrap(),
+			time: Timestamp::from_millisecond(r.timestamp).unwrap(),
 			long: Percent::from_str(&r.long_account).unwrap(),
 		}
 	}

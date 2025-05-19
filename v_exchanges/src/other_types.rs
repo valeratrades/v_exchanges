@@ -1,10 +1,10 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::Deserialize;
 use v_utils::{Percent, prelude::*, trades::Pair};
 
 #[derive(Clone, Copy, Debug, Default, derive_more::Deref, derive_more::DerefMut, Deserialize, Serialize)]
 pub struct Lsr {
-	pub time: DateTime<Utc>,
+	pub time: Timestamp,
 	#[deref_mut]
 	#[deref]
 	pub long: Percent,
@@ -28,7 +28,7 @@ impl Lsr {
 impl From<f64> for Lsr {
 	fn from(f: f64) -> Self {
 		Self {
-			time: DateTime::default(),
+			time: Timestamp::default(),
 			long: Percent::from(f),
 		}
 	}

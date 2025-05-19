@@ -5,6 +5,7 @@ use std::{borrow::Cow, marker::PhantomData, time::SystemTime, vec};
 
 use generics::{AuthError, UrlError, tokio_tungstenite::tungstenite};
 use hmac::{Hmac, Mac};
+use jiff::Timestamp;
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::json;
@@ -456,7 +457,7 @@ impl WsHandler for BybitWsHandler {
 				ContentEvent {
 					topic: content.topic,
 					data: content.data,
-					time: DateTime::<Utc>::from_timestamp_millis(content.ts).unwrap(),
+					time: Timestamp::from_millisecond(content.ts).unwrap(),
 					event_type: content.event_type,
 				}
 			}

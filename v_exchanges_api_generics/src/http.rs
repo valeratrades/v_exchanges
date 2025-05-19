@@ -1,6 +1,7 @@
 use std::{fmt::Debug, path::PathBuf, sync::OnceLock, time::Duration};
 
 pub use bytes::Bytes;
+use jiff::Timestamp;
 use reqwest::Url;
 pub use reqwest::{
 	Method, Request, RequestBuilder, StatusCode,
@@ -271,7 +272,7 @@ pub enum ApiError {
 	#[error("IP has been timed out or banned until {until:?}")]
 	IpTimeout {
 		/// Time of unban
-		until: Option<DateTime<Utc>>,
+		until: Option<Timestamp>,
 	},
 	/// Errors that are a) specific to a particular exchange or b) should be handled by this crate, but are here for dev convenience
 	#[error("{0}")]

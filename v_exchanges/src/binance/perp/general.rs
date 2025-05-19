@@ -1,6 +1,6 @@
 use adapters::binance::{BinanceHttpUrl, BinanceOption};
-use chrono::DateTime;
 use eyre::Result;
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{DisplayFromStr, serde_as};
@@ -31,7 +31,7 @@ pub struct BinanceExchangeFutures {
 impl From<BinanceExchangeFutures> for ExchangeInfo {
 	fn from(v: BinanceExchangeFutures) -> Self {
 		Self {
-			server_time: DateTime::from_timestamp_millis(v.server_time).unwrap(),
+			server_time: Timestamp::from_millisecond(v.server_time).unwrap(),
 			pairs: v
 				.symbols
 				.into_iter()

@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use chrono::DateTime;
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
@@ -35,9 +35,11 @@ pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: B
 
 	let mut klines = VecDeque::with_capacity(kline_response.result.list.len());
 	for k in kline_response.result.list {
-		if kline_response.time > k.0 + tf.duration().num_milliseconds() {
+		if kline_response.time > k.0 + tf.duration().as_millis() as i64
+		/*take `as_millis`, so ok to downcast in all practical applications*/
+		{
 			klines.push_back(Kline {
-				open_time: DateTime::from_timestamp_millis(k.0).unwrap(),
+				open_time: Timestamp::from_millisecond(k.0).unwrap(),
 				ohlc: Ohlc {
 					open: k.1,
 					close: k.2,

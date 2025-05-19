@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
-use chrono::{DateTime, Utc};
 use eyre::Result;
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
@@ -38,9 +38,9 @@ pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: B
 	let r_len = kline_responses.len();
 	let mut klines = VecDeque::with_capacity(r_len);
 	for (i, k) in kline_responses.into_iter().enumerate() {
-		//HACK: have to check against [now](Utc::now) instead, because binance returns some dumb shit instead of actual close. Here structured this way in case they fix it in the future.
-		let close_time = Utc::now().timestamp_millis();
-		match close_time > k.open_time + (0.99 * tf.duration().num_milliseconds() as f64) as i64 {
+		//HACK: have to check against current time instead, because binance returns some dumb shit instead of actual close. Here structured this way in case they fix it in the future.
+		let close_time = Timestamp::now().as_millisecond();
+		match close_time > k.open_time + (0.99 * tf.duration().as_millis() as f64) as i64 {
 			true => {
 				let ohlc = Ohlc {
 					open: k.open,
@@ -49,7 +49,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: B
 					close: k.close,
 				};
 				klines.push_back(Kline {
-					open_time: DateTime::from_timestamp_millis(k.open_time).unwrap(),
+					open_time: Timestamp::from_millisecond(k.open_time).unwrap(),
 					ohlc,
 					volume_quote: k.quote_asset_volume,
 					trades: Some(k.number_of_trades),

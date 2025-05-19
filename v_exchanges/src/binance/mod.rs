@@ -9,7 +9,7 @@ use secrecy::SecretString;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::{
-	AssetBalance, Balances, Exchange, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Klines, MethodError, RequestRange, TradeEvent,
+	AssetBalance, Balances, Exchange, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Klines, MethodError, RequestRange, Trade,
 	core::{Instrument, Symbol},
 };
 
@@ -85,7 +85,7 @@ impl Exchange for Binance {
 		}
 	}
 
-	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = TradeEvent>>, ExchangeError> {
+	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = Trade>>, ExchangeError> {
 		match instrument {
 			Instrument::Perp | Instrument::Spot | Instrument::Margin => {
 				let connection = ws::TradesConnection::new(self, pairs, instrument)?;

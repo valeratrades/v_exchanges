@@ -2,7 +2,6 @@
 
 use std::{collections::HashSet, marker::PhantomData, str::FromStr, time::SystemTime};
 
-use chrono::{DateTime, Utc};
 use eyre::eyre;
 use generics::{
 	AuthError, UrlError,
@@ -11,6 +10,7 @@ use generics::{
 	ws::{ContentEvent, ResponseOrContent, Topic, WsConfig, WsError, WsHandler},
 };
 use hmac::{Hmac, Mac};
+use jiff::{SignedDuration, Timestamp};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
@@ -100,7 +100,7 @@ where
 				};
 				let e = match retry_after_sec {
 					Some(s) => {
-						let until = Some(Utc::now() + chrono::Duration::seconds(s as i64));
+						let until = Some(Timestamp::now() + SignedDuration::from_secs(s as i64));
 						ApiError::IpTimeout { until }.into()
 					}
 					_ => eyre!("Could't interpret Retry-After header").into(),
@@ -227,7 +227,7 @@ impl WsHandler for BinanceWsHandler {
 			let event_type = data["e"].as_str().unwrap().to_owned();
 			event_data.remove("e");
 			let event_ts: i64 = data["E"].as_i64().unwrap();
-			let event_time = DateTime::<Utc>::from_timestamp_millis(event_ts).unwrap();
+			let event_time = Timestamp::from_millisecond(event_ts).unwrap();
 			event_data.remove("E");
 			(event_type, event_time, event_data.into())
 		};

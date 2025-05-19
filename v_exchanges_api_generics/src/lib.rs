@@ -3,6 +3,7 @@
 #![feature(default_field_values)]
 #![feature(try_blocks)]
 #![feature(duration_constructors)]
+#![feature(duration_constructors_lite)]
 #![feature(let_chains)]
 #![allow(clippy::result_large_err)]
 

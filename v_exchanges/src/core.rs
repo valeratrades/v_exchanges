@@ -4,8 +4,8 @@ use adapters::{
 	Client,
 	generics::{http::RequestError, ws::WsError},
 };
-use chrono::{DateTime, TimeDelta, Utc};
 use derive_more::{Deref, DerefMut};
+use jiff::Timestamp;
 use secrecy::SecretString;
 use serde_json::json;
 use v_utils::{
@@ -99,7 +99,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	// Websocket {{{
 	// Start a websocket connection for individual trades
 	#[allow(unused_variables)]
-	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = TradeEvent>>> {
+	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>> {
 		unimplemented!();
 	}
 	//,}}}
@@ -137,7 +137,7 @@ pub enum MethodError {
 pub struct Oi {
 	pub lsr: f64,
 	pub total: f64,
-	pub timestamp: DateTime<Utc>,
+	pub timestamp: Timestamp,
 }
 
 //Q: maybe add a `vectorize` method? Should add, question is really if it should be returning a) df b) all fields, including optional and oi c) t, o, h, l, c, v
@@ -164,7 +164,7 @@ impl Iterator for Klines {
 #[derive(Clone, Copy, Debug)]
 pub enum RequestRange {
 	/// Preferred way of defining the range
-	StartEnd { start: DateTime<Utc>, end: Option<DateTime<Utc>> },
+	Span { since: Timestamp, until: Option<Timestamp> },
 	/// For quick and dirty
 	//TODO!: have it contain an enum, with either exact value, either just `Max`, then each exchange matches on it
 	Limit(u32),
@@ -172,12 +172,13 @@ pub enum RequestRange {
 impl RequestRange {
 	pub fn ensure_allowed(&self, allowed: std::ops::RangeInclusive<u32>, tf: &Timeframe) -> Result<(), RequestRangeError> {
 		match self {
-			RequestRange::StartEnd { start, end } =>
+			RequestRange::Span { since: start, until: end } =>
 				if let Some(end) = end {
 					if start > end {
 						return Err(eyre!("Start time is greater than end time").into());
 					}
-					let effective_limit = ((*end - start).num_milliseconds() / tf.duration().num_milliseconds()) as u32;
+					let effective_limit =
+						((*end - *start).get_milliseconds() / tf.duration().as_millis() as i64/*ok to downcast, because i64 will be sufficient for entirety of my lifetime*/) as u32;
 					if effective_limit > *allowed.end() {
 						return Err(OutOfRangeError::new(allowed, effective_limit).into());
 					}
@@ -202,9 +203,9 @@ impl RequestRange {
 
 	fn serialize_common(&self) -> serde_json::Value {
 		filter_nulls(match self {
-			RequestRange::StartEnd { start, end } => json!({
-				"startTime": start.timestamp_millis(),
-				"endTime": end.map(|dt| dt.timestamp_millis()),
+			RequestRange::Span { since: start, until: end } => json!({
+				"startTime": start.as_millisecond(),
+				"endTime": end.map(|dt| dt.as_millisecond()),
 			}),
 			RequestRange::Limit(limit) => json!({
 				"limit": limit,
@@ -214,22 +215,24 @@ impl RequestRange {
 }
 impl Default for RequestRange {
 	fn default() -> Self {
-		RequestRange::StartEnd {
-			start: DateTime::default(),
-			end: None,
+		RequestRange::Span {
+			since: Timestamp::default(),
+			until: None,
 		}
 	}
 }
-impl From<DateTime<Utc>> for RequestRange {
-	fn from(value: DateTime<Utc>) -> Self {
-		RequestRange::StartEnd { start: value, end: None }
+impl From<Timestamp> for RequestRange {
+	fn from(value: Timestamp) -> Self {
+		RequestRange::Span { since: value, until: None }
 	}
 }
-/// funky
-impl From<TimeDelta> for RequestRange {
-	fn from(value: TimeDelta) -> Self {
-		let now = Utc::now();
-		RequestRange::StartEnd { start: now - value, end: None }
+impl From<jiff::Span> for RequestRange {
+	fn from(time_delta: jiff::Span) -> Self {
+		let now = Timestamp::now();
+		RequestRange::Span {
+			since: now - time_delta,
+			until: None,
+		}
 	}
 }
 impl From<u32> for RequestRange {
@@ -252,16 +255,19 @@ impl From<u8> for RequestRange {
 		RequestRange::Limit(value as u32)
 	}
 }
-impl From<(DateTime<Utc>, DateTime<Utc>)> for RequestRange {
-	fn from(value: (DateTime<Utc>, DateTime<Utc>)) -> Self {
-		RequestRange::StartEnd { start: value.0, end: Some(value.1) }
+impl From<(Timestamp, Timestamp)> for RequestRange {
+	fn from(value: (Timestamp, Timestamp)) -> Self {
+		RequestRange::Span {
+			since: value.0,
+			until: Some(value.1),
+		}
 	}
 }
 impl From<(i64, i64)> for RequestRange {
 	fn from(value: (i64, i64)) -> Self {
-		RequestRange::StartEnd {
-			start: DateTime::from_timestamp_millis(value.0).unwrap(),
-			end: Some(DateTime::from_timestamp_millis(value.1).unwrap()),
+		RequestRange::Span {
+			since: Timestamp::from_millisecond(value.0).unwrap(),
+			until: Some(Timestamp::from_millisecond(value.1).unwrap()),
 		}
 	}
 }
@@ -327,7 +333,7 @@ pub struct Balances {
 // Exchange Info {{{
 #[derive(Clone, Debug, Default)]
 pub struct ExchangeInfo {
-	pub server_time: DateTime<Utc>,
+	pub server_time: Timestamp,
 	pub pairs: BTreeMap<Pair, PairInfo>,
 }
 impl ExchangeInfo {
@@ -446,21 +452,21 @@ pub trait SubscribeOrder {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct TradeEvent {
-	pub time: DateTime<Utc>,
+pub struct Trade {
+	pub time: Timestamp,
 	pub qty_asset: f64,
 	pub price: f64,
 }
 
 //dbg: placeholder, ignore contents
 pub struct BookSnapshot {
-	pub time: DateTime<Utc>,
+	pub time: Timestamp,
 	pub asks: Vec<(f64, f64)>,
 	pub bids: Vec<(f64, f64)>,
 }
 //dbg: placeholder, ignore contents
 pub struct BookDelta {
-	pub time: DateTime<Utc>,
+	pub time: Timestamp,
 	pub asks: Vec<(f64, f64)>,
 	pub bids: Vec<(f64, f64)>,
 }
