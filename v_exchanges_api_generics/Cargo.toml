@@ -23,6 +23,7 @@ derive-new.workspace = true
 derive_more.workspace = true
 eyre.workspace = true
 futures-util.workspace = true
+jiff.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -30,9 +31,8 @@ serde_urlencoded.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-v_utils.workspace = true
-jiff.workspace = true
 url.workspace = true
+v_utils.workspace = true
 
 bytes = "1.10.1"
 tokio-tungstenite = "^0.26.2"
@@ -42,9 +42,9 @@ native-tls = ["reqwest/native-tls", "tokio-tungstenite/native-tls"]
 native-tls-vendored = ["reqwest/native-tls-vendored", "tokio-tungstenite/native-tls-vendored"]
 rustls-tls-native-roots = [
     "reqwest/rustls-tls-native-roots",
-    "tokio-tungstenite/rustls-tls-native-roots"
+    "tokio-tungstenite/rustls-tls-native-roots",
 ]
 rustls-tls-webpki-roots = [
     "reqwest/rustls-tls-webpki-roots",
-    "tokio-tungstenite/rustls-tls-webpki-roots"
+    "tokio-tungstenite/rustls-tls-webpki-roots",
 ]
