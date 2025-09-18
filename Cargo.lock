@@ -2624,7 +2624,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -2649,7 +2649,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_adapters"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "derive-new",
  "derive_more",
@@ -2674,7 +2674,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_api_generics"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "bytes",
  "derive-new",
