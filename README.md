@@ -74,7 +74,6 @@ if you try the following with different `Exchange`s and `Instruments` encoded in
 - [crypto-botters](<https://github.com/negi-grass/crypto-botters>), from where I stole the entire `generic-api-client` (as `v_exchanges_api_generics`).
 - [binance-rs](<https://github.com/wisespace-io/binance-rs>), which provided a cheat-sheet for so many binance interactions and best-practices on testing.
 - [binance-spot-connector-rust](<https://github.com/binance/binance-spot-connector-rust>)
-- [ccxt](<https://docs.ccxt.com/#/>), which exposes an api with similar purposes
 
 
 <br>
