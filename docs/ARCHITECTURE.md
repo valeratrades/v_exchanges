@@ -31,16 +31,18 @@ Some exchanges provide specialized `data` endpoints. Those can't be part of `Exc
 Two mods:
 a) arbitrary exchange, determined at runtime
 ```rs
-let exchange_str = std::env::args().skip(1).next();
-let exchange_client = AbsMarket::from(exchange_str).client();
-let price = exchange_client.price(("BTC","USDT").into(), exchange_client.source_market()); //TODO: get rid of the need to submit abs market for all reqs, just market (ie `"Futs".into()`) should suffice
-println!("{price}");
+let mut args_iter = std::env::args().skip(1);
+let ticker: Ticker = match Ticker::from_str("binance:BTC-USDT.P").unwrap();
+let client = ticker.exchange_name.init_client();
+let klines: Klines = client.klines(ticker.symbol, "1m".into(), 2.into()).await.unwrap();
+println!("{klines}");
 ```
-b) want to work with specific exchange
+b) want to work with specific exchange, known at comp time
 ```rs
 use v_exchanges::Exchange as _;
-let mut binance = v_exchanges::Binance::default();
-let price = binance.price(("BTC","USDT").into(), "Binance/Futures".into()); //HACK: as you can see, current approach leads to tautology in this type of evocation. 
+let mut binance = ExchangeName::Binance.init_client();
+let symbol = Symbol::from_str("BTC-USDT.P").unwrap();
+let price = binance.price(symbol).await.unwrap();
 println!("{price}");
 ```
 Both should be equally seamless to work with (not the case as of (2025/04/01))

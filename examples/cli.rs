@@ -6,7 +6,7 @@ use v_exchanges::prelude::*;
 async fn main() {
 	v_utils::clientside!();
 
-	let mut args_iter = std::env::args().skip(1);
+	let mut args_iter = std::env::args().skip(1); // eg "binance:BTC-USDT.P"
 	let ticker: Ticker = match Ticker::from_str(&args_iter.next().unwrap()) {
 		Ok(m) => m,
 		Err(e) => {
