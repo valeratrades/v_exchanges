@@ -80,6 +80,10 @@ name = "cli"
 path = "../examples/cli.rs"
 
 [[example]]
+name = "data"
+path = "../examples/data.rs"
+
+[[example]]
 name = "binance_market_perp"
 required-features = ["binance"]
 path = "../examples/binance/market_perp.rs"
