@@ -1,5 +1,4 @@
 #![feature(array_try_map)]
-#![feature(doc_auto_cfg)]
 #![feature(formatting_options)]
 #![feature(try_blocks)]
 
