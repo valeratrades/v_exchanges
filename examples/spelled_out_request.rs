@@ -6,7 +6,7 @@ async fn main() {
 	let hype: serde_json::Value = client
 		.get(
 			"/v5/market/account-ratio",
-			&[("category", "linear"), ("symbol", "HYPEUSDC"), ("period", "1h"), ("limit", "50")], //TODO!!!!!!: add this `5min` repr thing to Bybit tf type
+			&[("category", "linear"), ("symbol", "BTCUSDT"), ("period", "1h"), ("limit", "50")], //TODO!!!!!!: add this `5min` repr thing to Bybit tf type
 			[BybitOption::None],
 		)
 		.await
