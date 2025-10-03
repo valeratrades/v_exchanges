@@ -11,10 +11,8 @@ use serde_json::json;
 use v_utils::{
 	prelude::*,
 	trades::{Asset, Kline, Pair, Timeframe, Usd},
-	utils::filter_nulls,
+	utils::{define_str_enum, filter_nulls},
 };
-
-use crate::define_str_enum;
 
 /// Main trait for all standardized exchange interactions
 ///

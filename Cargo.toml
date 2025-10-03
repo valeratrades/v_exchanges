@@ -15,7 +15,7 @@ get_first = "allow" # const fn, so actually more performant
 get_last_with_len = "allow"
 
 [workspace.dependencies]
-v_utils = { version = "^2.6.5" }#, path = "../v_utils/v_utils" } #ga: rm path
+v_utils = { version = "^2.6.5" , path = "../v_utils/v_utils" } #ga: rm path
 futures-util = "^0.3.31"
 reqwest = { version = "^0.12.15", features = ["blocking", "json"] }
 serde = { version = "^1.0.219", features = ["derive"] }
