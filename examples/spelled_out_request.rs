@@ -1,4 +1,4 @@
-use v_exchanges_adapters::{Client, bybit::BybitOption};
+use v_exchanges::adapters::{Client, bybit::BybitOption};
 
 #[tokio::main]
 async fn main() {
