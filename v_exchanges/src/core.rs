@@ -9,9 +9,10 @@ use jiff::Timestamp;
 use secrecy::SecretString;
 use serde_json::json;
 use v_utils::{
+	define_str_enum,
 	prelude::*,
 	trades::{Asset, Kline, Pair, Timeframe, Usd},
-	utils::{define_str_enum, filter_nulls},
+	utils::filter_nulls,
 };
 
 /// Main trait for all standardized exchange interactions
