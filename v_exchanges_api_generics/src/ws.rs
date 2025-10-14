@@ -20,7 +20,7 @@ use crate::{AuthError, UrlError};
 type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 /// handle exchange-level events on the [WsConnection].
-pub trait WsHandler {
+pub trait WsHandler: std::fmt::Debug {
 	/// Returns a [WsConfig] that will be applied for all WebSocket connections handled by this handler.
 	fn config(&self) -> Result<WsConfig, UrlError> {
 		Ok(WsConfig::default())
@@ -109,6 +109,7 @@ impl<T> PartialEq for TopicInterpreter<T> {
 }
 
 /// Main way to interact with the WebSocket APIs.
+#[derive(Debug)]
 pub struct WsConnection<H: WsHandler> {
 	url: Url,
 	config: WsConfig,

@@ -10,7 +10,7 @@ use v_utils::trades::Pair;
 use crate::{ExchangeStream, Instrument, Trade};
 
 // trades {{{
-#[derive(derive_more::Deref, derive_more::DerefMut)]
+#[derive(derive_more::Deref, derive_more::DerefMut, Debug)]
 pub struct TradesConnection {
 	#[deref]
 	#[deref_mut]
