@@ -63,4 +63,5 @@ impl Exchange for Bybit {
 	}
 }
 
-crate::define_provider_timeframe!(BybitTimeframe, ["1", "3", "5", "15", "30", "60", "120", "240", "360", "720", "D", "W", "M"]);
+crate::define_provider_timeframe!(BybitInterval, ["1", "3", "5", "15", "30", "60", "120", "240", "360", "720", "D", "W", "M"]);
+crate::define_provider_timeframe!(BybitIntervalTime, ["5min", "15min", "30min", "1h", "4h", "1d"]);

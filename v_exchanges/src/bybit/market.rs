@@ -10,14 +10,14 @@ use v_utils::{
 	utils::filter_nulls,
 };
 
-use super::BybitTimeframe;
+use super::{BybitInterval, BybitIntervalTime};
 use crate::{
 	ExchangeName, ExchangeResult, Symbol,
 	core::{Klines, OpenInterest, RequestRange},
 };
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitTimeframe, range: RequestRange) -> ExchangeResult<Klines> {
+pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitInterval, range: RequestRange) -> ExchangeResult<Klines> {
 	range.ensure_allowed(1..=1000, &tf)?;
 	let range_json = range.serialize(ExchangeName::Bybit);
 	let base_params = filter_nulls(json!({
@@ -157,7 +157,7 @@ pub struct MarketTickerData {
 //,}}}
 
 // open_interest {{{
-pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitTimeframe, range: RequestRange) -> ExchangeResult<OpenInterest> {
+pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitIntervalTime, range: RequestRange) -> ExchangeResult<OpenInterest> {
 	range.ensure_allowed(1..=200, &tf)?;
 	let range_json = range.serialize(ExchangeName::Bybit);
 	let base_params = filter_nulls(json!({
