@@ -11,7 +11,7 @@ use v_utils::trades::{Kline, Ohlc};
 use super::BinanceTimeframe;
 use crate::{
 	ExchangeError, ExchangeName, Instrument, Symbol,
-	core::{Klines, RequestRange},
+	core::{Klines, OpenInterest, RequestRange},
 	utils::join_params,
 };
 
@@ -94,6 +94,52 @@ pub struct KlineResponse {
 	pub taker_buy_quote_asset_volume: f64,
 
 	__ignore: Option<Value>,
+}
+//,}}}
+
+// open_interest {{{
+pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BinanceTimeframe, range: RequestRange) -> Result<OpenInterest, ExchangeError> {
+	range.ensure_allowed(1..=500, tf.as_ref())?;
+	let range_params = range.serialize(ExchangeName::Binance);
+	let base_params = json!({
+		"symbol": symbol.pair.fmt_binance(),
+		"period": tf.to_string(),
+	});
+	let params = join_params(base_params, range_params);
+
+	let (endpoint, base_url) = match symbol.instrument {
+		Instrument::Perp => ("/futures/data/openInterestHist", BinanceHttpUrl::FuturesUsdM),
+		_ => return Err(ExchangeError::Method(crate::MethodError::MethodNotSupported {
+			exchange: ExchangeName::Binance,
+			instrument: symbol.instrument,
+		})),
+	};
+
+	let responses: Vec<OpenInterestResponse> = client.get(endpoint, &params, [BinanceOption::HttpUrl(base_url)]).await?;
+
+	// Return the most recent open interest value
+	if let Some(latest) = responses.last() {
+		Ok(OpenInterest {
+			val_quote: latest.sum_open_interest_value,
+			val_asset: latest.sum_open_interest,
+			timestamp: Timestamp::from_millisecond(latest.timestamp).unwrap(),
+		})
+	} else {
+		Err(ExchangeError::Other(eyre::eyre!("No open interest data returned")))
+	}
+}
+
+#[serde_as]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenInterestResponse {
+	#[serde_as(as = "DisplayFromStr")]
+	pub symbol: String,
+	#[serde_as(as = "DisplayFromStr")]
+	pub sum_open_interest: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub sum_open_interest_value: f64,
+	pub timestamp: i64,
 }
 //,}}}
 

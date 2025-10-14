@@ -13,7 +13,7 @@ use v_utils::{
 use super::BybitTimeframe;
 use crate::{
 	ExchangeName, ExchangeResult, Symbol,
-	core::{Klines, RequestRange},
+	core::{Klines, OpenInterest, RequestRange},
 };
 
 // klines {{{
@@ -153,5 +153,66 @@ pub struct MarketTickerData {
 	pub ask1_price: f64,
 	#[serde_as(as = "DisplayFromStr")]
 	pub ask1_size: f64,
+}
+//,}}}
+
+// open_interest {{{
+pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitTimeframe, range: RequestRange) -> ExchangeResult<OpenInterest> {
+	range.ensure_allowed(1..=200, &tf)?;
+	let range_json = range.serialize(ExchangeName::Bybit);
+	let base_params = filter_nulls(json!({
+		"category": "linear",
+		"symbol": symbol.pair.fmt_bybit(),
+		"intervalTime": tf.to_string(),
+	}));
+
+	let mut base_map = base_params.as_object().unwrap().clone();
+	let range_map = range_json.as_object().unwrap();
+	base_map.extend(range_map.clone());
+	let params = filter_nulls(serde_json::Value::Object(base_map));
+
+	let response: OpenInterestResponse = client.get("/v5/market/open-interest", &params, [BybitOption::None]).await?;
+
+	// Return the most recent open interest value
+	if let Some(latest) = response.result.list.first() {
+		Ok(OpenInterest {
+			val_quote: latest.open_interest_value,
+			val_asset: latest.open_interest,
+			timestamp: Timestamp::from_millisecond(latest.timestamp).unwrap(),
+		})
+	} else {
+		Err(crate::ExchangeError::Other(eyre::eyre!("No open interest data returned")))
+	}
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenInterestResponse {
+	pub ret_code: i32,
+	pub ret_msg: String,
+	pub result: OpenInterestResult,
+	pub ret_ext_info: std::collections::HashMap<String, Value>,
+	pub time: i64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenInterestResult {
+	pub symbol: String,
+	pub category: String,
+	pub list: Vec<OpenInterestData>,
+	pub next_page_cursor: String,
+}
+
+#[serde_as]
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenInterestData {
+	#[serde_as(as = "DisplayFromStr")]
+	pub open_interest: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub timestamp: i64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub open_interest_value: f64,
 }
 //,}}}

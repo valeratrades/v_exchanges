@@ -15,16 +15,17 @@ async fn main() {
 
 	let klines = binance.klines(symbol, "1m".into(), 2.into()).await.unwrap();
 	let price = binance.price(symbol).await.unwrap();
-	dbg!(&klines, price);
+	let open_interest = binance.open_interest(symbol, "1h".into(), 5.into()).await.unwrap();
+	dbg!(&klines, price, &open_interest);
 
-	if let (Ok(key), Ok(secret)) = (env::var("BINANCE_TIGER_READ_KEY"), env::var("BINANCE_TIGER_READ_SECRET")) {
+	if let (Ok(key), Ok(secret)) = (env::var("BINANCE_TIGER_READ_PUBKEY"), env::var("BINANCE_TIGER_READ_SECRET")) {
 		binance.auth(key, secret.into());
 		let balance_usdt = binance.asset_balance("USDT".into(), Some(10_000), symbol.instrument).await.unwrap();
 		dbg!(&balance_usdt);
 		let balances = binance.balances(Some(10_000), symbol.instrument).await.unwrap();
 		dbg!(&balances);
 	} else {
-		eprintln!("BINANCE_TIGER_READ_KEY or BINANCE_TIGER_READ_SECRET is missing, skipping private API methods.");
+		eprintln!("BINANCE_TIGER_READ_PUBKEY or BINANCE_TIGER_READ_SECRET is missing, skipping private API methods.");
 	}
 }
 

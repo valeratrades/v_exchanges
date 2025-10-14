@@ -13,6 +13,8 @@ async fn main() {
 	println!("{klines:?}");
 	let price = client.price(symbol).await.unwrap();
 	println!("{price:?}");
+	let open_interest = client.open_interest(symbol, "1h".into(), 5.into()).await.unwrap();
+	println!("{open_interest:?}");
 
 	if let (Ok(pubkey), Ok(secret)) = (env::var("BYBIT_TIGER_READ_PUBKEY"), env::var("BYBIT_TIGER_READ_SECRET")) {
 		client.auth(pubkey, secret.into());

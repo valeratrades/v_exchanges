@@ -68,6 +68,16 @@ impl Exchange for Binance {
 		}
 	}
 
+	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<crate::core::OpenInterest> {
+		match symbol.instrument {
+			Instrument::Perp => market::open_interest(self, symbol, tf.try_into()?, range).await,
+			_ => Err(ExchangeError::Method(MethodError::MethodNotSupported {
+				exchange: self.name(),
+				instrument: symbol.instrument,
+			})),
+		}
+	}
+
 	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, instrument: Instrument) -> ExchangeResult<AssetBalance> {
 		match instrument {
 			Instrument::Perp => perp::account::asset_balance(self, asset, recv_window).await,
