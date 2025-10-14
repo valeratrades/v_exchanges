@@ -77,6 +77,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	}
 
 	/// Get Open Interest data
+	/// in output vec: greater the index, fresher the data
 	#[allow(unused_variables)]
 	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported {
