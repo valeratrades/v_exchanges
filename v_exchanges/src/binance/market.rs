@@ -62,7 +62,7 @@ pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: B
 			},
 		}
 	}
-	Ok(Klines::new(klines, *tf, Vec::new()))
+	Ok(Klines::new(klines, *tf))
 }
 
 /** # Ex: ```json

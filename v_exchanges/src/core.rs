@@ -76,6 +76,15 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 		}))
 	}
 
+	/// Get Open Interest data
+	#[allow(unused_variables)]
+	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<OpenInterest> {
+		Err(ExchangeError::Method(MethodError::MethodNotSupported {
+			exchange: self.name(),
+			instrument: symbol.instrument,
+		}))
+	}
+
 	// Authenticated {{{
 	/// balance of a specific asset. Does not guarantee provision of USD values.
 	#[allow(unused_variables)]
@@ -131,25 +140,29 @@ pub enum MethodError {
 }
 //,}}}
 
-// Klines {{{
+// Open Interest {{{
 #[derive(Clone, Copy, Debug, Default)]
-pub struct Oi {
-	pub lsr: f64,
-	pub total: f64,
+pub struct OpenInterest {
+	pub val_quote: f64,
+	pub val_asset: f64,
 	pub timestamp: Timestamp,
 }
+//,}}}
+
+// Klines {{{
 
 //Q: maybe add a `vectorize` method? Should add, question is really if it should be returning a) df b) all fields, including optional and oi c) t, o, h, l, c, v
 // probably should figure out rust-typed dataframes for this first
 /// Does not have any gaps in the data, (as klines are meant to be indexed naively when used). TODO: enforce this.
+///
+/// # Arch
+/// the greater the index, the newer the value
 #[derive(Clone, Debug, Default, Deref, DerefMut, derive_new::new)]
 pub struct Klines {
 	#[deref_mut]
 	#[deref]
 	pub v: VecDeque<Kline>,
 	pub tf: Timeframe,
-	/// Doesn't have to be synchronized with klines; each track has its own timestamps.
-	pub oi: Vec<Oi>,
 }
 impl Iterator for Klines {
 	type Item = Kline;
@@ -158,6 +171,7 @@ impl Iterator for Klines {
 		self.v.pop_front()
 	}
 }
+//,}}}
 
 // RequestRange {{{
 #[derive(Clone, Copy, Debug)]
@@ -438,7 +452,7 @@ impl std::str::FromStr for Symbol {
 		Ok(Symbol { pair, instrument })
 	}
 }
-impl From<&str>  for Symbol {
+impl From<&str> for Symbol {
 	fn from(s: &str) -> Self {
 		Self::from_str(s).unwrap()
 	}
