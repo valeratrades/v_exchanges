@@ -234,6 +234,11 @@ impl From<jiff::Span> for RequestRange {
 		}
 	}
 }
+impl From<usize> for RequestRange {
+	fn from(value: usize) -> Self {
+		RequestRange::Limit(value as u32)
+	}
+}
 impl From<u32> for RequestRange {
 	fn from(value: u32) -> Self {
 		RequestRange::Limit(value)
