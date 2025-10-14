@@ -237,11 +237,11 @@ impl WsHandler for MexcWsHandler {
 		Ok(config)
 	}
 
-	fn handle_jrpc(&mut self, jrpc: serde_json::Value) -> Result<ResponseOrContent, WsError> {
+	fn handle_jrpc(&mut self, _jrpc: serde_json::Value) -> Result<ResponseOrContent, WsError> {
 		todo!();
 	}
 
-	fn handle_subscribe(&mut self, topics: HashSet<Topic>) -> Result<Vec<generics::tokio_tungstenite::tungstenite::Message>, WsError> {
+	fn handle_subscribe(&mut self, _topics: HashSet<Topic>) -> Result<Vec<generics::tokio_tungstenite::tungstenite::Message>, WsError> {
 		todo!()
 	}
 }

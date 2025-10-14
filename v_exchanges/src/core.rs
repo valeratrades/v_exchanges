@@ -141,10 +141,14 @@ pub enum MethodError {
 //,}}}
 
 // Open Interest {{{
+/// most exchanges default to returning OI value in asset quantity, not quote. Exception would be Inverse on Bybit.
+/// Which actually makes sense, as same endpoints accept things like "BTCETH", where quote value would be irrelevant.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct OpenInterest {
-	pub val_quote: f64,
 	pub val_asset: f64,
+	pub val_quote: Option<f64>,
+	/// Binance's /futures/data/openInterestHist returns CMC's MC as well
+	pub marketcap: Option<f64>,
 	pub timestamp: Timestamp,
 }
 //,}}}

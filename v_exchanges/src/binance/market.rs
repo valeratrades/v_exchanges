@@ -109,10 +109,11 @@ pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol
 
 	let (endpoint, base_url) = match symbol.instrument {
 		Instrument::Perp => ("/futures/data/openInterestHist", BinanceHttpUrl::FuturesUsdM),
-		_ => return Err(ExchangeError::Method(crate::MethodError::MethodNotSupported {
-			exchange: ExchangeName::Binance,
-			instrument: symbol.instrument,
-		})),
+		_ =>
+			return Err(ExchangeError::Method(crate::MethodError::MethodNotSupported {
+				exchange: ExchangeName::Binance,
+				instrument: symbol.instrument,
+			})),
 	};
 
 	let responses: Vec<OpenInterestResponse> = client.get(endpoint, &params, [BinanceOption::HttpUrl(base_url)]).await?;
@@ -120,8 +121,9 @@ pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol
 	// Return the most recent open interest value
 	if let Some(latest) = responses.last() {
 		Ok(OpenInterest {
-			val_quote: latest.sum_open_interest_value,
 			val_asset: latest.sum_open_interest,
+			val_quote: Some(latest.sum_open_interest_value),
+			marketcap: Some(latest.cmc_circulating_supply),
 			timestamp: Timestamp::from_millisecond(latest.timestamp).unwrap(),
 		})
 	} else {
@@ -139,6 +141,9 @@ pub struct OpenInterestResponse {
 	pub sum_open_interest: f64,
 	#[serde_as(as = "DisplayFromStr")]
 	pub sum_open_interest_value: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	#[serde(rename = "CMCCirculatingSupply")]
+	pub cmc_circulating_supply: f64,
 	pub timestamp: i64,
 }
 //,}}}

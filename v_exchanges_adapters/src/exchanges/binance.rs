@@ -162,8 +162,8 @@ impl WsHandler for BinanceWsHandler {
 		if self.options.ws_config.auth {
 			//TODO: implement ws auth once I can acquire ed25519 keys: https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-api-general-info#log-in-with-api-key-signed
 
-			let pubkey = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
-			let secret = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
+			let _pubkey = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
+			let _secret = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
 
 			//TODO!!!: auth for binance
 			/*
@@ -195,7 +195,7 @@ impl WsHandler for BinanceWsHandler {
 			.into_iter()
 			.filter_map(|topic| if let Topic::Order(v) = topic { Some(v) } else { None })
 			.collect::<Vec<_>>();
-		for o in order_topics {
+		for _o in order_topics {
 			todo!();
 		}
 

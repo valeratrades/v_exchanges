@@ -279,7 +279,7 @@ impl<H: WsHandler> WsConnection<H> {
 						tracing::warn!("received `tungstenite::Error::Io` from polling: {e:?}. Likely indicates connection issues. Skipping.");
 						continue;
 					}
-					tungstenite::Error::Tls(tls_error) => todo!(),
+					tungstenite::Error::Tls(_tls_error) => todo!(),
 					tungstenite::Error::Capacity(capacity_error) => {
 						tracing::warn!("received `tungstenite::Error::Capacity` from polling: {capacity_error:?}. Skipping.");
 						continue;
@@ -294,9 +294,9 @@ impl<H: WsHandler> WsConnection<H> {
 						self.stream = None;
 						continue;
 					}
-					tungstenite::Error::Url(url_error) => todo!(),
-					tungstenite::Error::Http(response) => todo!(),
-					tungstenite::Error::HttpFormat(error) => todo!(),
+					tungstenite::Error::Url(_url_error) => todo!(),
+					tungstenite::Error::Http(_response) => todo!(),
+					tungstenite::Error::HttpFormat(_error) => todo!(),
 				},
 			}
 		};

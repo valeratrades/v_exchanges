@@ -1,8 +1,9 @@
 use adapters::Client;
-use eyre::{Result, eyre};
+use eyre::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{DisplayFromStr, serde_as};
+use tracing::warn;
 use v_exchanges_adapters::bybit::{BybitHttpAuth, BybitOption};
 use v_utils::{macros::ScreamIt, trades::Asset};
 
@@ -14,8 +15,11 @@ use crate::{
 pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, recv_window: Option<u16>) -> ExchangeResult<AssetBalance> {
 	assert!(client.is_authenticated::<BybitOption>());
 	let balances: Balances = balances(client, recv_window).await?;
-	let balance: &AssetBalance = balances.iter().find(|b| b.asset == asset).ok_or_else(|| eyre!("No balance found for asset: {:?}", asset))?;
-	Ok(*balance)
+	let balance: AssetBalance = balances.iter().find(|b| b.asset == asset).copied().unwrap_or_else(|| {
+		warn!("No balance found for asset: {:?}", asset);
+		AssetBalance { asset, ..Default::default() }
+	});
+	Ok(balance)
 }
 
 /// Should be calling https://bybit-exchange.github.io/docs/v5/asset/balance/all-balance, but with how I'm registered on bybit, my key doesn't have permissions for that (they require it to be able to `transfer` for some reason)

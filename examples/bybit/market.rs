@@ -16,11 +16,14 @@ async fn main() {
 	let open_interest = client.open_interest(symbol, "1h".into(), 5.into()).await.unwrap();
 	println!("{open_interest:?}");
 
-	if let (Ok(pubkey), Ok(secret)) = (env::var("BYBIT_TIGER_READ_PUBKEY"), env::var("BYBIT_TIGER_READ_SECRET")) {
+	let keys_prefix = "QUANTM_BYBIT_SUB";
+	let pubkey_name = format!("{keys_prefix}_PUBKEY");
+	let secret_name = format!("{keys_prefix}_SECRET");
+	if let (Ok(pubkey), Ok(secret)) = (env::var(&pubkey_name), env::var(&secret_name)) {
 		client.auth(pubkey, secret.into());
 		private(&client, symbol).await;
 	} else {
-		eprintln!("BYBIT_TIGER_READ_KEY or BYBIT_TIGER_READ_SECRET is missing, skipping private API methods.");
+		eprintln!("{pubkey_name} or {secret_name} is missing, skipping private API methods.");
 	}
 }
 

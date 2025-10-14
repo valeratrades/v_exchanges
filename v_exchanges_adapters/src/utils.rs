@@ -5,7 +5,7 @@ use secrecy::{ExposeSecret as _, SecretString};
 use sha2::Sha256;
 
 #[deprecated(note = "it doesn't even make sense in the first place")]
-pub fn hmac_sign_key(pubkey: &str, secret: &SecretString) -> String {
+pub fn hmac_sign_key(_pubkey: &str, secret: &SecretString) -> String {
 	let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("always after the epoch");
 	let expires = time.as_millis() as u64 + 1000;
 

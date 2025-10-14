@@ -132,7 +132,7 @@ pub enum BybitHandlerError {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 struct BybitError {
-	code: i16,
+	code: i32,
 	msg: String,
 }
 impl From<BybitError> for ApiError {
@@ -190,8 +190,31 @@ where
 
 	fn handle_response(&self, status: StatusCode, _: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError> {
 		if status.is_success() {
-			serde_json::from_slice(&response_body).map_err(|error| {
+			// Bybit returns HTTP 200 even for API errors, so we need to check retCode
+			// First, try to parse as a generic response to check for errors
+			let value: serde_json::Value = serde_json::from_slice(&response_body).map_err(|error| {
 				tracing::debug!("Failed to parse response due to an error: {}", error);
+				HandleError::Parse(error)
+			})?;
+
+			// Check if response contains retCode field (V3/V5 API format)
+			if let Some(ret_code) = value.get("retCode").and_then(|v| v.as_i64()) {
+				if ret_code != 0 {
+					// Non-zero retCode indicates an error
+					let ret_msg = value.get("retMsg")
+						.and_then(|v| v.as_str())
+						.unwrap_or("Unknown error");
+					let error = BybitError {
+						code: ret_code as i32,
+						msg: ret_msg.to_string(),
+					};
+					return Err(ApiError::from(error).into());
+				}
+			}
+
+			// No error, deserialize to the expected type
+			serde_json::from_value(value).map_err(|error| {
+				tracing::debug!("Failed to parse successful response due to an error: {}", error);
 				HandleError::Parse(error)
 			})
 		} else {

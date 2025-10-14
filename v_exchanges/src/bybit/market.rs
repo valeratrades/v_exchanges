@@ -12,7 +12,7 @@ use v_utils::{
 
 use super::{BybitInterval, BybitIntervalTime};
 use crate::{
-	ExchangeName, ExchangeResult, Symbol,
+	ExchangeName, ExchangeResult, Instrument, Symbol,
 	core::{Klines, OpenInterest, RequestRange},
 };
 
@@ -160,6 +160,7 @@ pub struct MarketTickerData {
 pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitIntervalTime, range: RequestRange) -> ExchangeResult<OpenInterest> {
 	range.ensure_allowed(1..=200, &tf)?;
 	let range_json = range.serialize(ExchangeName::Bybit);
+
 	let base_params = filter_nulls(json!({
 		"category": "linear",
 		"symbol": symbol.pair.fmt_bybit(),
@@ -175,10 +176,30 @@ pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol
 
 	// Return the most recent open interest value
 	if let Some(latest) = response.result.list.first() {
+		let (val_asset, val_quote) = match symbol.instrument {
+			Instrument::PerpInverse => {
+				// as of (2025/10/14), Bybit returns value in `quote` for Inverse and in `asset` for Linear reqs
+				let val_quote = latest.open_interest;
+				let price = {
+					let params = filter_nulls(json!({
+						"category": "linear",
+						"symbol": symbol.pair.fmt_bybit(),
+					}));
+					let response: MarketTickerResponse = client.get("/v5/market/tickers", &params, [BybitOption::None]).await?;
+					response.result.list[0].last_price
+				};
+				let val_asset = val_quote / price;
+				(val_asset, Some(val_quote))
+			}
+			Instrument::Perp => (latest.open_interest, None),
+			_ => unreachable!(),
+		};
+
 		Ok(OpenInterest {
-			val_quote: latest.open_interest_value,
-			val_asset: latest.open_interest,
+			val_asset,
+			val_quote,
 			timestamp: Timestamp::from_millisecond(latest.timestamp).unwrap(),
+			..Default::default()
 		})
 	} else {
 		Err(crate::ExchangeError::Other(eyre::eyre!("No open interest data returned")))
@@ -212,7 +233,5 @@ pub struct OpenInterestData {
 	pub open_interest: f64,
 	#[serde_as(as = "DisplayFromStr")]
 	pub timestamp: i64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub open_interest_value: f64,
 }
 //,}}}
