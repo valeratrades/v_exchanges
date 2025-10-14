@@ -438,6 +438,11 @@ impl std::str::FromStr for Symbol {
 		Ok(Symbol { pair, instrument })
 	}
 }
+impl From<&str>  for Symbol {
+	fn from(s: &str) -> Self {
+		Self::from_str(s).unwrap()
+	}
+}
 //,}}}
 
 // Websocket {{{
