@@ -157,7 +157,7 @@ pub struct MarketTickerData {
 //,}}}
 
 // open_interest {{{
-pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitIntervalTime, range: RequestRange) -> ExchangeResult<OpenInterest> {
+pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitIntervalTime, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
 	range.ensure_allowed(1..=200, &tf)?;
 	let range_json = range.serialize(ExchangeName::Bybit);
 
@@ -174,36 +174,46 @@ pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol
 
 	let response: OpenInterestResponse = client.get("/v5/market/open-interest", &params, [BybitOption::None]).await?;
 
-	// Return the most recent open interest value
-	if let Some(latest) = response.result.list.first() {
+	if response.result.list.is_empty() {
+		return Err(crate::ExchangeError::Other(eyre::eyre!("No open interest data returned")));
+	}
+
+	// For PerpInverse, we need to fetch the price to convert
+	let price = if symbol.instrument == Instrument::PerpInverse {
+		let params = filter_nulls(json!({
+			"category": "linear",
+			"symbol": symbol.pair.fmt_bybit(),
+		}));
+		let ticker_response: MarketTickerResponse = client.get("/v5/market/tickers", &params, [BybitOption::None]).await?;
+		Some(ticker_response.result.list[0].last_price)
+	} else {
+		None
+	};
+
+	// Convert all data points to OpenInterest
+	let mut result = Vec::with_capacity(response.result.list.len());
+	for data in response.result.list {
 		let (val_asset, val_quote) = match symbol.instrument {
 			Instrument::PerpInverse => {
 				// as of (2025/10/14), Bybit returns value in `quote` for Inverse and in `asset` for Linear reqs
-				let val_quote = latest.open_interest;
-				let price = {
-					let params = filter_nulls(json!({
-						"category": "linear",
-						"symbol": symbol.pair.fmt_bybit(),
-					}));
-					let response: MarketTickerResponse = client.get("/v5/market/tickers", &params, [BybitOption::None]).await?;
-					response.result.list[0].last_price
-				};
+				let val_quote = data.open_interest;
+				let price = price.expect("price should be set for PerpInverse");
 				let val_asset = val_quote / price;
 				(val_asset, Some(val_quote))
 			}
-			Instrument::Perp => (latest.open_interest, None),
+			Instrument::Perp => (data.open_interest, None),
 			_ => unreachable!(),
 		};
 
-		Ok(OpenInterest {
+		result.push(OpenInterest {
 			val_asset,
 			val_quote,
-			timestamp: Timestamp::from_millisecond(latest.timestamp).unwrap(),
+			timestamp: Timestamp::from_millisecond(data.timestamp).unwrap(),
 			..Default::default()
-		})
-	} else {
-		Err(crate::ExchangeError::Other(eyre::eyre!("No open interest data returned")))
+		});
 	}
+
+	Ok(result)
 }
 
 #[derive(Debug, Deserialize, Serialize)]

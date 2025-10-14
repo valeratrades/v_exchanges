@@ -7,7 +7,7 @@ use v_exchanges_adapters::Client;
 use v_utils::trades::{Asset, Timeframe};
 
 use crate::{
-	Balances, ExchangeName, ExchangeResult, Instrument, Symbol,
+	Balances, ExchangeName, ExchangeResult, Instrument, OpenInterest, Symbol,
 	core::{AssetBalance, Exchange, Klines, RequestRange},
 };
 
@@ -44,7 +44,7 @@ impl Exchange for Bybit {
 		}
 	}
 
-	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<crate::core::OpenInterest> {
+	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
 		match symbol.instrument {
 			Instrument::Perp => market::open_interest(self, symbol, tf.try_into()?, range).await,
 			_ => Err(crate::ExchangeError::Method(crate::MethodError::MethodNotSupported {

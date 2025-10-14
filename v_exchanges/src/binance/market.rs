@@ -98,7 +98,7 @@ pub struct KlineResponse {
 //,}}}
 
 // open_interest {{{
-pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BinanceTimeframe, range: RequestRange) -> Result<OpenInterest, ExchangeError> {
+pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BinanceTimeframe, range: RequestRange) -> Result<Vec<OpenInterest>, ExchangeError> {
 	range.ensure_allowed(1..=500, tf.as_ref())?;
 	let range_params = range.serialize(ExchangeName::Binance);
 	let base_params = json!({
@@ -118,17 +118,22 @@ pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol
 
 	let responses: Vec<OpenInterestResponse> = client.get(endpoint, &params, [BinanceOption::HttpUrl(base_url)]).await?;
 
-	// Return the most recent open interest value
-	if let Some(latest) = responses.last() {
-		Ok(OpenInterest {
-			val_asset: latest.sum_open_interest,
-			val_quote: Some(latest.sum_open_interest_value),
-			marketcap: Some(latest.cmc_circulating_supply),
-			timestamp: Timestamp::from_millisecond(latest.timestamp).unwrap(),
-		})
-	} else {
-		Err(ExchangeError::Other(eyre::eyre!("No open interest data returned")))
+	if responses.is_empty() {
+		return Err(ExchangeError::Other(eyre::eyre!("No open interest data returned")));
 	}
+
+	// Convert all responses to OpenInterest
+	let result: Vec<OpenInterest> = responses
+		.into_iter()
+		.map(|r| OpenInterest {
+			val_asset: r.sum_open_interest,
+			val_quote: Some(r.sum_open_interest_value),
+			marketcap: Some(r.cmc_circulating_supply),
+			timestamp: Timestamp::from_millisecond(r.timestamp).unwrap(),
+		})
+		.collect();
+
+	Ok(result)
 }
 
 #[serde_as]

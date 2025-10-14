@@ -68,7 +68,7 @@ impl Exchange for Binance {
 		}
 	}
 
-	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<crate::core::OpenInterest> {
+	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<crate::core::OpenInterest>> {
 		match symbol.instrument {
 			Instrument::Perp => market::open_interest(self, symbol, tf.try_into()?, range).await,
 			_ => Err(ExchangeError::Method(MethodError::MethodNotSupported {
