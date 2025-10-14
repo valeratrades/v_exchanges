@@ -2,7 +2,7 @@ cargo-features = ["codegen-backend"]
 
 [package]
 name = "v_exchanges"
-version = "0.11.10"
+version = "0.12.0"
 edition = "2024"
 
 authors = ["negi-grass", "valeratrades"]
@@ -26,7 +26,7 @@ ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
 
 [dependencies]
 enum_dispatch = "0.3.13"
-v_exchanges_adapters = { version = "^0.11.10", path = "../v_exchanges_adapters/", optional = true }
+v_exchanges_adapters = { version = "^0.12.0", path = "../v_exchanges_adapters/", optional = true }
 
 reqwest = { version = "^0.12.24", optional = true }
 
