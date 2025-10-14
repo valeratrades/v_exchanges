@@ -474,7 +474,7 @@ impl WsHandler for BybitWsHandler {
 						))
 					}
 					false => {
-						return Err(WsError::Auth(AuthError::Other(eyre!("Authentication was not successful: {ret_msg}"))));
+						Err(AuthError::Other(eyre!("Authentication was not successful: {ret_msg}")).into())
 					}
 				},
 				Operation::Subscribe => {
@@ -484,7 +484,7 @@ impl WsHandler for BybitWsHandler {
 						match self.options.ws_auth || &ret_msg != "Request not authorized" {
 							true => return Err(WsError::Subscription(ret_msg)),
 							false => {
-								return Err(WsError::Auth(AuthError::Other(eyre!("Tried to access a private endpoint without authentication"))));
+								return Err(AuthError::Other(eyre!("Tried to access a private endpoint without authentication")).into());
 							}
 						}
 					}

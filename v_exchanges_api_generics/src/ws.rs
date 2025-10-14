@@ -274,8 +274,8 @@ impl<H: WsHandler> WsConnection<H> {
 						self.stream = None;
 						continue;
 					}
-					tungstenite::Error::Io(error) => {
-						tracing::warn!("received `tungstenite::Error::Io` from polling: {error:?}. Likely indicates connection issues. Skipping.");
+					tungstenite::Error::Io(e) => {
+						tracing::warn!("received `tungstenite::Error::Io` from polling: {e:?}. Likely indicates connection issues. Skipping.");
 						continue;
 					}
 					tungstenite::Error::Tls(tls_error) => todo!(),
@@ -287,7 +287,7 @@ impl<H: WsHandler> WsConnection<H> {
 						panic!("received `tungstenite::Error::Protocol` from polling: {protocol_error:?}");
 					}
 					tungstenite::Error::WriteBufferFull(_) => unreachable!("can only get from writing"),
-					tungstenite::Error::Utf8 => panic!("received `tungstenite::Error::Utf8` from polling. Exchange is going crazy, aborting"),
+					tungstenite::Error::Utf8(e) => panic!("received `tungstenite::Error::Utf8` from polling: {e:?}. Exchange is going crazy, aborting"),
 					tungstenite::Error::AttackAttempt => {
 						tracing::warn!("received `tungstenite::Error::AttackAttempt` from polling. Don't have a reason to trust detection 100%, so just reconnecting.");
 						self.stream = None;

@@ -58,6 +58,7 @@ pub struct KlineNamed {
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct KlineEvent {
 	#[serde(rename = "e")]
 	pub event_type: String,
@@ -75,6 +76,7 @@ pub struct KlineEvent {
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct FullKlines {
 	#[serde(flatten)]
 	pub core: KlineNamed,
