@@ -38,6 +38,7 @@ ignore = true
 [sources]
 unknown-git = "deny"
 unknown-registry = "deny"
+
 [sources.allow-org]
 github = ["valeratrades"]
 

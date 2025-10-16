@@ -34,7 +34,7 @@ jobs:
       matrix:
         rust:
         - nightly
-        - nightly-2025-01-16
+        - nightly-2025-10-12
     timeout-minutes: 45
 name: Errors
 'on':

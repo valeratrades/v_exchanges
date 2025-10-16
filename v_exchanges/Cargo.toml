@@ -25,26 +25,25 @@ rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
 
 [dependencies]
-enum_dispatch = "0.3.13"
-v_exchanges_adapters = { version = "^0.12.1", path = "../v_exchanges_adapters/", optional = true }
-
-reqwest = { version = "^0.12.24", optional = true }
-
-jiff.workspace = true
 async-trait.workspace = true
+cfg-if.workspace = true
 derive-new.workspace = true
 derive_more.workspace = true
+enum_dispatch = "0.3.13"
 eyre.workspace = true
+reqwest = { version = "^0.12.24", optional = true }
+v_exchanges_adapters = { version = "^0.12.1", path = "../v_exchanges_adapters/", optional = true }
+
+jiff.workspace = true
+secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_with.workspace = true
 #dynosaur.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 v_utils.workspace = true 
-serde_with.workspace = true
-cfg-if.workspace = true
-secrecy.workspace = true
 
 [dev-dependencies]
 color-eyre = "^0.6.5"

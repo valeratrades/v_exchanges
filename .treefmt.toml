@@ -1,7 +1,6 @@
 [formatter.nix]
-command = "nixfmt"
+command = "nixpkgs-fmt"
 includes = ["*.nix"]
-options = ["-w", "200"]
 
 [formatter.rust]
 command = "rustfmt"

@@ -22,6 +22,7 @@ functions.sh
 ## Nix
 result
 .direnv/
+.devenv/
 
 ## Vim
 *.sw[po]

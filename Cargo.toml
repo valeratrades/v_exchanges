@@ -15,28 +15,28 @@ get_first = "allow" # const fn, so actually more performant
 get_last_with_len = "allow"
 
 [workspace.dependencies]
-v_utils = { version = "^2.7.2" , path = "../v_utils/v_utils" } #ga: rm path
-futures-util = "^0.3.31"
-reqwest = { version = "^0.12.24", features = ["blocking", "json"] }
-serde = { version = "^1.0.228", features = ["derive"] }
-serde_plain = "^1.0.2" #TEST
-serde_json = "^1.0.145"
-serde_with = "^3.15.0"
-thiserror = "^2.0.17"
-serde_urlencoded = "^0.7.1"
 async-trait = "^0.1.89"
+cfg-if = "^1.0.3"
+derive-new = "^0.7.0"
 derive_more = { version = "^2.0.1", features = ["deref", "deref_mut"] }
+eyre = "^0.6.12"
+futures-util = "^0.3.31"
+hex = "^0.4.3"
+hmac = "^0.12.1"
+jiff = "^0.2.15"
+reqwest = { version = "^0.12.24", features = ["blocking", "json"] }
+secrecy = "^0.10.3"
+serde = { version = "^1.0.228", features = ["derive"] }
+serde_json = "^1.0.145"
+serde_plain = "^1.0.2" #TEST
+serde_urlencoded = "^0.7.1"
+serde_with = "^3.15.0"
+sha2 = "^0.10.9"
+thiserror = "^2.0.17"
 tokio = { version = "^1.47.1", features = ["sync", "macros", "io-util", "rt", "rt-multi-thread", "time"] } # enable only features that play with wasm.
 tracing = "^0.1.41"
-hmac = "^0.12.1"
-sha2 = "^0.10.9"
-hex = "^0.4.3"
-derive-new = "^0.7.0"
-secrecy = "^0.10.3"
-cfg-if = "^1.0.3"
-eyre = "^0.6.12"
 url = "^2.5.7"
-jiff = "^0.2.15"
+v_utils = { version = "^2.7.2", path = "../v_utils/v_utils" } #ga: rm path
 #dynosaur = "^0.2.0"
 
 #[dev-dependencies]

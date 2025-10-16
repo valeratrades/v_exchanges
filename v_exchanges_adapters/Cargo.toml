@@ -23,12 +23,12 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-jiff.workspace = true
 derive-new.workspace = true
 derive_more.workspace = true
+eyre.workspace = true
 hex.workspace = true
 hmac.workspace = true
-eyre.workspace = true
+jiff.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
