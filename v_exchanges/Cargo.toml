@@ -4,11 +4,6 @@ cargo-features = ["codegen-backend"]
 name = "v_exchanges"
 version = "0.12.2"
 edition = "2024"
-
-#TEST: there are normally problems with messing with docs's flags \
-[package.metadata.docs]
-cargo-args = ["--edition", "2024"]
-
 authors = ["negi-grass", "valeratrades"]
 categories = ["api-bindings", "asynchronous"]
 description = "Implementations of HTTP/HTTPS/WebSocket API methods for some crypto exchanges, using [crypto-botters](<https://github.com/negi-grass/crypto-botters>) framework"
@@ -20,7 +15,12 @@ readme = "README.md"
 repository = "https://github.com/valeratrades/v_exchanges/tree/master/v_exchanges"
 
 [package.metadata.docs.rs]
-cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+cargo-args = [
+    "-Zunstable-options",
+    "-Zrustdoc-scrape-examples",
+    #TEST: there are normally problems with messing with docs's flags, see if this is interpreted \
+    "--edition=2024",
+]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 
