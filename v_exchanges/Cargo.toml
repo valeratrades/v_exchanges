@@ -5,6 +5,10 @@ name = "v_exchanges"
 version = "0.12.2"
 edition = "2024"
 
+#TEST: there are normally problems with messing with docs's flags \
+[package.metadata.docs]
+cargo-args = ["--edition", "2024"]
+
 authors = ["negi-grass", "valeratrades"]
 categories = ["api-bindings", "asynchronous"]
 description = "Implementations of HTTP/HTTPS/WebSocket API methods for some crypto exchanges, using [crypto-botters](<https://github.com/negi-grass/crypto-botters>) framework"
