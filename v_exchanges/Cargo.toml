@@ -16,7 +16,6 @@ readme = "README.md"
 repository = "https://github.com/valeratrades/v_exchanges/tree/master/v_exchanges"
 
 [package.metadata.docs.rs]
-rustc-args = ["--edition=2024"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
