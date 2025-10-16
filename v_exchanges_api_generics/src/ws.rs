@@ -285,7 +285,9 @@ impl<H: WsHandler> WsConnection<H> {
 						continue;
 					}
 					tungstenite::Error::Protocol(protocol_error) => {
-						panic!("received `tungstenite::Error::Protocol` from polling: {protocol_error:?}");
+						tracing::warn!("received `tungstenite::Error::Protocol` from polling: {protocol_error:?}. Will reconnect");
+						self.stream = None;
+						continue;
 					}
 					tungstenite::Error::WriteBufferFull(_) => unreachable!("can only get from writing"),
 					tungstenite::Error::Utf8(e) => panic!("received `tungstenite::Error::Utf8` from polling: {e:?}. Exchange is going crazy, aborting"),
