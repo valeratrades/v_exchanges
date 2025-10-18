@@ -19,7 +19,7 @@ cargo-args = [
     "-Zunstable-options",
     "-Zrustdoc-scrape-examples",
     #TEST: there are normally problems with messing with docs's flags, see if this is interpreted \
-    "-- --edition=2024",
+    "--", "--edition=2024",
 ]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
