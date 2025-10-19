@@ -260,10 +260,8 @@ impl RequestConfig {
 pub enum HandleError {
 	/// Refer to [ApiError]
 	Api(ApiError),
-	/// Couldn't parse the response. Most often will wrap a [serde_json::Error].
-	Parse(serde_json::Error),
-	#[allow(missing_docs)]
-	Other(Report),
+	/// Couldn't parse the response. Normally just wraps the [JsonError](serde_json::Error) with [truncate_msg](v_utils::utils::truncate_msg) around the response msg.
+	Parse(Report),
 }
 /// Errors that exchanges purposefully transmit.
 #[derive(Debug, Error, derive_more::From)]

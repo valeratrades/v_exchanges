@@ -177,9 +177,9 @@ where
 
 	fn handle_response(&self, status: StatusCode, headers: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError> {
 		if status.is_success() {
-			serde_json::from_slice(&response_body).map_err(|e| {
-				tracing::debug!("Failed to parse response due to an error: {e}",);
-				HandleError::Parse(e)
+			serde_json::from_slice(&response_body).map_err(|error| {
+				let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
+				HandleError::Parse(eyre!("Failed to parse response: {error}\nResponse body: {response_str}"))
 			})
 		} else {
 			//Q: does MEXC even have this, or am I just blindly copying from Binance?
@@ -211,7 +211,10 @@ where
 
 			let api_error: MexcError = match serde_json::from_slice(&response_body) {
 				Ok(parsed) => parsed,
-				Err(e) => return Err(HandleError::Parse(e)),
+				Err(error) => {
+					let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
+					return Err(HandleError::Parse(eyre!("Failed to parse error response: {error}\nResponse body: {response_str}")));
+				}
 			};
 			Err(ApiError::from(api_error).into())
 		}

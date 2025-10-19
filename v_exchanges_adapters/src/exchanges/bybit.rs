@@ -193,17 +193,15 @@ where
 			// Bybit returns HTTP 200 even for API errors, so we need to check retCode
 			// First, try to parse as a generic response to check for errors
 			let value: serde_json::Value = serde_json::from_slice(&response_body).map_err(|error| {
-				tracing::debug!("Failed to parse response due to an error: {}", error);
-				HandleError::Parse(error)
+				let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
+				HandleError::Parse(eyre!("Failed to parse response: {error}\nResponse body: {response_str}"))
 			})?;
 
 			// Check if response contains retCode field (V3/V5 API format)
 			if let Some(ret_code) = value.get("retCode").and_then(|v| v.as_i64()) {
 				if ret_code != 0 {
 					// Non-zero retCode indicates an error
-					let ret_msg = value.get("retMsg")
-						.and_then(|v| v.as_str())
-						.unwrap_or("Unknown error");
+					let ret_msg = value.get("retMsg").and_then(|v| v.as_str()).unwrap_or("Unknown error");
 					let error = BybitError {
 						code: ret_code as i32,
 						msg: ret_msg.to_string(),
@@ -213,9 +211,9 @@ where
 			}
 
 			// No error, deserialize to the expected type
-			serde_json::from_value(value).map_err(|error| {
-				tracing::debug!("Failed to parse successful response due to an error: {}", error);
-				HandleError::Parse(error)
+			serde_json::from_value(value.clone()).map_err(|error| {
+				let response_str = v_utils::utils::truncate_msg(value.to_string());
+				HandleError::Parse(eyre!("Failed to parse successful response: {error}\nResponse body: {response_str}"))
 			})
 		} else {
 			// https://bybit-exchange.github.io/docs/spot/v3/#t-ratelimits
@@ -226,9 +224,9 @@ where
 					} else {
 						parsed
 					},
-				Err(e) => {
-					tracing::debug!("Failed to parse error response due to an error: {e}");
-					return Err(HandleError::Parse(e));
+				Err(error) => {
+					let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
+					return Err(HandleError::Parse(eyre!("Failed to parse error response: {error}\nResponse body: {response_str}")));
 				}
 			};
 			Err(ApiError::from(api_error).into())
@@ -496,9 +494,7 @@ impl WsHandler for BybitWsHandler {
 							self.handle_subscribe(self.options.ws_topics.clone().into_iter().map(Topic::String).collect())?,
 						))
 					}
-					false => {
-						Err(AuthError::Other(eyre!("Authentication was not successful: {ret_msg}")).into())
-					}
+					false => Err(AuthError::Other(eyre!("Authentication was not successful: {ret_msg}")).into()),
 				},
 				Operation::Subscribe => {
 					if jrpc["success"].as_bool() == Some(true) {

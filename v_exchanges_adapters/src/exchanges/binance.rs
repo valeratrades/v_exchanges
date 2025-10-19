@@ -15,6 +15,7 @@ use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
 use url::Url;
+use v_utils::utils::truncate_msg;
 
 use crate::traits::*;
 
@@ -75,8 +76,8 @@ where
 	fn handle_response(&self, status: StatusCode, headers: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError> {
 		if status.is_success() {
 			serde_json::from_slice(&response_body).map_err(|error| {
-				tracing::debug!("Failed to parse response due to an error: {}", error);
-				HandleError::Parse(error)
+				let response_str = truncate_msg(String::from_utf8_lossy(&response_body));
+				HandleError::Parse(eyre!("Failed to parse response: {error}\nResponse body: {response_str}"))
 			})
 		} else {
 			// https://binance-docs.github.io/apidocs/spot/en/#limits
@@ -110,7 +111,10 @@ where
 
 			let e: BinanceError = match serde_json::from_slice::<BinanceError>(&response_body) {
 				Ok(binance_error) => binance_error,
-				Err(parse_error) => return Err(HandleError::Parse(parse_error)),
+				Err(parse_error) => {
+					let response_str = truncate_msg(String::from_utf8_lossy(&response_body));
+					return Err(HandleError::Parse(eyre!("Failed to parse error response: {parse_error}\nResponse body: {response_str}")));
+				}
 			};
 			Err(ApiError::from(e).into())
 		}
