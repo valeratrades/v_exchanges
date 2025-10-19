@@ -19,7 +19,8 @@ repository = "https://github.com/valeratrades/v_exchanges/tree/master/v_exchange
 ignored = ["derive-new", "thiserror"]
 
 [package.metadata.docs.rs]
-all-features = true
+all-features = false
+features = ["binance", "bybit", "mexc"] #HACK: bitflyer and coincheck are broken
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]

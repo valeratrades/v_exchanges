@@ -19,10 +19,12 @@ cargo-args = [
     "-Zunstable-options",
     "-Zrustdoc-scrape-examples",
     #TEST: there are normally problems with messing with docs's flags, see if this is interpreted \
+    #DEPRECATE: think this is actually unnecessary, and the problem was in us trying to build docs for some broken modules, using `all-features = true`
     "--",
     "--edition=2024",
 ]
-all-features = true
+all-features = false
+features = ["major", "data"] #HACK: bitflyer and coincheck are broken
 rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 
 [package.metadata.cargo-machete]
