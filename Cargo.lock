@@ -2682,7 +2682,7 @@ dependencies = [
 
 [[package]]
 name = "v_utils"
-version = "2.7.10"
+version = "2.7.11"
 dependencies = [
  "const_format",
  "derive-new",
@@ -2708,7 +2708,7 @@ dependencies = [
 
 [[package]]
 name = "v_utils_macros"
-version = "2.3.9"
+version = "2.3.10"
 dependencies = [
  "eyre",
  "heck",

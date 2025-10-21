@@ -80,7 +80,6 @@ jobs:
         \ != 0 ]; then\n  echo \"Cargo.toml is not sorted. Run \\`cargo sort -w\\\
         ` to fix it.\"\n  exit $exit_code\nfi\n"
   rust-sorted-derives:
-    description: Assert derives are sorted
     name: Sorted Derives
     runs-on: ubuntu-latest
     steps:
@@ -89,7 +88,7 @@ jobs:
       uses: taiki-e/install-action@v2
       with:
         tool: cargo-sort-derives
-    - name: Check if Cargo.toml is sorted
+    - name: Assert derives are sorted
       run: "\t\t\t\tcargo sort-derives --check\n\t\t\t\texit_code=$?\n\t\t\t\tif [\
         \ $exit_code != 0 ]; then\n\t\t\t\t\techo \"Derives are not sorted. Run \\\
         `cargo sort-derives\\` to fix it.\"\n\t\t\t\t\texit $exit_code\n\t\t\t\tfi\n\

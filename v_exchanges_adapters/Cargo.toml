@@ -23,6 +23,21 @@ all-features = false
 features = ["binance", "bybit", "mexc"] #HACK: bitflyer and coincheck are broken
 rustdoc-args = ["--cfg", "docsrs"]
 
+[features]
+default = ["native-tls"]
+
+full = ["binance", "bitflyer", "bybit", "coincheck", "mexc"]
+binance = []
+bitflyer = ["dep:rand"]
+bybit = ["dep:rand"]
+coincheck = []
+mexc = []
+
+native-tls = ["v_exchanges_api_generics/native-tls"]
+native-tls-vendored = ["v_exchanges_api_generics/native-tls-vendored"]
+rustls-tls-native-roots = ["v_exchanges_api_generics/rustls-tls-native-roots"]
+rustls-tls-webpki-roots = ["v_exchanges_api_generics/rustls-tls-webpki-roots"]
+
 [dependencies]
 derive-new.workspace = true
 derive_more.workspace = true
@@ -46,18 +61,3 @@ rand = { version = "0.9.2", optional = true }
 [dev-dependencies]
 rust_decimal = { version = "1.39.0", features = ["serde-with-str", "serde-with-float"] }
 tokio.workspace = true
-
-[features]
-default = ["native-tls"]
-
-full = ["binance", "bitflyer", "bybit", "coincheck", "mexc"]
-binance = []
-bitflyer = ["dep:rand"]
-bybit = ["dep:rand"]
-coincheck = []
-mexc = []
-
-native-tls = ["v_exchanges_api_generics/native-tls"]
-native-tls-vendored = ["v_exchanges_api_generics/native-tls-vendored"]
-rustls-tls-native-roots = ["v_exchanges_api_generics/rustls-tls-native-roots"]
-rustls-tls-webpki-roots = ["v_exchanges_api_generics/rustls-tls-webpki-roots"]
