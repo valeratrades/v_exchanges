@@ -207,11 +207,6 @@ impl WsHandler for BinanceWsHandler {
 	}
 
 	fn handle_jrpc(&mut self, jrpc: serde_json::Value) -> Result<ResponseOrContent, WsError> {
-		//TODO: handle listen key expiration \
-		//match jrpc["e"].as_str().expect("missing event type") { // matches with event_type
-		//	"listenKeyExpired" => todo!(),
-		//	_ => Ok(None),
-		//}
 		#[derive(serde::Deserialize)]
 		struct NamedStreamData {
 			pub stream: String,
@@ -236,6 +231,12 @@ impl WsHandler for BinanceWsHandler {
 			(event_type, event_time, event_data.into())
 		};
 
+		//TEST: handle listen-key expiration //NB: Claude wrote this, no clue if logic is correct
+		if event_type == "listenKeyExpired" {
+			tracing::error!("Listen key expired. This requires re-authentication and reconnection.");
+			return Err(WsError::Auth(AuthError::Other(eyre!("Listen key expired").into())));
+		}
+
 		let content = ContentEvent {
 			data: event_data,
 			topic: event_topic,
@@ -249,6 +250,7 @@ impl WsHandler for BinanceWsHandler {
 	// - [x] binance spot
 	// - [?] binance perp
 
+	//DEPRECATE
 	//	fn handle_post(&mut self) -> Result<Option<Vec<tungstenite::Message>>, WsError> {
 	//	if SystemTime::now().duration_since(self.last_keep_alive).unwrap() > Duration::from_mins(30) {
 	//		//XXX: will fail if it's not a USER_DATA_STREAM //TODO: generalize to all binance streams
@@ -263,6 +265,7 @@ impl WsHandler for BinanceWsHandler {
 	//	}
 	//	Ok(None)
 	//}
+	//DEPRECATE
 	//if SystemTime::now().duration_since(self.last_keep_alive).unwrap() > Duration::from_mins(30) {
 	//	//XXX: will fail if it's not a USER_DATA_STREAM
 	//	//TODO send `PUT /api/v3/userDataStream`
