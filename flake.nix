@@ -24,7 +24,18 @@
         pname = manifest.name;
         stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv;
 
-        workflowContents = v-utils.ci { inherit pkgs; lastSupportedVersion = "nightly-2025-10-12"; jobsErrors = [ "rust-tests" ]; jobsWarnings = [ "rust-doc" "rust-clippy" "rust-machete" "rust-sorted" "rust-sorted-derives" "rust-miri" "tokei" ]; };
+        workflowContents = v-utils.ci {
+          inherit pkgs; lastSupportedVersion = "nightly-2025-10-12";
+          jobsErrors = [ "rust-tests" ];
+          jobsWarnings = [
+            { name = "rust-doc"; arguments = [ "v-exchanges" ]; }
+            "rust-clippy"
+            "rust-machete"
+            "rust-sorted"
+            "rust-sorted-derives"
+            "tokei"
+          ];
+        };
         readme = v-utils.readme-fw { inherit pkgs pname; lastSupportedVersion = "nightly-1.92"; rootDir = ./.; licenses = [{ name = "Blue Oak 1.0.0"; outPath = "LICENSE"; }]; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; };
       in
       {

@@ -450,6 +450,7 @@ pub enum WsDefinitionError {
 	MissingUrl,
 }
 
+//DEPRECATE: or reinstate, - can't even remember what's this now
 //#[derive(Debug, derive_more::Display, thiserror::Error)]
 //pub enum SubscriptionError {
 //	Topic(String),
