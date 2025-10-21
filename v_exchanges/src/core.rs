@@ -1,9 +1,6 @@
 use std::collections::{BTreeMap, VecDeque};
 
-use adapters::{
-	Client,
-	generics::{http::RequestError, ws::WsError},
-};
+use adapters::{Client, generics::ws::WsError};
 use derive_more::{Deref, DerefMut};
 use jiff::Timestamp;
 use secrecy::SecretString;
@@ -14,6 +11,8 @@ use v_utils::{
 	trades::{Asset, Kline, Pair, Timeframe, Usd},
 	utils::filter_nulls,
 };
+
+use crate::error::{ExchangeError, ExchangeResult, MethodError, OutOfRangeError, RequestRangeError};
 
 /// Main trait for all standardized exchange interactions
 ///
@@ -113,33 +112,6 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	}
 	//,}}}
 }
-
-// Exchange Error {{{
-pub type ExchangeResult<T> = Result<T, ExchangeError>;
-#[derive(Debug, derive_more::Display, Error, derive_more::From)]
-pub enum ExchangeError {
-	Request(RequestError),
-	Method(MethodError),
-	Timeframe(UnsupportedTimeframeError),
-	Ws(WsError),
-	Range(RequestRangeError),
-	Other(Report),
-}
-#[derive(Debug, Error, derive_new::new)]
-#[error("Chosen exchange does not support the requested timeframe. Provided: {provided}, allowed: {allowed:?}")]
-pub struct UnsupportedTimeframeError {
-	provided: Timeframe,
-	allowed: Vec<Timeframe>,
-}
-#[derive(Debug, thiserror::Error, derive_new::new)]
-pub enum MethodError {
-	/// Means that it's **not expected** to be implemented, not only that it's not implemented now. For things that are yet to be implemented I just put `unimplemented!()`.
-	#[error("Method not implemented for the requested exchange and instrument: ({exchange}, {instrument})")]
-	MethodNotImplemented { exchange: ExchangeName, instrument: Instrument },
-	#[error("Requested exchange does not support the method for chosen instrument: ({exchange}, {instrument})")]
-	MethodNotSupported { exchange: ExchangeName, instrument: Instrument },
-}
-//,}}}
 
 // Open Interest {{{
 /// most exchanges default to returning OI value in asset quantity, not quote. Exception would be Inverse on Bybit.
@@ -292,26 +264,6 @@ impl From<(i64, i64)> for RequestRange {
 			since: Timestamp::from_millisecond(value.0).unwrap(),
 			until: Some(Timestamp::from_millisecond(value.1).unwrap()),
 		}
-	}
-}
-
-#[derive(Debug, derive_more::Display, Error, derive_more::From)]
-pub enum RequestRangeError {
-	OutOfRange(OutOfRangeError),
-	Others(Report),
-}
-#[derive(derive_more::Debug, thiserror::Error, derive_new::new)]
-pub struct OutOfRangeError {
-	allowed: std::ops::RangeInclusive<u32>,
-	provided: u32,
-}
-impl std::fmt::Display for OutOfRangeError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(
-			f,
-			"Effective provided limit is out of range (could be translated from Start:End / tf). Allowed: {:?}, provided: {}",
-			self.allowed, self.provided
-		)
 	}
 }
 //,}}}

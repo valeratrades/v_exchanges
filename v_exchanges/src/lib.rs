@@ -6,6 +6,7 @@
 pub extern crate v_exchanges_adapters as adapters;
 
 pub mod core;
+pub mod error;
 pub(crate) mod other_types;
 
 pub mod prelude {
@@ -25,7 +26,7 @@ pub mod prelude {
 	pub use crate::mexc::Mexc;
 	#[cfg(feature = "data")]
 	pub use crate::yahoo::*;
-	pub use crate::{core::*, other_types::*};
+	pub use crate::{core::*, error::*, other_types::*};
 }
 pub use prelude::*;
 

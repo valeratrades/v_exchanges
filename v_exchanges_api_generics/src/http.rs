@@ -256,7 +256,7 @@ impl RequestConfig {
 }
 
 /// Error type encompassing all the failure modes of [RequestHandler::handle_response()].
-#[derive(Debug, derive_more::Display, Error, derive_more::From)]
+#[derive(Debug, derive_more::Display, thiserror::Error, derive_more::From)]
 pub enum HandleError {
 	/// Refer to [ApiError]
 	Api(ApiError),
@@ -264,7 +264,7 @@ pub enum HandleError {
 	Parse(Report),
 }
 /// Errors that exchanges purposefully transmit.
-#[derive(Debug, Error, derive_more::From)]
+#[derive(Debug, thiserror::Error, derive_more::From)]
 pub enum ApiError {
 	/// Ip has been timed out or banned
 	#[error("IP has been timed out or banned until {until:?}")]
