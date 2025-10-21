@@ -1,6 +1,7 @@
 #![feature(array_try_map)]
 #![feature(formatting_options)]
 #![feature(try_blocks)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub extern crate v_exchanges_adapters as adapters;
 
