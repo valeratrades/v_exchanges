@@ -18,6 +18,18 @@ repository = "https://github.com/valeratrades/v_exchanges/tree/master/v_exchange
 [package.metadata.cargo-machete]
 ignored = ["derive-new", "thiserror"]
 
+[features]
+native-tls = ["reqwest/native-tls", "tokio-tungstenite/native-tls"]
+native-tls-vendored = ["reqwest/native-tls-vendored", "tokio-tungstenite/native-tls-vendored"]
+rustls-tls-native-roots = [
+    "reqwest/rustls-tls-native-roots",
+    "tokio-tungstenite/rustls-tls-native-roots",
+]
+rustls-tls-webpki-roots = [
+    "reqwest/rustls-tls-webpki-roots",
+    "tokio-tungstenite/rustls-tls-webpki-roots",
+]
+
 [dependencies]
 derive-new.workspace = true
 derive_more.workspace = true
@@ -36,15 +48,3 @@ v_utils.workspace = true
 
 bytes = "1.10.1"
 tokio-tungstenite = "^0.28.0"
-
-[features]
-native-tls = ["reqwest/native-tls", "tokio-tungstenite/native-tls"]
-native-tls-vendored = ["reqwest/native-tls-vendored", "tokio-tungstenite/native-tls-vendored"]
-rustls-tls-native-roots = [
-    "reqwest/rustls-tls-native-roots",
-    "tokio-tungstenite/rustls-tls-native-roots",
-]
-rustls-tls-webpki-roots = [
-    "reqwest/rustls-tls-webpki-roots",
-    "tokio-tungstenite/rustls-tls-webpki-roots",
-]

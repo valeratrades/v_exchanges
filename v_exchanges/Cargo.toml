@@ -23,6 +23,19 @@ rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 [package.metadata.cargo-machete]
 ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
 
+[features]
+default = ["major", "data"]
+
+full = ["major", "data", "bitflyer", "coincheck"]
+major = ["binance", "bybit", "mexc"]
+
+binance = ["v_exchanges_adapters/binance"]
+bybit = ["v_exchanges_adapters/bybit"]
+bitflyer = ["v_exchanges_adapters/bitflyer"]
+coincheck = ["v_exchanges_adapters/coincheck"]
+mexc = ["v_exchanges_adapters/mexc"]
+data = ["dep:reqwest"]
+
 [dependencies]
 async-trait.workspace = true
 cfg-if.workspace = true
@@ -47,19 +60,6 @@ v_utils.workspace = true
 [dev-dependencies]
 color-eyre = "^0.6.5"
 insta.workspace = true
-
-[features]
-default = ["major", "data"]
-
-full = ["major", "data", "bitflyer", "coincheck"]
-major = ["binance", "bybit", "mexc"]
-
-binance = ["v_exchanges_adapters/binance"]
-bybit = ["v_exchanges_adapters/bybit"]
-bitflyer = ["v_exchanges_adapters/bitflyer"]
-coincheck = ["v_exchanges_adapters/coincheck"]
-mexc = ["v_exchanges_adapters/mexc"]
-data = ["dep:reqwest"]
 
 # Random test stuff, for dev purposes only
 [[example]]
