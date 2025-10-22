@@ -27,7 +27,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 default = ["native-tls"]
 
 full = ["binance", "bitflyer", "bybit", "coincheck", "mexc"]
-binance = []
+binance = ["dep:rand"]
 bitflyer = ["dep:rand"]
 bybit = ["dep:rand"]
 coincheck = []
