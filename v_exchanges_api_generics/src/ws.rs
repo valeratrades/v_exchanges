@@ -169,21 +169,35 @@ impl<H: WsHandler> WsConnection<H> {
 		let json_rpc_value = loop {
 			// force a response out of the server.
 			let resp = {
-				let timeout = match self.stream.as_ref().unwrap().last_unanswered_communication {
-					Some(last_unanswered) => {
-						let now = SystemTime::now();
-						match last_unanswered + self.config.response_timeout > now {
-							true => self.config.response_timeout,
-							false => {
-								tracing::error!(
-									"Timeout for last unanswered communication ended before `.next()` was called. This likely indicates an implementation error on the clientside."
-								);
-								self.reconnect().await?;
-								continue;
+				let timeout = match self.stream.as_ref() {
+					Some(stream) => match stream.last_unanswered_communication {
+						Some(last_unanswered) => {
+							let now = SystemTime::now();
+							match last_unanswered + self.config.response_timeout > now {
+								true => self.config.response_timeout,
+								false => {
+									tracing::error!(
+										"Timeout for last unanswered communication ended before `.next()` was called. This likely indicates an implementation error on the clientside."
+									);
+									self.reconnect().await?;
+									continue;
+								}
 							}
 						}
+						None => self.config.message_timeout,
+					},
+					None => {
+						tracing::error!(
+							"UNEXPECTED: Stream is None at ws.rs:172 despite guard at line 163. \
+							Possible causes: (1) system hibernation/sleep caused stale state, \
+							(2) memory corruption, (3) logic bug in reconnection flow, \
+							(4) async cancellation. \
+							Last reconnect attempt: {:?} ago. Attempting to reconnect...",
+							SystemTime::now().duration_since(self.last_reconnect_attempt).unwrap_or_default()
+						);
+						self.connect().await?;
+						continue;
 					}
-					None => self.config.message_timeout,
 				};
 
 				let timeout_handle = tokio::time::timeout(timeout, {
