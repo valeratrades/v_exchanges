@@ -1,5 +1,16 @@
 use v_utils::prelude::*;
 
+#[macro_export]
+macro_rules! recv_window_check {
+	//NB: requires explicit arg provision, as otherwise `default` branch logic gets confused
+	($recv_window:expr, $self:expr) => {{
+		if $recv_window.is_none() && $self.recv_window.is_some() {
+			tracing::warn!("called without recv_window, using global default (not recommended)");
+		}
+		// TODO: extend for missing self.recv_window case
+	}};
+}
+
 /// # Panics
 /// Fine, because given prospected usages, theoretically only developer will see it.
 pub fn join_params(a: Value, b: Value) -> Value {

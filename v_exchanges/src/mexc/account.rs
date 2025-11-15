@@ -1,12 +1,14 @@
 use adapters::{
 	Client,
-	mexc::{MexcAuth, MexcHttpUrl, MexcOption},
+	mexc::{MexcAuth, MexcHttpUrl, MexcOption, MexcOptions},
 };
 use v_utils::prelude::*;
 
-use crate::{AssetBalance, Balances, ExchangeResult};
+use crate::{AssetBalance, Balances, ExchangeResult, recv_window_check};
 
 pub async fn asset_balance(client: &Client, asset: Asset, recv_window: Option<u16>) -> ExchangeResult<AssetBalance> {
+	use v_exchanges_adapters::GetOptions;
+	recv_window_check!(recv_window, GetOptions::<MexcOptions>::default_options(client));
 	assert!(client.is_authenticated::<MexcOption>());
 	let mut options = vec![MexcOption::HttpUrl(MexcHttpUrl::Futures), MexcOption::HttpAuth(MexcAuth::Sign)];
 	if let Some(rw) = recv_window {
@@ -19,6 +21,8 @@ pub async fn asset_balance(client: &Client, asset: Asset, recv_window: Option<u1
 }
 
 pub async fn balances(client: &Client, recv_window: Option<u16>) -> ExchangeResult<Balances> {
+	use v_exchanges_adapters::GetOptions;
+	recv_window_check!(recv_window, GetOptions::<MexcOptions>::default_options(client));
 	assert!(client.is_authenticated::<MexcOption>());
 	let mut options = vec![MexcOption::HttpUrl(MexcHttpUrl::Futures), MexcOption::HttpAuth(MexcAuth::Sign)];
 	if let Some(rw) = recv_window {

@@ -47,14 +47,14 @@ impl Exchange for Mexc {
 		}
 	}
 
-	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, instrument: Instrument) -> ExchangeResult<AssetBalance> {
+	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<AssetBalance> {
 		match instrument {
 			Instrument::Perp => account::asset_balance(self, asset, recv_window).await,
 			_ => unimplemented!(),
 		}
 	}
 
-	async fn balances(&self, recv_window: Option<u16>, instrument: Instrument) -> ExchangeResult<Balances> {
+	async fn balances(&self, instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<Balances> {
 		match instrument {
 			Instrument::Perp => account::balances(self, recv_window).await,
 			_ => unimplemented!(),

@@ -4,15 +4,18 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{DisplayFromStr, serde_as};
 use tracing::warn;
-use v_exchanges_adapters::bybit::{BybitHttpAuth, BybitOption};
+use v_exchanges_adapters::bybit::{BybitHttpAuth, BybitOption, BybitOptions};
 use v_utils::{macros::ScreamIt, trades::Asset};
 
 use crate::{
 	ExchangeResult,
 	core::{AssetBalance, Balances},
+	recv_window_check,
 };
 
 pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, recv_window: Option<u16>) -> ExchangeResult<AssetBalance> {
+	use v_exchanges_adapters::GetOptions;
+	recv_window_check!(recv_window, GetOptions::<BybitOptions>::default_options(client));
 	assert!(client.is_authenticated::<BybitOption>());
 	let balances: Balances = balances(client, recv_window).await?;
 	let balance: AssetBalance = balances.iter().find(|b| b.asset == asset).copied().unwrap_or_else(|| {
@@ -24,6 +27,8 @@ pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, 
 
 /// Should be calling https://bybit-exchange.github.io/docs/v5/asset/balance/all-balance, but with how I'm registered on bybit, my key doesn't have permissions for that (they require it to be able to `transfer` for some reason)
 pub async fn balances(client: &Client, recv_window: Option<u16>) -> ExchangeResult<Balances> {
+	use v_exchanges_adapters::GetOptions;
+	recv_window_check!(recv_window, GetOptions::<BybitOptions>::default_options(client));
 	assert!(client.is_authenticated::<BybitOption>());
 
 	let mut options = vec![BybitOption::HttpAuth(BybitHttpAuth::V3AndAbove)];

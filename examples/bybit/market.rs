@@ -32,10 +32,10 @@ async fn private(c: &dyn Exchange, symbol: Symbol) {
 	//	.await
 	//	.unwrap();
 
-	let balances = c.balances(None, symbol.instrument).await.unwrap();
+	let balances = c.balances(symbol.instrument, None).await.unwrap();
 	println!("{balances:?}");
 
-	let balance_usdc = c.asset_balance("USDC".into(), Some(5000), symbol.instrument).await.unwrap();
+	let balance_usdc = c.asset_balance("USDC".into(), symbol.instrument, Some(5000)).await.unwrap();
 	println!("{balance_usdc:?}");
 }
 

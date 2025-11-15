@@ -101,3 +101,8 @@ path = "../examples/bybit/market.rs"
 name = "mexc"
 required-features = ["mexc"]
 path = "../examples/mexc.rs"
+
+[[example]]
+name = "healthcheck"
+required-features = ["binance", "bybit", "mexc"]
+path = "../examples/healthcheck.rs"

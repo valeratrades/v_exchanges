@@ -54,11 +54,11 @@ impl Exchange for Bybit {
 		}
 	}
 
-	async fn asset_balance(&self, asset: Asset, recv_window: Option<u16>, _instrument: Instrument) -> ExchangeResult<AssetBalance> {
+	async fn asset_balance(&self, asset: Asset, _instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<AssetBalance> {
 		account::asset_balance(self, asset, recv_window).await
 	}
 
-	async fn balances(&self, recv_window: Option<u16>, _instrument: Instrument) -> ExchangeResult<Balances> {
+	async fn balances(&self, _instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<Balances> {
 		account::balances(self, recv_window).await
 	}
 }
