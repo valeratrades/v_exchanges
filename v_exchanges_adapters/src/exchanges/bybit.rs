@@ -198,16 +198,16 @@ where
 			})?;
 
 			// Check if response contains retCode field (V3/V5 API format)
-			if let Some(ret_code) = value.get("retCode").and_then(|v| v.as_i64()) {
-				if ret_code != 0 {
-					// Non-zero retCode indicates an error
-					let ret_msg = value.get("retMsg").and_then(|v| v.as_str()).unwrap_or("Unknown error");
-					let error = BybitError {
-						code: ret_code as i32,
-						msg: ret_msg.to_string(),
-					};
-					return Err(ApiError::from(error).into());
-				}
+			if let Some(ret_code) = value.get("retCode").and_then(|v| v.as_i64())
+				&& ret_code != 0
+			{
+				// Non-zero retCode indicates an error
+				let ret_msg = value.get("retMsg").and_then(|v| v.as_str()).unwrap_or("Unknown error");
+				let error = BybitError {
+					code: ret_code as i32,
+					msg: ret_msg.to_string(),
+				};
+				return Err(ApiError::from(error).into());
 			}
 
 			// No error, deserialize to the expected type

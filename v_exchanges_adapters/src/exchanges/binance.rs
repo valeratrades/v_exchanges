@@ -126,13 +126,13 @@ where
 pub struct BinanceWsHandler {
 	options: BinanceOptions,
 	/// Binance has a retarded `listen-key` system. This is needed only for that.
-	last_keep_alive: SystemTime,
+	_last_keep_alive: SystemTime,
 }
 impl BinanceWsHandler {
 	pub fn new(options: BinanceOptions) -> Self {
 		Self {
 			options,
-			last_keep_alive: SystemTime::UNIX_EPOCH, // semantically creation itself does nothing for refreshing the token. But refreshment timer on it will be set to 0 on creation, so that's when we'll set it to [now](SystemTime::now)
+			_last_keep_alive: SystemTime::UNIX_EPOCH, // semantically creation itself does nothing for refreshing the token. But refreshment timer on it will be set to 0 on creation, so that's when we'll set it to [now](SystemTime::now)
 		}
 	}
 }
