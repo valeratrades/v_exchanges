@@ -93,6 +93,11 @@ required-features = ["binance"]
 path = "../examples/binance/market_spot.rs"
 
 [[example]]
+name = "binance_orders"
+required-features = ["binance"]
+path = "../examples/binance/orders.rs"
+
+[[example]]
 name = "bybit_market"
 required-features = ["bybit"]
 path = "../examples/bybit/market.rs"

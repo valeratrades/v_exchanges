@@ -28,13 +28,14 @@
           inherit pkgs; lastSupportedVersion = "nightly-2025-10-12";
           jobsErrors = [ "rust-tests" ];
           jobsWarnings = [
-            { name = "rust-doc"; arguments = [ "v-exchanges" ]; }
+            { name = "rust-doc"; arguments = [ "v_exchanges" ]; }
             "rust-clippy"
             "rust-machete"
             "rust-sorted"
             "rust-sorted-derives"
             "tokei"
           ];
+          jobsOther = [ "loc-badge" ];
         };
         readme = v-utils.readme-fw { inherit pkgs pname; lastSupportedVersion = "nightly-1.92"; rootDir = ./.; licenses = [{ name = "Blue Oak 1.0.0"; outPath = "LICENSE"; }]; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; };
       in
@@ -71,8 +72,9 @@
             pre-commit-check.shellHook +
             ''
               							mkdir -p ./.github/workflows
-              							rm -f ./.github/workflows/errors.yml; cp ${workflowContents.errors} ./.github/workflows/errors.yml
-              							rm -f ./.github/workflows/warnings.yml; cp ${workflowContents.warnings} ./.github/workflows/warnings.yml
+              							cp -f ${workflowContents.errors} ./.github/workflows/errors.yml
+              							cp -f ${workflowContents.warnings} ./.github/workflows/warnings.yml
+              							cp -f ${workflowContents.other} ./.github/workflows/other.yml
 
               							cp -f ${v-utils.files.licenses.blue_oak} ./LICENSE
 

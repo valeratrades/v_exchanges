@@ -2,7 +2,7 @@
 ![Minimum Supported Rust Version](https://img.shields.io/badge/nightly-1.92+-ab6000.svg)
 [<img alt="crates.io" src="https://img.shields.io/crates/v/v_exchanges.svg?color=fc8d62&logo=rust" height="20" style=flat-square>](https://crates.io/crates/v_exchanges)
 [<img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs&style=flat-square" height="20">](https://docs.rs/v_exchanges)
-![Lines Of Code](https://img.shields.io/badge/LoC-5776-lightblue)
+![Lines Of Code](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/valeratrades/b48e6f02c61942200e7d1e3eeabf9bcb/raw/v_exchanges-loc.json)
 <br>
 [<img alt="ci errors" src="https://img.shields.io/github/actions/workflow/status/valeratrades/v_exchanges/errors.yml?branch=master&style=for-the-badge&style=flat-square&label=errors&labelColor=420d09" height="20">](https://github.com/valeratrades/v_exchanges/actions?query=branch%3Amaster) <!--NB: Won't find it if repo is private-->
 [<img alt="ci warnings" src="https://img.shields.io/github/actions/workflow/status/valeratrades/v_exchanges/warnings.yml?branch=master&style=for-the-badge&style=flat-square&label=warnings&labelColor=d16002" height="20">](https://github.com/valeratrades/v_exchanges/actions?query=branch%3Amaster) <!--NB: Won't find it if repo is private-->
@@ -64,8 +64,9 @@ if you try the following with different `Exchange`s and `Instruments` encoded in
 - [x] full bybit integration
 - [\.] polish http interactions in using this API in other projects
 - [ ] method to execute _all_ known requests in test mode[^1], on `success`full responses, persist the returned json objects to use in test later.
-- [ ] use in [btc_line](https://github.com/valeratrades/btc_line) to get Websocket interactions nice and good
+- [x] use in [btc_line](https://github.com/valeratrades/btc_line) to get Websocket interactions nice and good
 - [ ] make fitted for the final stage of full integration into [discretionary_engine](<https://github.com/valeratrades/discretionary_engine>) (requires trade execution/followup methods suite), which would signify production-readiness of this crate.
+    upd: really should be just compatible with nautilus-trader; used only for data collection, - _not trading_ 
 
 
 [^1] where allowed, otherwise use min position size or just skip problematic endpoints

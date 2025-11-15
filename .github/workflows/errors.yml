@@ -16,6 +16,8 @@ jobs:
     - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{matrix.rust}}
+    - name: Install mold
+      uses: rui314/setup-mold@v1
     - if: github.ref == 'refs/heads/release'
       name: Set RUSTFLAGS for release branch
       run: echo "RUSTFLAGS=-Dwarnings" >> $GITHUB_ENV

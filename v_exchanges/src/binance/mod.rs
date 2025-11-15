@@ -1,5 +1,5 @@
 pub mod data; // interfaced with directly, not through `Exchange` trait, thus must be public.
-mod perp;
+pub mod perp; // public for accessing order placement and income history functions
 use std::collections::BTreeMap;
 mod market;
 mod spot;

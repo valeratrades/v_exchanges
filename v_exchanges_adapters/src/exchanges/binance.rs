@@ -234,7 +234,7 @@ impl WsHandler for BinanceWsHandler {
 		//TEST: handle listen-key expiration //NB: Claude wrote this, no clue if logic is correct
 		if event_type == "listenKeyExpired" {
 			tracing::error!("Listen key expired. This requires re-authentication and reconnection.");
-			return Err(WsError::Auth(AuthError::Other(eyre!("Listen key expired").into())));
+			return Err(WsError::Auth(AuthError::Other(eyre!("Listen key expired"))));
 		}
 
 		let content = ContentEvent {
