@@ -28,7 +28,7 @@
           inherit pkgs; lastSupportedVersion = "nightly-2025-10-12";
           jobsErrors = [ "rust-tests" ];
           jobsWarnings = [
-            { name = "rust-doc"; arguments = [ "v_exchanges" ]; }
+            { name = "rust-doc"; args = { package = "v_exchanges"; }; }
             "rust-clippy"
             "rust-machete"
             "rust-sorted"
