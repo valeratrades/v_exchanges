@@ -30,23 +30,23 @@ impl Exchange for Bybit {
 		self.update_default_option(BybitOption::RecvWindow(recv_window));
 	}
 
-	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
+	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange, recv_window: Option<u16>) -> ExchangeResult<Klines> {
 		match symbol.instrument {
-			Instrument::Perp => market::klines(self, symbol, tf.try_into()?, range).await,
+			Instrument::Perp => market::klines(self, symbol, tf.try_into()?, range, recv_window).await,
 			_ => unimplemented!(),
 		}
 	}
 
-	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
+	async fn price(&self, symbol: Symbol, recv_window: Option<u16>) -> ExchangeResult<f64> {
 		match symbol.instrument {
-			Instrument::Perp => market::price(self, symbol.pair).await,
+			Instrument::Perp => market::price(self, symbol.pair, recv_window).await,
 			_ => unimplemented!(),
 		}
 	}
 
-	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
+	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange, recv_window: Option<u16>) -> ExchangeResult<Vec<OpenInterest>> {
 		match symbol.instrument {
-			Instrument::Perp => market::open_interest(self, symbol, tf.try_into()?, range).await,
+			Instrument::Perp => market::open_interest(self, symbol, tf.try_into()?, range, recv_window).await,
 			_ => Err(crate::ExchangeError::Method(crate::MethodError::MethodNotSupported {
 				exchange: self.name(),
 				instrument: symbol.instrument,

@@ -68,7 +68,16 @@ async fn check_mexc() {
 
 			match mexc.balances(Instrument::Perp, Some(5000)).await {
 				Ok(_) => println!("✅ MEXC: API key is valid and active"),
-				Err(e) => println!("❌ MEXC: API key error - {}", e),
+				Err(e) => {
+					let err_str = e.to_string();
+					if err_str.contains("API KEY 已过期") || err_str.contains("402") {
+						println!("❌ MEXC: API key has expired");
+					} else if err_str.contains("需要资产信息读取权限") || err_str.contains("701") {
+						println!("❌ MEXC: API key lacks read permissions for account balance");
+					} else {
+						println!("❌ MEXC: API key error - {}", e);
+					}
+				}
 			}
 		}
 		_ => println!("⚠️  MEXC: Environment variables {} or {} not set", key_var, secret_var),

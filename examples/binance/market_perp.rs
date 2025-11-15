@@ -10,12 +10,12 @@ async fn main() {
 	let symbol = Symbol::from_str("BTC-USDT.P").unwrap();
 	binance.set_max_tries(3);
 
-	let exchange_info = binance.exchange_info(symbol.instrument).await.unwrap();
+	let exchange_info = binance.exchange_info(symbol.instrument, None).await.unwrap();
 	dbg!(&exchange_info.pairs.iter().take(2).collect::<Vec<_>>());
 
-	let klines = binance.klines(symbol, "1m".into(), 2.into()).await.unwrap();
-	let price = binance.price(symbol).await.unwrap();
-	let open_interest = binance.open_interest(symbol, "1h".into(), 5.into()).await.unwrap();
+	let klines = binance.klines(symbol, "1m".into(), 2.into(), None).await.unwrap();
+	let price = binance.price(symbol, None).await.unwrap();
+	let open_interest = binance.open_interest(symbol, "1h".into(), 5.into(), None).await.unwrap();
 	dbg!(&klines, price, &open_interest);
 
 	if let (Ok(key), Ok(secret)) = (env::var("BINANCE_TIGER_READ_PUBKEY"), env::var("BINANCE_TIGER_READ_SECRET")) {

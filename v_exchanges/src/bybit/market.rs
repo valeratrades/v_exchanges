@@ -4,7 +4,10 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
-use v_exchanges_adapters::bybit::BybitOption;
+use v_exchanges_adapters::{
+	GetOptions,
+	bybit::{BybitOption, BybitOptions},
+};
 use v_utils::{
 	trades::{Kline, Ohlc, Pair},
 	utils::filter_nulls,
@@ -14,10 +17,12 @@ use super::{BybitInterval, BybitIntervalTime};
 use crate::{
 	ExchangeName, ExchangeResult, Instrument, Symbol,
 	core::{Klines, OpenInterest, RequestRange},
+	recv_window_check,
 };
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitInterval, range: RequestRange) -> ExchangeResult<Klines> {
+pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitInterval, range: RequestRange, recv_window: Option<u16>) -> ExchangeResult<Klines> {
+	recv_window_check!(recv_window, GetOptions::<BybitOptions>::default_options(client));
 	range.ensure_allowed(1..=1000, &tf)?;
 	let range_json = range.serialize(ExchangeName::Bybit);
 	let base_params = filter_nulls(json!({
@@ -31,7 +36,11 @@ pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: B
 	base_map.extend(range_map.clone());
 	let params = filter_nulls(serde_json::Value::Object(base_map));
 
-	let kline_response: KlineResponse = client.get("/v5/market/kline", &params, [BybitOption::None]).await.unwrap();
+	let mut options = vec![BybitOption::None];
+	if let Some(rw) = recv_window {
+		options.push(BybitOption::RecvWindow(rw));
+	}
+	let kline_response: KlineResponse = client.get("/v5/market/kline", &params, options).await.unwrap();
 
 	let mut klines = VecDeque::with_capacity(kline_response.result.list.len());
 	for k in kline_response.result.list {
@@ -87,12 +96,17 @@ pub struct KlineData(
 //,}}}
 
 // price {{{
-pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> ExchangeResult<f64> {
+pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair, recv_window: Option<u16>) -> ExchangeResult<f64> {
+	recv_window_check!(recv_window, GetOptions::<BybitOptions>::default_options(client));
 	let params = filter_nulls(json!({
 		"category": "linear",
 		"symbol": pair.fmt_bybit(),
 	}));
-	let response: MarketTickerResponse = client.get("/v5/market/tickers", &params, [BybitOption::None]).await?;
+	let mut options = vec![BybitOption::None];
+	if let Some(rw) = recv_window {
+		options.push(BybitOption::RecvWindow(rw));
+	}
+	let response: MarketTickerResponse = client.get("/v5/market/tickers", &params, options).await?;
 	Ok(response.result.list[0].last_price)
 }
 
@@ -157,7 +171,8 @@ pub struct MarketTickerData {
 //,}}}
 
 // open_interest {{{
-pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitIntervalTime, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
+pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitIntervalTime, range: RequestRange, recv_window: Option<u16>) -> ExchangeResult<Vec<OpenInterest>> {
+	recv_window_check!(recv_window, GetOptions::<BybitOptions>::default_options(client));
 	range.ensure_allowed(1..=200, &tf)?;
 	let range_json = range.serialize(ExchangeName::Bybit);
 
@@ -172,7 +187,11 @@ pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol
 	base_map.extend(range_map.clone());
 	let params = filter_nulls(serde_json::Value::Object(base_map));
 
-	let response: OpenInterestResponse = client.get("/v5/market/open-interest", &params, [BybitOption::None]).await?;
+	let mut options = vec![BybitOption::None];
+	if let Some(rw) = recv_window {
+		options.push(BybitOption::RecvWindow(rw));
+	}
+	let response: OpenInterestResponse = client.get("/v5/market/open-interest", &params, options).await?;
 
 	if response.result.list.is_empty() {
 		return Err(crate::ExchangeError::Other(eyre::eyre!("No open interest data returned")));
@@ -184,7 +203,11 @@ pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol
 			"category": "linear",
 			"symbol": symbol.pair.fmt_bybit(),
 		}));
-		let ticker_response: MarketTickerResponse = client.get("/v5/market/tickers", &params, [BybitOption::None]).await?;
+		let mut options = vec![BybitOption::None];
+		if let Some(rw) = recv_window {
+			options.push(BybitOption::RecvWindow(rw));
+		}
+		let ticker_response: MarketTickerResponse = client.get("/v5/market/tickers", &params, options).await?;
 		Some(ticker_response.result.list[0].last_price)
 	} else {
 		None

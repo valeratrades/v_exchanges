@@ -33,16 +33,16 @@ impl Exchange for Mexc {
 		self.update_default_option(MexcOption::RecvWindow(recv_window));
 	}
 
-	async fn prices(&self, _pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
+	async fn prices(&self, _pairs: Option<Vec<Pair>>, instrument: Instrument, _recv_window: Option<u16>) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		match instrument {
 			Instrument::Perp => unimplemented!("Mexc does not have a multi-asset endpoints for futures"),
 			_ => unimplemented!(),
 		}
 	}
 
-	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
+	async fn price(&self, symbol: Symbol, recv_window: Option<u16>) -> ExchangeResult<f64> {
 		match symbol.instrument {
-			Instrument::Perp => market::price(self, symbol.pair).await,
+			Instrument::Perp => market::price(self, symbol.pair, recv_window).await,
 			_ => unimplemented!(),
 		}
 	}

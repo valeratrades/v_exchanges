@@ -9,11 +9,11 @@ async fn main() {
 	let mut client = Bybit::default();
 	let symbol = Symbol::from_str("BTC-USDT.P").unwrap();
 
-	let klines = client.klines(symbol, "1m".into(), 2.into()).await.unwrap();
+	let klines = client.klines(symbol, "1m".into(), 2.into(), None).await.unwrap();
 	println!("{klines:?}");
-	let price = client.price(symbol).await.unwrap();
+	let price = client.price(symbol, None).await.unwrap();
 	println!("{price:?}");
-	let open_interest = client.open_interest(symbol, "1h".into(), 5.into()).await.unwrap();
+	let open_interest = client.open_interest(symbol, "1h".into(), 5.into(), None).await.unwrap();
 	println!("{open_interest:?}");
 
 	let keys_prefix = "QUANTM_BYBIT_SUB";

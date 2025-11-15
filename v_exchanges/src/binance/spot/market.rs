@@ -1,16 +1,22 @@
 use std::{collections::BTreeMap, str::FromStr};
 
-use adapters::binance::{BinanceHttpUrl, BinanceOption};
+use adapters::binance::{BinanceHttpUrl, BinanceOption, BinanceOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_with::{DisplayFromStr, serde_as};
 use tracing::instrument;
+use v_exchanges_adapters::GetOptions;
 use v_utils::trades::Pair;
 
-use crate::ExchangeResult;
+use crate::{ExchangeResult, recv_window_check};
 
 #[instrument(skip_all, fields(?pairs))]
-pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>, recv_window: Option<u16>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
+	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::Spot)];
+	if let Some(rw) = recv_window {
+		options.push(BinanceOption::RecvWindow(rw));
+	}
 	let r: PricesResponse = match pairs {
 		//TODO!!!: fix this branch
 		//BUG: doesn't work for some reason
@@ -19,9 +25,9 @@ pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pai
 				"symbols": pairs.into_iter().map(|p| p.to_string()).collect::<Vec<String>>(),
 			});
 			dbg!(&params);
-			client.get("/api/v3/ticker/price", &params, [BinanceOption::HttpUrl(BinanceHttpUrl::Spot)]).await.unwrap()
+			client.get("/api/v3/ticker/price", &params, options).await.unwrap()
 		}
-		None => client.get_no_query("/api/v3/ticker/price", [BinanceOption::HttpUrl(BinanceHttpUrl::Spot)]).await.unwrap(),
+		None => client.get_no_query("/api/v3/ticker/price", options).await.unwrap(),
 	};
 
 	//let mut prices = Vec::with_capacity(r.0.len());
@@ -40,12 +46,17 @@ pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pai
 	Ok(prices)
 }
 
-pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> ExchangeResult<f64> {
+pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair, recv_window: Option<u16>) -> ExchangeResult<f64> {
+	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	let params = json!({
 		"symbol": pair.fmt_binance(),
 	});
 
-	let r: AssetPriceResponse = client.get("/api/v3/ticker/price", &params, [BinanceOption::HttpUrl(BinanceHttpUrl::Spot)]).await.unwrap();
+	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::Spot)];
+	if let Some(rw) = recv_window {
+		options.push(BinanceOption::RecvWindow(rw));
+	}
+	let r: AssetPriceResponse = client.get("/api/v3/ticker/price", &params, options).await.unwrap();
 	let price = r.price;
 	Ok(price)
 }

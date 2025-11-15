@@ -1,32 +1,45 @@
 use adapters::Client;
 //HACK: Methods should be implemented on the central interface struct, following <https://github.com/wisespace-io/binance-rs>.
 use serde_with::{DisplayFromStr, serde_as};
-use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
+use v_exchanges_adapters::{
+	GetOptions,
+	binance::{BinanceHttpUrl, BinanceOption, BinanceOptions},
+};
 use v_utils::prelude::*;
 
-use crate::ExchangeResult;
+use crate::{ExchangeResult, recv_window_check};
 
 // price {{{
 //HACK: should use /fapi/v2/ticker/price instead
-pub async fn price(client: &Client, pair: Pair) -> ExchangeResult<f64> {
+pub async fn price(client: &Client, pair: Pair, recv_window: Option<u16>) -> ExchangeResult<f64> {
+	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	let params = json!({
 		"symbol": pair.fmt_binance(),
 	});
 
-	let r: MarkPriceResponse = client.get("/fapi/v1/premiumIndex", &params, [BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)]).await?;
+	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)];
+	if let Some(rw) = recv_window {
+		options.push(BinanceOption::RecvWindow(rw));
+	}
+	let r: MarkPriceResponse = client.get("/fapi/v1/premiumIndex", &params, options).await?;
 	let price = r.index_price; // when using this framework, we care for per-exchange price, obviously
 	Ok(price)
 }
 
-pub async fn prices(client: &Client, pairs: Option<Vec<Pair>>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+pub async fn prices(client: &Client, pairs: Option<Vec<Pair>>, recv_window: Option<u16>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
+	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)];
+	if let Some(rw) = recv_window {
+		options.push(BinanceOption::RecvWindow(rw));
+	}
 	let rs: Vec<PriceObject> = match pairs {
 		Some(pairs) => {
 			let params = json!({
 				"symbols": pairs.into_iter().map(|p| p.to_string()).collect::<Vec<String>>(),
 			});
-			client.get("/fapi/v1/ticker/price", &params, [BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)]).await?
+			client.get("/fapi/v1/ticker/price", &params, options).await?
 		}
-		None => client.get_no_query("/fapi/v2/ticker/price", [BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)]).await?,
+		None => client.get_no_query("/fapi/v2/ticker/price", options).await?,
 	};
 	Ok(rs.into_iter().map(Into::into).collect())
 }

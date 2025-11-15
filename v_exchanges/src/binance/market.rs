@@ -5,18 +5,23 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
-use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
+use v_exchanges_adapters::{
+	GetOptions,
+	binance::{BinanceHttpUrl, BinanceOption, BinanceOptions},
+};
 use v_utils::trades::{Kline, Ohlc};
 
 use super::BinanceTimeframe;
 use crate::{
 	ExchangeError, ExchangeName, Instrument, Symbol,
 	core::{Klines, OpenInterest, RequestRange},
+	recv_window_check,
 	utils::join_params,
 };
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BinanceTimeframe, range: RequestRange) -> Result<Klines, ExchangeError> {
+pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BinanceTimeframe, range: RequestRange, recv_window: Option<u16>) -> Result<Klines, ExchangeError> {
+	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	//TODO: test if embedding params into the url works more consistently (comp number of pairs axum-site is ablle ot get)
 	range.ensure_allowed(1..=1000, tf.as_ref())?;
 	let range_params = range.serialize(ExchangeName::Binance);
@@ -33,7 +38,11 @@ pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: B
 		_ => unimplemented!(),
 	};
 
-	let kline_responses: Vec<KlineResponse> = client.get(&format!("{endpoint_prefix}/klines"), &params, [BinanceOption::HttpUrl(base_url)]).await?;
+	let mut options = vec![BinanceOption::HttpUrl(base_url)];
+	if let Some(rw) = recv_window {
+		options.push(BinanceOption::RecvWindow(rw));
+	}
+	let kline_responses: Vec<KlineResponse> = client.get(&format!("{endpoint_prefix}/klines"), &params, options).await?;
 
 	let r_len = kline_responses.len();
 	let mut klines = VecDeque::with_capacity(r_len);
@@ -98,7 +107,14 @@ pub struct KlineResponse {
 //,}}}
 
 // open_interest {{{
-pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BinanceTimeframe, range: RequestRange) -> Result<Vec<OpenInterest>, ExchangeError> {
+pub async fn open_interest(
+	client: &v_exchanges_adapters::Client,
+	symbol: Symbol,
+	tf: BinanceTimeframe,
+	range: RequestRange,
+	recv_window: Option<u16>,
+) -> Result<Vec<OpenInterest>, ExchangeError> {
+	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	range.ensure_allowed(1..=500, tf.as_ref())?;
 	let range_params = range.serialize(ExchangeName::Binance);
 	let base_params = json!({
@@ -116,7 +132,11 @@ pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol
 			})),
 	};
 
-	let responses: Vec<OpenInterestResponse> = client.get(endpoint, &params, [BinanceOption::HttpUrl(base_url)]).await?;
+	let mut options = vec![BinanceOption::HttpUrl(base_url)];
+	if let Some(rw) = recv_window {
+		options.push(BinanceOption::RecvWindow(rw));
+	}
+	let responses: Vec<OpenInterestResponse> = client.get(endpoint, &params, options).await?;
 
 	if responses.is_empty() {
 		return Err(ExchangeError::Other(eyre::eyre!("No open interest data returned")));
