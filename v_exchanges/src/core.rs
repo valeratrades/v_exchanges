@@ -48,12 +48,16 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	//DO: same for other fields in [RequestConfig](v_exchanges_api_generics::http::RequestConfig)
 	//,}}}
 
+	//Q: do we actually want to return a `MethodNotSupported` error, or should we just `unimplemented!()`?
+
+	#[allow(unused_variables)]
 	#[allow(dead_code)]
 	async fn exchange_info(&self, instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<ExchangeInfo> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
+	#[allow(unused_variables)]
 	#[allow(dead_code)]
 	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange, recv_window: Option<u16>) -> ExchangeResult<Klines> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported {
@@ -63,11 +67,13 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	}
 
 	/// If no pairs are specified, returns for all;
+	#[allow(unused_variables)]
 	#[allow(dead_code)]
 	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 
+	#[allow(unused_variables)]
 	#[allow(dead_code)]
 	async fn price(&self, symbol: Symbol, recv_window: Option<u16>) -> ExchangeResult<f64> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported {
@@ -78,6 +84,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 
 	/// Get Open Interest data
 	/// in output vec: greater the index, fresher the data
+	#[allow(unused_variables)]
 	#[allow(dead_code)]
 	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange, recv_window: Option<u16>) -> ExchangeResult<Vec<OpenInterest>> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported {
@@ -88,14 +95,16 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 
 	// Authenticated {{{
 	/// balance of a specific asset. Does not guarantee provision of USD values.
+	#[allow(unused_variables)]
 	#[allow(dead_code)]
 	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<AssetBalance> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 
 	/// vec of _non-zero_ balances exclusively. Provides USD values.
+	#[allow(unused_variables)]
 	#[allow(dead_code)]
-	async fn balances(&self, instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<Balances> {
+	async fn balances(&self, instrument: Instrument, #[allow(unused_variables)] recv_window: Option<u16>) -> ExchangeResult<Balances> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 	//,}}}
@@ -108,9 +117,10 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 
 	// Websocket {{{
 	// Start a websocket connection for individual trades
+	#[allow(unused_variables)]
 	#[allow(dead_code)]
 	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>> {
-		unimplemented!();
+		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 	//,}}}
 }

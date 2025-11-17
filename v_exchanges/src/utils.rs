@@ -22,18 +22,6 @@ pub fn join_params(a: Value, b: Value) -> Value {
 	}
 }
 
-pub fn usd_value(underlying: f64, asset: Asset, prices: &BTreeMap<Pair, f64>) -> Result<Usd> {
-	if underlying == 0. {
-		return Ok(Usd(0.));
-	}
-	if asset == "USDT" {
-		return Ok(Usd(underlying));
-	}
-	let usdt_pair = Pair::new(asset, "USDT".into());
-	let usdt_price = prices.get(&usdt_pair).ok_or_else(|| eyre!("No usdt price found for {asset}, which has non-zero balance."))?;
-	Ok((underlying * usdt_price).into())
-}
-
 #[macro_export]
 macro_rules! define_provider_timeframe {
 	($struct_name:ident, $timeframes:expr) => {
