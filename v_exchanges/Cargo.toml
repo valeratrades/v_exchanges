@@ -115,5 +115,5 @@ path = "../examples/mexc.rs"
 
 [[example]]
 name = "healthcheck"
-required-features = ["binance", "bybit", "mexc"]
+required-features = ["binance", "bybit", "kucoin", "mexc"]
 path = "../examples/healthcheck.rs"
