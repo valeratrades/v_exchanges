@@ -414,7 +414,7 @@ impl std::str::FromStr for Symbol {
 	type Err = eyre::Report;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let (pair_str, instrument_ticker_str) = s.split_once('.').map(|(p, i)| (p, format!(".{i}"))).unwrap_or((s, "".to_owned()));
+		let (pair_str, instrument_ticker_str) = s.split_once('.').map(|(p, i)| (p, format!(".{}", i.to_uppercase()))).unwrap_or((s, "".to_owned()));
 		let pair = Pair::from_str(pair_str)?;
 		let instrument = Instrument::from_str(&instrument_ticker_str)?;
 
@@ -485,5 +485,20 @@ mod test {
 		assert_eq!(ticker.symbol.pair, super::Pair::new("BTC", "USDT"));
 		assert_eq!(ticker.symbol.instrument, super::Instrument::Perp);
 		assert_eq!(ticker.exchange_name, super::ExchangeName::Bybit);
+	}
+
+	#[test]
+	fn from_str_case_insensitive() {
+		// Test lowercase instrument suffix
+		let ticker_str = "binance:btc-usdt.p";
+		let ticker: super::Ticker = ticker_str.parse().unwrap();
+		assert_eq!(ticker.symbol.pair, super::Pair::new("BTC", "USDT"));
+		assert_eq!(ticker.symbol.instrument, super::Instrument::Perp);
+		assert_eq!(ticker.exchange_name, super::ExchangeName::Binance);
+
+		// Test mixed case
+		let ticker_str2 = "bybit:ETH-USDT.pErP_iNvErSe";
+		let ticker2: super::Ticker = ticker_str2.parse().unwrap();
+		assert_eq!(ticker2.symbol.instrument, super::Instrument::PerpInverse);
 	}
 }
