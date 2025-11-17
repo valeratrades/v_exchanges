@@ -60,10 +60,10 @@ where
 			let mut request = builder.build().expect("From what I understand, can't trigger this from client-side");
 
 			// Build prehash string: timestamp + method + endpoint + body
-			let method = request.method().as_str();
-			let endpoint = request.url().path();
-			let query = request.url().query().unwrap_or("");
-			let endpoint_with_query = if query.is_empty() { endpoint.to_string() } else { format!("{}?{}", endpoint, query) };
+			let method = request.method().as_str().to_string();
+			let endpoint = request.url().path().to_string();
+			let query = request.url().query().unwrap_or("").to_string();
+			let endpoint_with_query = if query.is_empty() { endpoint.clone() } else { format!("{}?{}", endpoint, query) };
 
 			let prehash = format!("{}{}{}{}", timestamp, method, endpoint_with_query, body_str);
 
@@ -79,6 +79,7 @@ where
 
 			// Add headers
 			let headers = request.headers_mut();
+
 			headers.insert(
 				"KC-API-KEY",
 				header::HeaderValue::from_str(pubkey).map_err(|e| AuthError::InvalidCharacterInApiKey(e.to_string()))?,

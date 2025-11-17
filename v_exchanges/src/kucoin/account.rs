@@ -1,6 +1,5 @@
 use adapters::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use serde_with::{DisplayFromStr, serde_as};
 use tracing::warn;
 use v_exchanges_adapters::kucoin::{KucoinAuth, KucoinHttpUrl, KucoinOption};
@@ -25,7 +24,8 @@ pub async fn balances(client: &Client, _recv_window: Option<u16>) -> ExchangeRes
 	assert!(client.is_authenticated::<KucoinOption>());
 
 	let options = vec![KucoinOption::HttpAuth(KucoinAuth::Sign), KucoinOption::HttpUrl(KucoinHttpUrl::Spot)];
-	let account_response: AccountResponse = client.get("/api/v1/accounts", &json!({}), options).await?;
+	let empty_params: &[(String, String)] = &[];
+	let account_response: AccountResponse = client.get("/api/v1/accounts", empty_params, options).await?;
 
 	let mut vec_balance = Vec::new();
 	let total_usd = 0.0;

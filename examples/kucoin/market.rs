@@ -21,6 +21,7 @@ async fn main() -> eyre::Result<()> {
 	// Test authenticated endpoints if credentials are available
 	if let (Ok(pubkey), Ok(secret), Ok(passphrase)) = (std::env::var("KUCOIN_API_PUBKEY"), std::env::var("KUCOIN_API_SECRET"), std::env::var("KUCOIN_API_PASSPHRASE")) {
 		println!("\nTesting authenticated endpoints...");
+
 		kucoin.update_default_option(KucoinOption::Pubkey(pubkey));
 		kucoin.update_default_option(KucoinOption::Secret(SecretString::from(secret)));
 		kucoin.update_default_option(KucoinOption::Passphrase(SecretString::from(passphrase)));

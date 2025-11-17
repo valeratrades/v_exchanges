@@ -3,21 +3,21 @@
 
 use std::{marker::PhantomData, time::SystemTime};
 
+use generics::{
+	http::{BuildError, HandleError, header::HeaderValue, *},
+	tokio_tungstenite::tungstenite,
+	ws::{ContentEvent, ResponseOrContent, Topic, WsConfig, WsError, WsHandler},
+};
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::json;
 use sha2::Sha256;
-use v_exchanges_api_generics::{
-	http::{header::HeaderValue, *},
-	websocket::*,
-};
 
 use crate::traits::*;
 
 /// The type returned by [Client::request()].
-pub type CoincheckRequestResult<T> = Result<T, CoincheckRequestError>;
-pub type CoincheckRequestError = RequestError<&'static str, CoincheckHandlerError>;
+pub type CoincheckRequestResult<T> = Result<T, RequestError>;
 
 /// Options that can be set when creating handlers
 #[derive(Debug, Default)]
@@ -112,24 +112,22 @@ where
 	B: Serialize,
 	R: DeserializeOwned,
 {
-	type BuildError = &'static str;
 	type Successful = R;
-	type Unsuccessful = CoincheckHandlerError;
 
-	fn base_url(&self, is_test: bool) -> String {
+	fn base_url(&self, is_test: bool) -> Result<url::Url, generics::UrlError> {
 		match is_test {
 			true => todo!(),
-			false => self.options.http_url.as_str().to_owned(),
+			false => url::Url::parse(self.options.http_url.as_str()).map_err(generics::UrlError::Parse),
 		}
 	}
 
-	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, Self::BuildError> {
+	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, BuildError> {
 		if let Some(body) = request_body {
-			let encoded = serde_urlencoded::to_string(body).or(Err("could not serialize body as application/x-www-form-urlencoded"))?;
+			let encoded = serde_urlencoded::to_string(body).map_err(BuildError::UrlSerialization)?;
 			builder = builder.header(header::CONTENT_TYPE, "application/x-www-form-urlencoded").body(encoded);
 		}
 
-		let mut request = builder.build().or(Err("failed to build request"))?;
+		let mut request = builder.build().map_err(|e| BuildError::Other(eyre::eyre!("failed to build request: {}", e)))?;
 
 		if self.options.http_auth {
 			// https://coincheck.com/ja/documents/exchange/api#auth
@@ -140,13 +138,19 @@ where
 
 			let sign_contents = format!("{}{}{}", timestamp, request.url(), body);
 
-			let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or("API secret not set")?;
+			let secret = self
+				.options
+				.secret
+				.as_ref()
+				.map(|s| s.expose_secret())
+				.ok_or(BuildError::Auth(generics::AuthError::MissingSecret))?;
 			let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap(); // hmac accepts key of any length
 
 			hmac.update(sign_contents.as_bytes());
 			let signature = hex::encode(hmac.finalize().into_bytes());
 
-			let key = HeaderValue::from_str(self.options.key.as_deref().ok_or("API key not set")?).or(Err("invalid character in API key"))?;
+			let key = HeaderValue::from_str(self.options.key.as_deref().ok_or(BuildError::Auth(generics::AuthError::MissingPubkey))?)
+				.map_err(|e| BuildError::Auth(generics::AuthError::InvalidCharacterInApiKey(e.to_string())))?;
 			let headers = request.headers_mut();
 			headers.insert("ACCESS-KEY", key);
 			headers.insert("ACCESS-NONCE", HeaderValue::from(timestamp));
@@ -156,23 +160,18 @@ where
 		Ok(request)
 	}
 
-	fn handle_response(&self, status: StatusCode, _: HeaderMap, response_body: Bytes) -> Result<Self::Successful, Self::Unsuccessful> {
+	fn handle_response(&self, status: StatusCode, _: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError> {
 		if status.is_success() {
 			serde_json::from_slice(&response_body).map_err(|error| {
 				tracing::debug!("Failed to parse response due to an error: {}", error);
-				CoincheckHandlerError::ParseError
+				HandleError::ParseJson(error)
 			})
 		} else {
 			let error = match serde_json::from_slice(&response_body) {
-				Ok(parsed_error) =>
-					if status == 429 {
-						CoincheckHandlerError::RequestLimitExceeded(parsed_error)
-					} else {
-						CoincheckHandlerError::ApiError(parsed_error)
-					},
+				Ok(parsed_error) => HandleError::Api(generics::http::ApiError { status, body: parsed_error }),
 				Err(error) => {
 					tracing::debug!("Failed to parse error response due to an error: {}", error);
-					CoincheckHandlerError::ParseError
+					HandleError::ParseJson(error)
 				}
 			};
 			Err(error)
@@ -180,38 +179,8 @@ where
 	}
 }
 
-impl WebSocketHandler for CoincheckWebSocketHandler {
-	fn websocket_config(&self) -> WebSocketConfig {
-		let mut config = self.options.websocket_config.clone();
-		if self.options.websocket_url != CoincheckWebSocketUrl::None {
-			config.url_prefix = self.options.websocket_url.as_str().to_owned();
-		}
-		config
-	}
-
-	fn handle_start(&mut self) -> Vec<WebSocketMessage> {
-		self.options
-			.websocket_channels
-			.clone()
-			.into_iter()
-			.map(|channel| WebSocketMessage::Text(json!({ "type": "subscribe", "channel": channel }).to_string()))
-			.collect()
-	}
-
-	fn handle_message(&mut self, message: WebSocketMessage) -> Vec<WebSocketMessage> {
-		match message {
-			WebSocketMessage::Text(message) => {
-				match serde_json::from_str(&message) {
-					Ok(message) => (self.message_handler)(message),
-					Err(_) => tracing::debug!("Invalid JSON message received"),
-				};
-			}
-			WebSocketMessage::Binary(_) => tracing::debug!("Unexpected binary message received"),
-			WebSocketMessage::Ping(_) | WebSocketMessage::Pong(_) => (),
-		}
-		vec![]
-	}
-}
+// TODO: Implement WsHandler for CoincheckWebSocketHandler
+// The WebSocket implementation needs to be updated to match the new WsHandler trait
 
 impl CoincheckHttpUrl {
 	/// The base URL that this variant represents.
@@ -284,16 +253,8 @@ where
 	}
 }
 
-impl<H: FnMut(serde_json::Value) + Send + 'static> WebSocketOption<H> for CoincheckOption {
-	type WebSocketHandler = CoincheckWebSocketHandler;
-
-	fn websocket_handler(handler: H, options: Self::Options) -> Self::WebSocketHandler {
-		CoincheckWebSocketHandler {
-			message_handler: Box::new(handler),
-			options,
-		}
-	}
-}
+// TODO: Implement WsOption for CoincheckOption
+// This needs to be updated to match the new WsOption trait
 
 impl HandlerOption for CoincheckOption {
 	type Options = CoincheckOptions;

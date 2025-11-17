@@ -1,7 +1,7 @@
 mod account;
 mod market;
 
-use adapters::kucoin::KucoinOption;
+pub use adapters::kucoin::KucoinOption;
 use secrecy::SecretString;
 use v_exchanges_adapters::Client;
 use v_utils::trades::Asset;
