@@ -342,6 +342,7 @@ define_str_enum! {
 	pub enum ExchangeName {
 		Binance => "binance",
 		Bybit => "bybit",
+		Kucoin => "kucoin",
 		Mexc => "mexc",
 		BitFlyer => "bitflyer",
 		Coincheck => "coincheck",
@@ -355,6 +356,8 @@ impl ExchangeName {
 			Self::Binance => Box::new(crate::Binance(Client::default())),
 			#[cfg(feature = "bybit")]
 			Self::Bybit => Box::new(crate::Bybit(Client::default())),
+			#[cfg(feature = "kucoin")]
+			Self::Kucoin => Box::new(crate::Kucoin(Client::default())),
 			#[cfg(feature = "mexc")]
 			Self::Mexc => Box::new(crate::Mexc(Client::default())),
 			_ => unimplemented!(),

@@ -26,11 +26,12 @@ rustdoc-args = ["--cfg", "docsrs"]
 [features]
 default = ["native-tls"]
 
-full = ["binance", "bitflyer", "bybit", "coincheck", "mexc"]
+full = ["binance", "bitflyer", "bybit", "coincheck", "kucoin", "mexc"]
 binance = ["dep:rand"]
 bitflyer = ["dep:rand"]
 bybit = ["dep:rand"]
 coincheck = []
+kucoin = []
 mexc = []
 
 native-tls = ["v_exchanges_api_generics/native-tls"]
@@ -39,6 +40,7 @@ rustls-tls-native-roots = ["v_exchanges_api_generics/rustls-tls-native-roots"]
 rustls-tls-webpki-roots = ["v_exchanges_api_generics/rustls-tls-webpki-roots"]
 
 [dependencies]
+base64.workspace = true
 derive-new.workspace = true
 derive_more.workspace = true
 eyre.workspace = true

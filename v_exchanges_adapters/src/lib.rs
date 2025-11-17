@@ -36,6 +36,8 @@ pub struct Client {
 	bybit: bybit::BybitOptions,
 	#[cfg(feature = "coincheck")]
 	coincheck: coincheck::CoincheckOptions,
+	#[cfg(feature = "kucoin")]
+	kucoin: kucoin::KucoinOptions,
 	#[cfg(feature = "mexc")]
 	mexc: mexc::MexcOptions,
 }
@@ -214,6 +216,17 @@ impl GetOptions<coincheck::CoincheckOptions> for Client {
 
 	fn default_options_mut(&mut self) -> &mut coincheck::CoincheckOptions {
 		&mut self.coincheck
+	}
+}
+#[cfg(feature = "kucoin")]
+#[cfg_attr(docsrs, doc(cfg(feature = "kucoin")))]
+impl GetOptions<kucoin::KucoinOptions> for Client {
+	fn default_options(&self) -> &kucoin::KucoinOptions {
+		&self.kucoin
+	}
+
+	fn default_options_mut(&mut self) -> &mut kucoin::KucoinOptions {
+		&mut self.kucoin
 	}
 }
 #[cfg(feature = "mexc")]

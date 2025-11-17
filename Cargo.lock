@@ -2632,6 +2632,7 @@ dependencies = [
 name = "v_exchanges_adapters"
 version = "0.13.3"
 dependencies = [
+ "base64",
  "derive-new",
  "derive_more",
  "eyre",

@@ -27,12 +27,13 @@ ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
 default = ["major", "data"]
 
 full = ["major", "data", "bitflyer", "coincheck"]
-major = ["binance", "bybit", "mexc"]
+major = ["binance", "bybit", "kucoin", "mexc"]
 
 binance = ["v_exchanges_adapters/binance"]
 bybit = ["v_exchanges_adapters/bybit"]
 bitflyer = ["v_exchanges_adapters/bitflyer"]
 coincheck = ["v_exchanges_adapters/coincheck"]
+kucoin = ["v_exchanges_adapters/kucoin"]
 mexc = ["v_exchanges_adapters/mexc"]
 data = ["dep:reqwest"]
 
@@ -101,6 +102,11 @@ path = "../examples/binance/orders.rs"
 name = "bybit_market"
 required-features = ["bybit"]
 path = "../examples/bybit/market.rs"
+
+[[example]]
+name = "kucoin_market"
+required-features = ["kucoin"]
+path = "../examples/kucoin/market.rs"
 
 [[example]]
 name = "mexc"

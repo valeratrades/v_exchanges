@@ -22,6 +22,8 @@ pub mod prelude {
 	pub use crate::bybit::Bybit;
 	#[cfg(feature = "coincheck")]
 	pub use crate::coincheck::Coincheck;
+	#[cfg(feature = "kucoin")]
+	pub use crate::kucoin::Kucoin;
 	#[cfg(feature = "mexc")]
 	pub use crate::mexc::Mexc;
 	#[cfg(feature = "data")]
@@ -39,6 +41,10 @@ pub mod binance;
 #[cfg(feature = "bybit")]
 #[cfg_attr(docsrs, doc(cfg(feature = "bybit")))]
 pub mod bybit;
+
+#[cfg(feature = "kucoin")]
+#[cfg_attr(docsrs, doc(cfg(feature = "kucoin")))]
+pub mod kucoin;
 
 #[cfg(feature = "mexc")]
 #[cfg_attr(docsrs, doc(cfg(feature = "mexc")))]
