@@ -3,10 +3,7 @@ mod market;
 
 pub use adapters::kucoin::KucoinOption;
 
-crate::define_provider_timeframe!(
-	KucoinTimeframe,
-	["1min", "3min", "5min", "15min", "30min", "1hour", "2hour", "4hour", "6hour", "8hour", "12hour", "1day", "1week"]
-);
+crate::define_provider_timeframe!(KucoinTimeframe, ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "1w"]);
 use std::collections::BTreeMap;
 
 use secrecy::SecretString;

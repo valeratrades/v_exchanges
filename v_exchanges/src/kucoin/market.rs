@@ -130,7 +130,10 @@ pub struct TickerInfo {
 // klines {{{
 pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: KucoinTimeframe, range: RequestRange, _recv_window: Option<u16>) -> ExchangeResult<Klines> {
 	let kucoin_symbol = format!("{}-{}", symbol.pair.base(), symbol.pair.quote());
-	let type_param = tf.to_string();
+
+	// Convert from v_utils format (1h, 1d, 1w) to Kucoin API format (1hour, 1day, 1week)
+	let tf_str = tf.to_string();
+	let type_param = tf_str.replace("m", "min").replace("h", "hour").replace("d", "day").replace("w", "week");
 
 	let mut params = vec![("symbol", kucoin_symbol.as_str()), ("type", type_param.as_str())];
 
@@ -202,9 +205,14 @@ pub async fn exchange_info(client: &v_exchanges_adapters::Client, _recv_window: 
 		if symbol.enable_trading {
 			if let Some((base, quote)) = symbol.symbol.split_once('-') {
 				let pair = Pair::new(base, quote);
-				let pair_info = PairInfo {
-					price_precision: symbol.price_precision,
+				// Calculate price precision from priceIncrement
+				// e.g., 0.0001 -> 4, 0.001 -> 3, 1.0 -> 0
+				let price_precision = if symbol.price_increment == 0.0 {
+					0
+				} else {
+					(-symbol.price_increment.log10()).max(0.0).round() as u8
 				};
+				let pair_info = PairInfo { price_precision };
 				pairs.insert(pair, pair_info);
 			}
 		}
@@ -246,7 +254,6 @@ pub struct KucoinSymbol {
 	pub quote_increment: f64,
 	#[serde_as(as = "DisplayFromStr")]
 	pub price_increment: f64,
-	pub price_precision: u8,
 	pub price_limit_rate: Option<String>,
 	#[serde_as(as = "Option<DisplayFromStr>")]
 	pub min_funds: Option<f64>,
