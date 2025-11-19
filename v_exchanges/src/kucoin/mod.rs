@@ -2,13 +2,20 @@ mod account;
 mod market;
 
 pub use adapters::kucoin::KucoinOption;
+
+crate::define_provider_timeframe!(
+	KucoinTimeframe,
+	["1min", "3min", "5min", "15min", "30min", "1hour", "2hour", "4hour", "6hour", "8hour", "12hour", "1day", "1week"]
+);
+use std::collections::BTreeMap;
+
 use secrecy::SecretString;
 use v_exchanges_adapters::Client;
-use v_utils::trades::Asset;
+use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::{
-	Balances, ExchangeName, ExchangeResult, Instrument, Symbol,
-	core::{AssetBalance, Exchange},
+	Balances, ExchangeName, ExchangeResult, Instrument, RequestRange, Symbol,
+	core::{AssetBalance, Exchange, ExchangeInfo, Klines},
 };
 
 #[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
@@ -30,9 +37,30 @@ impl Exchange for Kucoin {
 		// Kucoin doesn't use recv_window in the same way as Binance/Bybit
 	}
 
+	async fn exchange_info(&self, instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<ExchangeInfo> {
+		match instrument {
+			Instrument::Spot => market::exchange_info(self, recv_window).await,
+			_ => unimplemented!(),
+		}
+	}
+
 	async fn price(&self, symbol: Symbol, recv_window: Option<u16>) -> ExchangeResult<f64> {
 		match symbol.instrument {
 			Instrument::Spot => market::price(self, symbol.pair, recv_window).await,
+			_ => unimplemented!(),
+		}
+	}
+
+	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+		match instrument {
+			Instrument::Spot => market::prices(self, pairs, recv_window).await,
+			_ => unimplemented!(),
+		}
+	}
+
+	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange, recv_window: Option<u16>) -> ExchangeResult<Klines> {
+		match symbol.instrument {
+			Instrument::Spot => market::klines(self, symbol, tf.try_into()?, range, recv_window).await,
 			_ => unimplemented!(),
 		}
 	}

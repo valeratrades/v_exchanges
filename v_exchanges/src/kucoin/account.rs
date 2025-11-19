@@ -1,13 +1,15 @@
 use adapters::Client;
+use eyre::{Result, eyre};
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
 use tracing::warn;
 use v_exchanges_adapters::kucoin::{KucoinAuth, KucoinHttpUrl, KucoinOption};
-use v_utils::trades::Asset;
+use v_utils::trades::{Asset, Pair, Usd};
 
 use crate::{
 	ExchangeResult,
 	core::{AssetBalance, Balances},
+	kucoin::market,
 };
 
 pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, _recv_window: Option<u16>) -> ExchangeResult<AssetBalance> {
@@ -20,29 +22,50 @@ pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, 
 	Ok(balance)
 }
 
-pub async fn balances(client: &Client, _recv_window: Option<u16>) -> ExchangeResult<Balances> {
+pub async fn balances(client: &Client, recv_window: Option<u16>) -> ExchangeResult<Balances> {
 	assert!(client.is_authenticated::<KucoinOption>());
 
 	let options = vec![KucoinOption::HttpAuth(KucoinAuth::Sign), KucoinOption::HttpUrl(KucoinHttpUrl::Spot)];
 	let empty_params: &[(String, String)] = &[];
 	let account_response: AccountResponse = client.get("/api/v1/accounts", empty_params, options).await?;
 
-	let mut vec_balance = Vec::new();
-	let total_usd = 0.0;
+	// Helper function to calculate USD value for an asset
+	async fn usd_value(client: &Client, underlying: f64, asset: Asset, recv_window: Option<u16>) -> Result<Usd> {
+		if underlying == 0. {
+			return Ok(Usd(0.));
+		}
+		// Check common stablecoins
+		if asset == "USDT" || asset == "USDC" || asset == "BUSD" || asset == "DAI" {
+			return Ok(Usd(underlying));
+		}
+		// Fetch price for non-stablecoin assets
+		let usdt_pair = Pair::new(asset, "USDT".into());
+		let usdt_price = market::price(client, usdt_pair, recv_window)
+			.await
+			.map_err(|e| eyre!("Failed to fetch USDT price for {asset} (balance: {underlying}): {e}"))?;
+		Ok((underlying * usdt_price).into())
+	}
 
+	let mut balances: Vec<AssetBalance> = Vec::new();
 	for account in &account_response.data {
 		// Only include accounts with non-zero balances
 		if account.balance > 0.0 {
-			vec_balance.push(AssetBalance {
-				asset: (&*account.currency).into(),
-				underlying: account.balance,
-				usd: None, // Kucoin doesn't provide USD values in this endpoint
-			});
+			let asset: Asset = (&*account.currency).into();
+			let underlying = account.balance;
+			let usd = usd_value(client, underlying, asset, recv_window).await.ok();
+
+			balances.push(AssetBalance { asset, underlying, usd });
 		}
 	}
 
-	let balances = Balances::new(vec_balance, total_usd.into());
-	Ok(balances)
+	let total = balances.iter().fold(Usd(0.), |acc, b| {
+		acc + match b.usd {
+			Some(b) => b,
+			None => Usd(0.),
+		}
+	});
+
+	Ok(Balances::new(balances, total))
 }
 
 #[derive(Debug, Deserialize, Serialize)]
