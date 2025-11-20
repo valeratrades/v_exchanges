@@ -70,12 +70,8 @@
           inherit stdenv;
           shellHook =
             pre-commit-check.shellHook +
+            workflowContents.shellHook +
             ''
-              							mkdir -p ./.github/workflows
-              							cp -f ${workflowContents.errors} ./.github/workflows/errors.yml
-              							cp -f ${workflowContents.warnings} ./.github/workflows/warnings.yml
-              							cp -f ${workflowContents.other} ./.github/workflows/other.yml
-
               							cp -f ${v-utils.files.licenses.blue_oak} ./LICENSE
 
               							cargo -Zscript -q ${v-utils.hooks.appendCustom} ./.git/hooks/pre-commit

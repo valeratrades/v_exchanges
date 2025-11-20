@@ -11,3 +11,6 @@ options = ["--edition", "2024"]
 command = "leptosfmt"
 includes = ["*.rs"]
 options = ["--tab-spaces", "2", "--max-width", "100"]
+
+[global]
+excludes = ["examples/config.*"]
