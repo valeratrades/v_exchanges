@@ -1,4 +1,4 @@
-use std::{env, str::FromStr as _};
+use std::{env, str::FromStr as _, time::Duration};
 
 use v_exchanges::prelude::*;
 
@@ -20,9 +20,9 @@ async fn main() {
 
 	if let (Ok(key), Ok(secret)) = (env::var("BINANCE_TIGER_READ_PUBKEY"), env::var("BINANCE_TIGER_READ_SECRET")) {
 		binance.auth(key, secret.into());
-		let balance_usdt = binance.asset_balance("USDT".into(), symbol.instrument, Some(10_000)).await.unwrap();
+		let balance_usdt = binance.asset_balance("USDT".into(), symbol.instrument, Some(Duration::from_millis(10_000))).await.unwrap();
 		dbg!(&balance_usdt);
-		let balances = binance.balances(symbol.instrument, Some(10_000)).await.unwrap();
+		let balances = binance.balances(symbol.instrument, Some(Duration::from_millis(10_000))).await.unwrap();
 		dbg!(&balances);
 	} else {
 		eprintln!("BINANCE_TIGER_READ_PUBKEY or BINANCE_TIGER_READ_SECRET is missing, skipping private API methods.");

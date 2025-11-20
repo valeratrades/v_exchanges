@@ -14,7 +14,7 @@ use crate::{
 };
 
 // price {{{
-pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair, _recv_window: Option<u16>) -> ExchangeResult<f64> {
+pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair, _recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
 	let symbol = format!("{}-{}", pair.base(), pair.quote());
 	let params = json!({
 		"symbol": symbol,
@@ -53,7 +53,7 @@ pub struct TickerData {
 //,}}}
 
 // prices {{{
-pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>, _recv_window: Option<u16>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>, _recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
 	let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Spot)];
 	let response: AllTickersResponse = client.get("/api/v1/market/allTickers", &json!({}), options).await?;
 
@@ -65,10 +65,10 @@ pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pai
 			let pair = Pair::new(base, quote);
 
 			// If pairs filter is specified, only include those pairs
-			if let Some(ref requested_pairs) = pairs {
-				if !requested_pairs.contains(&pair) {
-					continue;
-				}
+			if let Some(ref requested_pairs) = pairs
+				&& !requested_pairs.contains(&pair)
+			{
+				continue;
 			}
 
 			price_map.insert(pair, ticker.last);
@@ -128,7 +128,7 @@ pub struct TickerInfo {
 //,}}}
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: KucoinTimeframe, range: RequestRange, _recv_window: Option<u16>) -> ExchangeResult<Klines> {
+pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: KucoinTimeframe, range: RequestRange, _recv_window: Option<std::time::Duration>) -> ExchangeResult<Klines> {
 	let kucoin_symbol = format!("{}-{}", symbol.pair.base(), symbol.pair.quote());
 
 	// Convert from v_utils format (1h, 1d, 1w) to Kucoin API format (1hour, 1day, 1week)
@@ -194,7 +194,7 @@ pub struct KlineResponse {
 //,}}}
 
 // exchange_info {{{
-pub async fn exchange_info(client: &v_exchanges_adapters::Client, _recv_window: Option<u16>) -> ExchangeResult<ExchangeInfo> {
+pub async fn exchange_info(client: &v_exchanges_adapters::Client, _recv_window: Option<std::time::Duration>) -> ExchangeResult<ExchangeInfo> {
 	let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Spot)];
 	let response: SymbolsResponse = client.get("/api/v2/symbols", &json!({}), options).await?;
 
@@ -202,19 +202,19 @@ pub async fn exchange_info(client: &v_exchanges_adapters::Client, _recv_window: 
 
 	for symbol in response.data {
 		// Only include enabled trading pairs
-		if symbol.enable_trading {
-			if let Some((base, quote)) = symbol.symbol.split_once('-') {
-				let pair = Pair::new(base, quote);
-				// Calculate price precision from priceIncrement
-				// e.g., 0.0001 -> 4, 0.001 -> 3, 1.0 -> 0
-				let price_precision = if symbol.price_increment == 0.0 {
-					0
-				} else {
-					(-symbol.price_increment.log10()).max(0.0).round() as u8
-				};
-				let pair_info = PairInfo { price_precision };
-				pairs.insert(pair, pair_info);
-			}
+		if symbol.enable_trading
+			&& let Some((base, quote)) = symbol.symbol.split_once('-')
+		{
+			let pair = Pair::new(base, quote);
+			// Calculate price precision from priceIncrement
+			// e.g., 0.0001 -> 4, 0.001 -> 3, 1.0 -> 0
+			let price_precision = if symbol.price_increment == 0.0 {
+				0
+			} else {
+				(-symbol.price_increment.log10()).max(0.0).round() as u8
+			};
+			let pair_info = PairInfo { price_precision };
+			pairs.insert(pair, pair_info);
 		}
 	}
 

@@ -12,7 +12,7 @@ use crate::{
 	kucoin::market,
 };
 
-pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, _recv_window: Option<u16>) -> ExchangeResult<AssetBalance> {
+pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, _recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
 	assert!(client.is_authenticated::<KucoinOption>());
 	let balances: Balances = balances(client, None).await?;
 	let balance: AssetBalance = balances.iter().find(|b| b.asset == asset).copied().unwrap_or_else(|| {
@@ -22,7 +22,7 @@ pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, 
 	Ok(balance)
 }
 
-pub async fn balances(client: &Client, recv_window: Option<u16>) -> ExchangeResult<Balances> {
+pub async fn balances(client: &Client, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
 	assert!(client.is_authenticated::<KucoinOption>());
 
 	let options = vec![KucoinOption::HttpAuth(KucoinAuth::Sign), KucoinOption::HttpUrl(KucoinHttpUrl::Spot)];
@@ -30,7 +30,7 @@ pub async fn balances(client: &Client, recv_window: Option<u16>) -> ExchangeResu
 	let account_response: AccountResponse = client.get("/api/v1/accounts", empty_params, options).await?;
 
 	// Helper function to calculate USD value for an asset
-	async fn usd_value(client: &Client, underlying: f64, asset: Asset, recv_window: Option<u16>) -> Result<Usd> {
+	async fn usd_value(client: &Client, underlying: f64, asset: Asset, recv_window: Option<std::time::Duration>) -> Result<Usd> {
 		if underlying == 0. {
 			return Ok(Usd(0.));
 		}

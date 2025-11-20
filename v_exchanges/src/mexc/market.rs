@@ -8,7 +8,7 @@ use v_utils::prelude::*;
 use crate::{ExchangeResult, recv_window_check};
 
 //TODO: impl spot
-pub async fn price(client: &Client, pair: Pair, recv_window: Option<u16>) -> ExchangeResult<f64> {
+pub async fn price(client: &Client, pair: Pair, recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
 	recv_window_check!(recv_window, GetOptions::<MexcOptions>::default_options(client));
 	let endpoint = format!("/api/v1/contract/index_price/{}", pair.fmt_mexc());
 	let mut options = vec![MexcOption::HttpUrl(MexcHttpUrl::Futures)];

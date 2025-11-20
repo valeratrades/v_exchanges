@@ -21,7 +21,7 @@ use crate::{
 };
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitInterval, range: RequestRange, recv_window: Option<u16>) -> ExchangeResult<Klines> {
+pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitInterval, range: RequestRange, recv_window: Option<std::time::Duration>) -> ExchangeResult<Klines> {
 	recv_window_check!(recv_window, GetOptions::<BybitOptions>::default_options(client));
 	range.ensure_allowed(1..=1000, &tf)?;
 	let range_json = range.serialize(ExchangeName::Bybit);
@@ -96,7 +96,7 @@ pub struct KlineData(
 //,}}}
 
 // price {{{
-pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair, recv_window: Option<u16>) -> ExchangeResult<f64> {
+pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair, recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
 	recv_window_check!(recv_window, GetOptions::<BybitOptions>::default_options(client));
 	let params = filter_nulls(json!({
 		"category": "linear",
@@ -171,7 +171,13 @@ pub struct MarketTickerData {
 //,}}}
 
 // open_interest {{{
-pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitIntervalTime, range: RequestRange, recv_window: Option<u16>) -> ExchangeResult<Vec<OpenInterest>> {
+pub async fn open_interest(
+	client: &v_exchanges_adapters::Client,
+	symbol: Symbol,
+	tf: BybitIntervalTime,
+	range: RequestRange,
+	recv_window: Option<std::time::Duration>,
+) -> ExchangeResult<Vec<OpenInterest>> {
 	recv_window_check!(recv_window, GetOptions::<BybitOptions>::default_options(client));
 	range.ensure_allowed(1..=200, &tf)?;
 	let range_json = range.serialize(ExchangeName::Bybit);

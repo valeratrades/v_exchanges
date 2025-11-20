@@ -29,32 +29,32 @@ impl Exchange for Mexc {
 		self.update_default_option(MexcOption::Secret(secret));
 	}
 
-	fn set_recv_window(&mut self, recv_window: u16) {
+	fn set_recv_window(&mut self, recv_window: std::time::Duration) {
 		self.update_default_option(MexcOption::RecvWindow(recv_window));
 	}
 
-	async fn prices(&self, _pairs: Option<Vec<Pair>>, instrument: Instrument, _recv_window: Option<u16>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+	async fn prices(&self, _pairs: Option<Vec<Pair>>, instrument: Instrument, _recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		match instrument {
 			Instrument::Perp => unimplemented!("Mexc does not have a multi-asset endpoints for futures"),
 			_ => unimplemented!(),
 		}
 	}
 
-	async fn price(&self, symbol: Symbol, recv_window: Option<u16>) -> ExchangeResult<f64> {
+	async fn price(&self, symbol: Symbol, recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
 		match symbol.instrument {
 			Instrument::Perp => market::price(self, symbol.pair, recv_window).await,
 			_ => unimplemented!(),
 		}
 	}
 
-	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<AssetBalance> {
+	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
 		match instrument {
 			Instrument::Perp => account::asset_balance(self, asset, recv_window).await,
 			_ => unimplemented!(),
 		}
 	}
 
-	async fn balances(&self, instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<Balances> {
+	async fn balances(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
 		match instrument {
 			Instrument::Perp => account::balances(self, recv_window).await,
 			_ => unimplemented!(),

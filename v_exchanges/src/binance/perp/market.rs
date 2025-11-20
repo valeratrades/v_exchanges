@@ -11,7 +11,7 @@ use crate::{ExchangeResult, recv_window_check};
 
 // price {{{
 //HACK: should use /fapi/v2/ticker/price instead
-pub async fn price(client: &Client, pair: Pair, recv_window: Option<u16>) -> ExchangeResult<f64> {
+pub async fn price(client: &Client, pair: Pair, recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
 	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	let params = json!({
 		"symbol": pair.fmt_binance(),
@@ -26,7 +26,7 @@ pub async fn price(client: &Client, pair: Pair, recv_window: Option<u16>) -> Exc
 	Ok(price)
 }
 
-pub async fn prices(client: &Client, pairs: Option<Vec<Pair>>, recv_window: Option<u16>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+pub async fn prices(client: &Client, pairs: Option<Vec<Pair>>, recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
 	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)];
 	if let Some(rw) = recv_window {

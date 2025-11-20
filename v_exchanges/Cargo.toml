@@ -26,8 +26,8 @@ ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
 [features]
 default = ["major", "data"]
 
-full = ["major", "data", "bitflyer", "coincheck"]
-major = ["binance", "bybit", "kucoin", "mexc"]
+full = ["major", "data", "mexc", "kucoin", "bitflyer", "coincheck"]
+major = ["binance", "bybit"]
 
 binance = ["v_exchanges_adapters/binance"]
 bybit = ["v_exchanges_adapters/bybit"]

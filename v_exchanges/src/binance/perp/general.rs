@@ -14,7 +14,7 @@ use crate::{
 };
 //TODO: general endpoints, like ping and exchange info
 
-pub async fn exchange_info(client: &v_exchanges_adapters::Client, recv_window: Option<u16>) -> Result<ExchangeInfo, ExchangeError> {
+pub async fn exchange_info(client: &v_exchanges_adapters::Client, recv_window: Option<std::time::Duration>) -> Result<ExchangeInfo, ExchangeError> {
 	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)];
 	if let Some(rw) = recv_window {

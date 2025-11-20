@@ -1,10 +1,6 @@
-use std::env;
+use std::{env, time::Duration};
 
-use v_exchanges::{
-	Binance,
-	binance::perp::account::{IncomeRequest, OrderRequest, OrderType, PositionSide, TimeInForce},
-	prelude::*,
-};
+use v_exchanges::{Binance, binance::perp::account::IncomeRequest, prelude::*};
 
 #[tokio::main]
 async fn main() {
@@ -26,7 +22,7 @@ async fn main() {
 			page: None,
 		};
 
-		match v_exchanges::binance::perp::account::income_history(&binance, income_req, Some(5000)).await {
+		match v_exchanges::binance::perp::account::income_history(&binance, income_req, Some(Duration::from_millis(5000))).await {
 			Ok(records) => {
 				println!("Found {} income records:", records.len());
 				for record in records.iter().take(5) {
@@ -58,7 +54,7 @@ async fn main() {
 			new_client_order_id: None,
 		};
 
-		match v_exchanges::binance::perp::account::place_order(&binance, order_req, Some(5000)).await {
+		match v_exchanges::binance::perp::account::place_order(&binance, order_req, Some(Duration::from_millis(5000))).await {
 			Ok(response) => {
 				println!("Order placed successfully!");
 				println!("  Order ID: {}", response.order_id);

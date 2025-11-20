@@ -30,43 +30,43 @@ impl Exchange for Kucoin {
 		// Note: Passphrase needs to be set separately via KucoinOption::Passphrase
 	}
 
-	fn set_recv_window(&mut self, _recv_window: u16) {
-		// Kucoin doesn't use recv_window in the same way as Binance/Bybit
+	fn set_recv_window(&mut self, _recv_window: std::time::Duration) {
+		unimplemented!("Kucoin does not support recv_window as a global setting");
 	}
 
-	async fn exchange_info(&self, instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<ExchangeInfo> {
+	async fn exchange_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<ExchangeInfo> {
 		match instrument {
 			Instrument::Spot => market::exchange_info(self, recv_window).await,
 			_ => unimplemented!(),
 		}
 	}
 
-	async fn price(&self, symbol: Symbol, recv_window: Option<u16>) -> ExchangeResult<f64> {
+	async fn price(&self, symbol: Symbol, recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
 		match symbol.instrument {
 			Instrument::Spot => market::price(self, symbol.pair, recv_window).await,
 			_ => unimplemented!(),
 		}
 	}
 
-	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		match instrument {
 			Instrument::Spot => market::prices(self, pairs, recv_window).await,
 			_ => unimplemented!(),
 		}
 	}
 
-	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange, recv_window: Option<u16>) -> ExchangeResult<Klines> {
+	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange, recv_window: Option<std::time::Duration>) -> ExchangeResult<Klines> {
 		match symbol.instrument {
 			Instrument::Spot => market::klines(self, symbol, tf.try_into()?, range, recv_window).await,
 			_ => unimplemented!(),
 		}
 	}
 
-	async fn asset_balance(&self, asset: Asset, _instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<AssetBalance> {
+	async fn asset_balance(&self, asset: Asset, _instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
 		account::asset_balance(self, asset, recv_window).await
 	}
 
-	async fn balances(&self, _instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<Balances> {
+	async fn balances(&self, _instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
 		account::balances(self, recv_window).await
 	}
 }

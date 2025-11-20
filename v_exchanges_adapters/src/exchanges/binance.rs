@@ -52,7 +52,7 @@ where
 
 				builder = builder.query(&[("timestamp", timestamp)]);
 				if let Some(recv_window) = self.options.recv_window {
-					builder = builder.query(&[("recvWindow", recv_window)]);
+					builder = builder.query(&[("recvWindow", recv_window.as_millis() as u64)]);
 				}
 
 				let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(AuthError::MissingSecret)?;
@@ -299,8 +299,8 @@ pub enum BinanceOption {
 	/// Use testnet
 	Test(bool),
 
-	/// Number of milliseconds the request is valid for. Only applicable for signed requests.
-	RecvWindow(u16),
+	/// Duration the request is valid for. Only applicable for signed requests.
+	RecvWindow(std::time::Duration),
 	/// Base url for HTTP requests
 	HttpUrl(BinanceHttpUrl),
 	/// Authentication type for HTTP requests
@@ -460,7 +460,7 @@ pub struct BinanceOptions {
 	#[debug("[REDACTED]")]
 	pub secret: Option<SecretString>,
 	// see [BinanceOption::RecvWindow]
-	pub recv_window: Option<u16>,
+	pub recv_window: Option<std::time::Duration>,
 	/// see [BinanceOption::HttpUrl]
 	pub http_url: BinanceHttpUrl,
 	/// see [BinanceOption::HttpAuth]

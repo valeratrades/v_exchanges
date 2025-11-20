@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, time::Duration};
 
 use v_exchanges::prelude::*;
 
@@ -27,7 +27,7 @@ async fn check_binance() {
 			let mut binance = ExchangeName::Binance.init_client();
 			binance.auth(key, secret.into());
 
-			match binance.balances(Instrument::Perp, Some(5000)).await {
+			match binance.balances(Instrument::Perp, Some(Duration::from_millis(5000))).await {
 				Ok(_) => println!("✅ Binance: API key is valid and active"),
 				Err(e) => println!("❌ Binance: API key error - {}", e),
 			}
@@ -47,7 +47,7 @@ async fn check_bybit() {
 			let mut bybit = ExchangeName::Bybit.init_client();
 			bybit.auth(key, secret.into());
 
-			match bybit.balances(Instrument::Perp, Some(5000)).await {
+			match bybit.balances(Instrument::Perp, Some(Duration::from_millis(5000))).await {
 				Ok(_) => println!("✅ Bybit: API key is valid and active"),
 				Err(e) => println!("❌ Bybit: API key error - {}", e),
 			}
@@ -113,7 +113,7 @@ async fn check_mexc() {
 			let mut mexc = ExchangeName::Mexc.init_client();
 			mexc.auth(key, secret.into());
 
-			match mexc.balances(Instrument::Perp, Some(5000)).await {
+			match mexc.balances(Instrument::Perp, Some(Duration::from_millis(5000))).await {
 				Ok(_) => println!("✅ MEXC: API key is valid and active"),
 				Err(e) => {
 					let err_str = e.to_string();

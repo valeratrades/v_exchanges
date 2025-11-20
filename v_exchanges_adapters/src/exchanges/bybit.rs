@@ -36,7 +36,7 @@ pub enum BybitOption {
 	/// Type of authentication used for HTTP requests.
 	HttpAuth(BybitHttpAuth),
 	/// receive window parameter used for requests
-	RecvWindow(u16),
+	RecvWindow(std::time::Duration),
 	/// Base url for Ws connections
 	WsUrl(BybitWsUrlBase),
 	/// Whether [BybitWsHandler] should perform authentication
@@ -64,7 +64,7 @@ pub struct BybitOptions {
 	/// see [BybitOption::HttpAuth]
 	pub http_auth: BybitHttpAuth,
 	/// see [BybitOption::RecvWindow]
-	pub recv_window: Option<u16>,
+	pub recv_window: Option<std::time::Duration>,
 	/// see [BybitOption::WsUrl]
 	pub ws_url: BybitWsUrlBase,
 	/// see [BybitOption::WsAuth]
@@ -238,7 +238,15 @@ impl<R> BybitRequestHandler<'_, R>
 where
 	R: DeserializeOwned,
 {
-	fn v1_auth<B>(builder: RequestBuilder, request_body: &Option<B>, key: &str, timestamp: u128, mut hmac: Hmac<Sha256>, spot: bool, window: Option<u16>) -> Result<Request, BuildError>
+	fn v1_auth<B>(
+		builder: RequestBuilder,
+		request_body: &Option<B>,
+		key: &str,
+		timestamp: u128,
+		mut hmac: Hmac<Sha256>,
+		spot: bool,
+		window: Option<std::time::Duration>,
+	) -> Result<Request, BuildError>
 	where
 		B: Serialize, {
 		fn sort_and_add<'a>(mut pairs: Vec<(Cow<str>, Cow<'a, str>)>, key: &'a str, timestamp: u128) -> String {
@@ -263,10 +271,11 @@ where
 		if matches!(*request.method(), Method::GET | Method::DELETE) {
 			let mut queries: Vec<_> = request.url().query_pairs().collect();
 			if let Some(window) = window {
+				let window_ms = window.as_millis() as u64;
 				if spot {
-					queries.push((Cow::Borrowed("recvWindow"), Cow::Owned(window.to_string())));
+					queries.push((Cow::Borrowed("recvWindow"), Cow::Owned(window_ms.to_string())));
 				} else {
-					queries.push((Cow::Borrowed("recv_window"), Cow::Owned(window.to_string())));
+					queries.push((Cow::Borrowed("recv_window"), Cow::Owned(window_ms.to_string())));
 				}
 			}
 			let query = sort_and_add(queries, key, timestamp);
@@ -291,6 +300,7 @@ where
 		} else {
 			let mut body = if let Some(body) = request_body { serde_urlencoded::to_string(body)? } else { String::new() };
 			if let Some(window) = window {
+				let window_ms = window.as_millis() as u64;
 				if !body.is_empty() {
 					body.push('&');
 				}
@@ -299,7 +309,7 @@ where
 				} else {
 					body.push_str("recv_window=");
 				}
-				body.push_str(&window.to_string());
+				body.push_str(&window_ms.to_string());
 			}
 
 			let pairs: Vec<_> = body
@@ -333,7 +343,7 @@ where
 		timestamp: u128,
 		mut hmac: Hmac<Sha256>,
 		version_header: bool,
-		window: Option<u16>,
+		window: Option<std::time::Duration>,
 	) -> Result<Request, BuildError>
 	where
 		B: Serialize, {
@@ -349,7 +359,8 @@ where
 
 		let mut sign_contents = format!("{timestamp}{key}");
 		if let Some(window) = window {
-			sign_contents.push_str(&window.to_string());
+			let window_ms = window.as_millis() as u64;
+			sign_contents.push_str(&window_ms.to_string());
 		}
 
 		if matches!(*request.method(), Method::GET | Method::DELETE) {
@@ -376,7 +387,8 @@ where
 		headers.insert("X-BAPI-API-KEY", HeaderValue::from_str(key).or(Err(AuthError::InvalidCharacterInApiKey(key.to_owned())))?);
 		headers.insert("X-BAPI-TIMESTAMP", HeaderValue::from(timestamp as u64));
 		if let Some(window) = window {
-			headers.insert("X-BAPI-RECV-WINDOW", HeaderValue::from(window));
+			let window_ms = window.as_millis() as u64;
+			headers.insert("X-BAPI-RECV-WINDOW", HeaderValue::from(window_ms));
 		}
 		Ok(request)
 	}

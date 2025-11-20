@@ -5,13 +5,11 @@ use std::{marker::PhantomData, time::SystemTime};
 
 use generics::{
 	http::{BuildError, HandleError, header::HeaderValue, *},
-	tokio_tungstenite::tungstenite,
-	ws::{ContentEvent, ResponseOrContent, Topic, WsConfig, WsError, WsHandler},
+	tokio_tungstenite::tungstenite::protocol::WebSocketConfig,
 };
 use hmac::{Hmac, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Serialize, de::DeserializeOwned};
-use serde_json::json;
 use sha2::Sha256;
 
 use crate::traits::*;
@@ -163,15 +161,15 @@ where
 	fn handle_response(&self, status: StatusCode, _: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError> {
 		if status.is_success() {
 			serde_json::from_slice(&response_body).map_err(|error| {
-				tracing::debug!("Failed to parse response due to an error: {}", error);
-				HandleError::ParseJson(error)
+				let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
+				HandleError::Parse(eyre::eyre!("Failed to parse response: {}\nResponse body: {}", error, response_str))
 			})
 		} else {
-			let error = match serde_json::from_slice(&response_body) {
-				Ok(parsed_error) => HandleError::Api(generics::http::ApiError { status, body: parsed_error }),
+			let error = match serde_json::from_slice::<serde_json::Value>(&response_body) {
+				Ok(parsed_error) => HandleError::Api(ApiError::Other(eyre::eyre!("Coincheck API error (status {}): {}", status, parsed_error))),
 				Err(error) => {
-					tracing::debug!("Failed to parse error response due to an error: {}", error);
-					HandleError::ParseJson(error)
+					let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
+					HandleError::Parse(eyre::eyre!("Failed to parse error response: {}\nResponse body: {}", error, response_str))
 				}
 			};
 			Err(error)
@@ -226,8 +224,7 @@ impl HandlerOptions for CoincheckOptions {
 
 impl Default for CoincheckOptions {
 	fn default() -> Self {
-		let mut websocket_config = WebSocketConfig::default();
-		websocket_config.ignore_duplicate_during_reconnection = true;
+		let websocket_config = WebSocketConfig::default();
 		Self {
 			key: None,
 			secret: None,

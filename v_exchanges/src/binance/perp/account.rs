@@ -17,7 +17,7 @@ use crate::{
 
 // balance {{{
 //DUP: difficult to escape duplicating half the [balances] method due to a) not requiring usd value b) binance not having individual asset balance endpoint
-pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, recv_window: Option<u16>) -> ExchangeResult<AssetBalance> {
+pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
 	use v_exchanges_adapters::GetOptions;
 	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	assert!(client.is_authenticated::<BinanceOption>());
@@ -38,7 +38,7 @@ pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, 
 	Ok(balance)
 }
 
-pub async fn balances(client: &v_exchanges_adapters::Client, recv_window: Option<u16>, prices: &BTreeMap<Pair, f64>) -> ExchangeResult<Balances> {
+pub async fn balances(client: &v_exchanges_adapters::Client, recv_window: Option<std::time::Duration>, prices: &BTreeMap<Pair, f64>) -> ExchangeResult<Balances> {
 	use v_exchanges_adapters::GetOptions;
 	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	assert!(client.is_authenticated::<BinanceOption>());
@@ -87,7 +87,7 @@ pub async fn balances(client: &v_exchanges_adapters::Client, recv_window: Option
 // Order Placement {{{
 
 /// Place a new order on Binance Futures
-pub async fn place_order(client: &v_exchanges_adapters::Client, request: OrderRequest, recv_window: Option<u16>) -> ExchangeResult<OrderResponse> {
+pub async fn place_order(client: &v_exchanges_adapters::Client, request: OrderRequest, recv_window: Option<std::time::Duration>) -> ExchangeResult<OrderResponse> {
 	use v_exchanges_adapters::GetOptions;
 	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	assert!(client.is_authenticated::<BinanceOption>());
@@ -145,7 +145,7 @@ pub async fn place_order(client: &v_exchanges_adapters::Client, request: OrderRe
 // Income History {{{
 
 /// Query income history
-pub async fn income_history(client: &v_exchanges_adapters::Client, request: IncomeRequest, recv_window: Option<u16>) -> ExchangeResult<Vec<IncomeRecord>> {
+pub async fn income_history(client: &v_exchanges_adapters::Client, request: IncomeRequest, recv_window: Option<std::time::Duration>) -> ExchangeResult<Vec<IncomeRecord>> {
 	use v_exchanges_adapters::GetOptions;
 	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	assert!(client.is_authenticated::<BinanceOption>());

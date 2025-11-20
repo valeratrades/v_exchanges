@@ -20,7 +20,13 @@ use crate::{
 };
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BinanceTimeframe, range: RequestRange, recv_window: Option<u16>) -> Result<Klines, ExchangeError> {
+pub async fn klines(
+	client: &v_exchanges_adapters::Client,
+	symbol: Symbol,
+	tf: BinanceTimeframe,
+	range: RequestRange,
+	recv_window: Option<std::time::Duration>,
+) -> Result<Klines, ExchangeError> {
 	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	//TODO: test if embedding params into the url works more consistently (comp number of pairs axum-site is ablle ot get)
 	range.ensure_allowed(1..=1000, tf.as_ref())?;
@@ -112,7 +118,7 @@ pub async fn open_interest(
 	symbol: Symbol,
 	tf: BinanceTimeframe,
 	range: RequestRange,
-	recv_window: Option<u16>,
+	recv_window: Option<std::time::Duration>,
 ) -> Result<Vec<OpenInterest>, ExchangeError> {
 	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	range.ensure_allowed(1..=500, tf.as_ref())?;

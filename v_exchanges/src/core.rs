@@ -29,7 +29,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	///
 	/// **WARNING:** This sets a global default and should only be used as a crutch when you can't pass `recv_window` per-request.
 	/// Prefer using the `recv_window` parameter in individual method calls instead.
-	fn set_recv_window(&mut self, recv_window: u16);
+	fn set_recv_window(&mut self, recv_window: std::time::Duration);
 	fn set_timeout(&mut self, timeout: std::time::Duration) {
 		self.client.config.timeout = timeout;
 	}
@@ -52,14 +52,14 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 
 	#[allow(unused_variables)]
 	#[allow(dead_code)]
-	async fn exchange_info(&self, instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<ExchangeInfo> {
+	async fn exchange_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<ExchangeInfo> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
 	#[allow(unused_variables)]
 	#[allow(dead_code)]
-	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange, recv_window: Option<u16>) -> ExchangeResult<Klines> {
+	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange, recv_window: Option<std::time::Duration>) -> ExchangeResult<Klines> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported {
 			exchange: self.name(),
 			instrument: symbol.instrument,
@@ -69,13 +69,13 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	/// If no pairs are specified, returns for all;
 	#[allow(unused_variables)]
 	#[allow(dead_code)]
-	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 
 	#[allow(unused_variables)]
 	#[allow(dead_code)]
-	async fn price(&self, symbol: Symbol, recv_window: Option<u16>) -> ExchangeResult<f64> {
+	async fn price(&self, symbol: Symbol, recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported {
 			exchange: self.name(),
 			instrument: symbol.instrument,
@@ -86,7 +86,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	/// in output vec: greater the index, fresher the data
 	#[allow(unused_variables)]
 	#[allow(dead_code)]
-	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange, recv_window: Option<u16>) -> ExchangeResult<Vec<OpenInterest>> {
+	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange, recv_window: Option<std::time::Duration>) -> ExchangeResult<Vec<OpenInterest>> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported {
 			exchange: self.name(),
 			instrument: symbol.instrument,
@@ -97,14 +97,14 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	/// balance of a specific asset. Does not guarantee provision of USD values.
 	#[allow(unused_variables)]
 	#[allow(dead_code)]
-	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<u16>) -> ExchangeResult<AssetBalance> {
+	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 
 	/// vec of _non-zero_ balances exclusively. Provides USD values.
 	#[allow(unused_variables)]
 	#[allow(dead_code)]
-	async fn balances(&self, instrument: Instrument, #[allow(unused_variables)] recv_window: Option<u16>) -> ExchangeResult<Balances> {
+	async fn balances(&self, instrument: Instrument, #[allow(unused_variables)] recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 	//,}}}

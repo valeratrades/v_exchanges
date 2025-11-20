@@ -14,7 +14,7 @@ use v_utils::prelude::*;
 
 use crate::traits::*;
 
-static MAX_RECV_WINDOW: u16 = 60000; // as of (2025/01/18)
+static MAX_RECV_WINDOW: std::time::Duration = std::time::Duration::from_millis(60000); // as of (2025/01/18)
 
 /// Options that can be set when creating handlers
 #[derive(Debug, Default)]
@@ -33,7 +33,7 @@ pub enum MexcOption {
 	/// Authentication type for HTTP requests
 	HttpAuth(MexcAuth),
 	/// receive window parameter used for requests
-	RecvWindow(u16),
+	RecvWindow(std::time::Duration),
 	/// Base url for Ws connections
 	WsUrl(MexcWsUrl),
 	/// WsConfig used for creating WsConnections
@@ -57,7 +57,7 @@ pub struct MexcOptions {
 	/// see [MexcOption::HttpAuth]
 	pub http_auth: MexcAuth,
 	/// see [MexcOption::RecvWindow]
-	pub recv_window: Option<u16>,
+	pub recv_window: Option<std::time::Duration>,
 	/// see [MexcOption::WsUrl]
 	pub ws_url: MexcWsUrl,
 	/// see [MexcOption::WsConfig]
@@ -149,7 +149,7 @@ where
 			builder = builder.header("Request-Time", timestamp.to_string());
 
 			if let Some(recv_window) = self.options.recv_window {
-				builder = builder.header("Recv-Window", recv_window.to_string());
+				builder = builder.header("Recv-Window", (recv_window.as_millis() as u64).to_string());
 			}
 
 			if self.options.http_auth == MexcAuth::Sign {
@@ -296,7 +296,7 @@ impl HandlerOptions for MexcOptions {
 			MexcOption::HttpAuth(v) => self.http_auth = v,
 			MexcOption::RecvWindow(v) =>
 				if v > MAX_RECV_WINDOW {
-					tracing::warn!("recvWindow is too large, overwriting with maximum value of {MAX_RECV_WINDOW}");
+					tracing::warn!("recvWindow is too large, overwriting with maximum value of {MAX_RECV_WINDOW:?}");
 					self.recv_window = Some(MAX_RECV_WINDOW);
 				} else {
 					self.recv_window = Some(v);

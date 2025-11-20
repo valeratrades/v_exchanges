@@ -11,7 +11,7 @@ use v_utils::trades::Pair;
 use crate::{ExchangeResult, recv_window_check};
 
 #[instrument(skip_all, fields(?pairs))]
-pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>, recv_window: Option<u16>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>, recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
 	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::Spot)];
 	if let Some(rw) = recv_window {
@@ -46,7 +46,7 @@ pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pai
 	Ok(prices)
 }
 
-pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair, recv_window: Option<u16>) -> ExchangeResult<f64> {
+pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair, recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
 	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	let params = json!({
 		"symbol": pair.fmt_binance(),

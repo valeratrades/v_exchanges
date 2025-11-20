@@ -1,4 +1,4 @@
-use std::{env, str::FromStr as _};
+use std::{env, str::FromStr as _, time::Duration};
 
 use v_exchanges::{Bybit, prelude::*};
 
@@ -35,7 +35,7 @@ async fn private(c: &dyn Exchange, symbol: Symbol) {
 	let balances = c.balances(symbol.instrument, None).await.unwrap();
 	println!("{balances:?}");
 
-	let balance_usdc = c.asset_balance("USDC".into(), symbol.instrument, Some(5000)).await.unwrap();
+	let balance_usdc = c.asset_balance("USDC".into(), symbol.instrument, Some(Duration::from_millis(5000))).await.unwrap();
 	println!("{balance_usdc:?}");
 }
 

@@ -114,16 +114,16 @@ where
 			})?;
 
 			// Check if response contains code field
-			if let Some(code) = value.get("code").and_then(|v| v.as_str()) {
-				if code != "200000" {
-					// Non-200000 code indicates an error
-					let msg = value.get("msg").and_then(|v| v.as_str()).unwrap_or("Unknown error");
-					let error = KucoinError {
-						code: code.to_string(),
-						msg: msg.to_string(),
-					};
-					return Err(ApiError::from(error).into());
-				}
+			if let Some(code) = value.get("code").and_then(|v| v.as_str())
+				&& code != "200000"
+			{
+				// Non-200000 code indicates an error
+				let msg = value.get("msg").and_then(|v| v.as_str()).unwrap_or("Unknown error");
+				let error = KucoinError {
+					code: code.to_string(),
+					msg: msg.to_string(),
+				};
+				return Err(ApiError::from(error).into());
 			}
 
 			// No error, deserialize to the expected type

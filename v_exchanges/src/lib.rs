@@ -14,14 +14,16 @@ pub mod prelude {
 
 	#[cfg(feature = "binance")]
 	pub use crate::binance::Binance;
-	#[cfg(feature = "bitflyer")]
-	pub use crate::bitflyer::Bitflyer;
+	// TODO: bitflyer implementation not yet complete
+	// #[cfg(feature = "bitflyer")]
+	// pub use crate::bitflyer::Bitflyer;
 	#[cfg(feature = "data")]
 	pub use crate::bitmex::Bitmex;
 	#[cfg(feature = "bybit")]
 	pub use crate::bybit::Bybit;
-	#[cfg(feature = "coincheck")]
-	pub use crate::coincheck::Coincheck;
+	// TODO: coincheck implementation not yet complete
+	// #[cfg(feature = "coincheck")]
+	// pub use crate::coincheck::Coincheck;
 	#[cfg(feature = "kucoin")]
 	pub use crate::kucoin::Kucoin;
 	#[cfg(feature = "mexc")]
