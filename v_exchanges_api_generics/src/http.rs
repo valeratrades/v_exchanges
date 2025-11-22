@@ -75,7 +75,14 @@ impl Client {
 				Ok(mut response) => {
 					let status = response.status();
 					let headers = std::mem::take(response.headers_mut());
-					let body: Bytes = response.bytes().await.map_err(RequestError::ReceiveResponse)?;
+					debug!(?status, ?headers, "Received response headers");
+					let body: Bytes = match response.bytes().await {
+						Ok(b) => b,
+						Err(e) => {
+							error!(?status, ?headers, ?e, "Failed to read response body");
+							return Err(RequestError::ReceiveResponse(e));
+						}
+					};
 					{
 						let truncated_body = v_utils::utils::truncate_msg(std::str::from_utf8(&body)?.trim());
 						debug!(truncated_body);
@@ -89,7 +96,10 @@ impl Client {
 							return Ok(handled);
 						}
 						false => {
-							return handler.handle_response(status, headers, body).map_err(RequestError::HandleResponse);
+							return handler.handle_response(status, headers.clone(), body.clone()).map_err(|e| {
+								error!(?status, ?headers, body = ?v_utils::utils::truncate_msg(std::str::from_utf8(&body).unwrap_or("<invalid utf8>")), "Failed to handle response");
+								RequestError::HandleResponse(e)
+							});
 						}
 					}
 				}

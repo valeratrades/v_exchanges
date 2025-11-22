@@ -31,7 +31,7 @@ impl Exchange for Kucoin {
 	}
 
 	fn set_recv_window(&mut self, _recv_window: std::time::Duration) {
-		unimplemented!("Kucoin does not support recv_window as a global setting");
+		tracing::warn!("Kucoin does not support recv_window as a global setting");
 	}
 
 	async fn exchange_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<ExchangeInfo> {
