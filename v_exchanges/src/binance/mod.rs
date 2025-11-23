@@ -31,9 +31,9 @@ impl Exchange for Binance {
 		self.update_default_option(BinanceOption::RecvWindow(recv_window));
 	}
 
-	async fn exchange_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<ExchangeInfo> {
+	async fn exchange_info(&self, instrument: Instrument, _recv_window: Option<std::time::Duration>) -> ExchangeResult<ExchangeInfo> {
 		match instrument {
-			Instrument::Perp => perp::general::exchange_info(self, recv_window).await,
+			Instrument::Perp => perp::general::exchange_info(self).await,
 			_ => unimplemented!(),
 		}
 	}
@@ -49,18 +49,18 @@ impl Exchange for Binance {
 		}
 	}
 
-	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument, _recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		match instrument {
-			Instrument::Spot | Instrument::Margin => spot::market::prices(self, pairs, recv_window).await,
-			Instrument::Perp => perp::market::prices(self, pairs, recv_window).await,
+			Instrument::Spot | Instrument::Margin => spot::market::prices(self, pairs).await,
+			Instrument::Perp => perp::market::prices(self, pairs).await,
 			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument })),
 		}
 	}
 
-	async fn price(&self, symbol: Symbol, recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
+	async fn price(&self, symbol: Symbol, _recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
 		match symbol.instrument {
-			Instrument::Spot | Instrument::Margin => spot::market::price(self, symbol.pair, recv_window).await,
-			Instrument::Perp => perp::market::price(self, symbol.pair, recv_window).await,
+			Instrument::Spot | Instrument::Margin => spot::market::price(self, symbol.pair).await,
+			Instrument::Perp => perp::market::price(self, symbol.pair).await,
 			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented {
 				exchange: self.name(),
 				instrument: symbol.instrument,

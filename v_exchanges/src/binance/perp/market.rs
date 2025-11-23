@@ -1,37 +1,26 @@
 use adapters::Client;
 //HACK: Methods should be implemented on the central interface struct, following <https://github.com/wisespace-io/binance-rs>.
 use serde_with::{DisplayFromStr, serde_as};
-use v_exchanges_adapters::{
-	GetOptions,
-	binance::{BinanceHttpUrl, BinanceOption, BinanceOptions},
-};
+use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
 use v_utils::prelude::*;
 
-use crate::{ExchangeResult, recv_window_check};
+use crate::ExchangeResult;
 
 // price {{{
 //HACK: should use /fapi/v2/ticker/price instead
-pub async fn price(client: &Client, pair: Pair, recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
-	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
+pub async fn price(client: &Client, pair: Pair) -> ExchangeResult<f64> {
 	let params = json!({
 		"symbol": pair.fmt_binance(),
 	});
 
-	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)];
-	if let Some(rw) = recv_window {
-		options.push(BinanceOption::RecvWindow(rw));
-	}
+	let options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)];
 	let r: MarkPriceResponse = client.get("/fapi/v1/premiumIndex", &params, options).await?;
 	let price = r.index_price; // when using this framework, we care for per-exchange price, obviously
 	Ok(price)
 }
 
-pub async fn prices(client: &Client, pairs: Option<Vec<Pair>>, recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
-	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
-	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)];
-	if let Some(rw) = recv_window {
-		options.push(BinanceOption::RecvWindow(rw));
-	}
+pub async fn prices(client: &Client, pairs: Option<Vec<Pair>>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+	let options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)];
 	let rs: Vec<PriceObject> = match pairs {
 		Some(pairs) => {
 			let params = json!({

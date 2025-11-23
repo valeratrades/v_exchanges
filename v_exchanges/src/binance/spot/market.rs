@@ -1,22 +1,17 @@
 use std::{collections::BTreeMap, str::FromStr};
 
-use adapters::binance::{BinanceHttpUrl, BinanceOption, BinanceOptions};
+use adapters::binance::{BinanceHttpUrl, BinanceOption};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_with::{DisplayFromStr, serde_as};
 use tracing::instrument;
-use v_exchanges_adapters::GetOptions;
 use v_utils::trades::Pair;
 
-use crate::{ExchangeResult, recv_window_check};
+use crate::ExchangeResult;
 
 #[instrument(skip_all, fields(?pairs))]
-pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>, recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
-	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
-	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::Spot)];
-	if let Some(rw) = recv_window {
-		options.push(BinanceOption::RecvWindow(rw));
-	}
+pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+	let options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::Spot)];
 	let r: PricesResponse = match pairs {
 		//TODO!!!: fix this branch
 		//BUG: doesn't work for some reason
@@ -46,16 +41,12 @@ pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pai
 	Ok(prices)
 }
 
-pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair, recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
-	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
+pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> ExchangeResult<f64> {
 	let params = json!({
 		"symbol": pair.fmt_binance(),
 	});
 
-	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::Spot)];
-	if let Some(rw) = recv_window {
-		options.push(BinanceOption::RecvWindow(rw));
-	}
+	let options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::Spot)];
 	let r: AssetPriceResponse = client.get("/api/v3/ticker/price", &params, options).await.unwrap();
 	let price = r.price;
 	Ok(price)

@@ -42,7 +42,7 @@ impl Exchange for Mexc {
 
 	async fn price(&self, symbol: Symbol, recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
 		match symbol.instrument {
-			Instrument::Perp => market::price(self, symbol.pair, recv_window).await,
+			Instrument::Perp => market::price(self, symbol.pair).await,
 			_ => unimplemented!(),
 		}
 	}

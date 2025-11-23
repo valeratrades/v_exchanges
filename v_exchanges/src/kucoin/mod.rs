@@ -31,7 +31,7 @@ impl Exchange for Kucoin {
 	}
 
 	fn set_recv_window(&mut self, _recv_window: std::time::Duration) {
-		tracing::warn!("Kucoin does not support recv_window as a global setting");
+		tracing::warn!("KuCoin does not support configurable recv_window - uses a fixed 5-second tolerance window for all authenticated requests");
 	}
 
 	async fn exchange_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<ExchangeInfo> {

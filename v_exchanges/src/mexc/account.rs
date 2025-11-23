@@ -39,7 +39,7 @@ pub async fn balances(client: &Client, recv_window: Option<std::time::Duration>)
 			if b.asset == "USDT" {
 				Box::pin(async move { Ok(1.) }) as Pin<Box<dyn Future<Output = ExchangeResult<f64>> + Send>>
 			} else {
-				Box::pin(super::market::price(client, (b.asset, "USDT".into()).into(), recv_window)) as Pin<Box<dyn Future<Output = ExchangeResult<f64>> + Send>>
+				Box::pin(super::market::price(client, (b.asset, "USDT".into()).into())) as Pin<Box<dyn Future<Output = ExchangeResult<f64>> + Send>>
 			}
 		})
 		.collect();

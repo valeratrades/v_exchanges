@@ -40,7 +40,7 @@ pub async fn balances(client: &Client, recv_window: Option<std::time::Duration>)
 		}
 		// Fetch price for non-stablecoin assets
 		let usdt_pair = Pair::new(asset, "USDT".into());
-		let usdt_price = market::price(client, usdt_pair, recv_window)
+		let usdt_price = market::price(client, usdt_pair, None)
 			.await
 			.map_err(|e| eyre!("Failed to fetch USDT price for {asset} (balance: {underlying}): {e}"))?;
 		Ok((underlying * usdt_price).into())

@@ -1,25 +1,19 @@
-use adapters::binance::{BinanceHttpUrl, BinanceOption, BinanceOptions};
+use adapters::binance::{BinanceHttpUrl, BinanceOption};
 use eyre::Result;
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{DisplayFromStr, serde_as};
-use v_exchanges_adapters::GetOptions;
 use v_utils::trades::Pair;
 
 use crate::{
 	ExchangeError,
 	core::{ExchangeInfo, PairInfo},
-	recv_window_check,
 };
 //TODO: general endpoints, like ping and exchange info
 
-pub async fn exchange_info(client: &v_exchanges_adapters::Client, recv_window: Option<std::time::Duration>) -> Result<ExchangeInfo, ExchangeError> {
-	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
-	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)];
-	if let Some(rw) = recv_window {
-		options.push(BinanceOption::RecvWindow(rw));
-	}
+pub async fn exchange_info(client: &v_exchanges_adapters::Client) -> Result<ExchangeInfo, ExchangeError> {
+	let options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)];
 	let r: BinanceExchangeFutures = client.get_no_query("/fapi/v1/exchangeInfo", options).await?;
 	Ok(r.into())
 }
