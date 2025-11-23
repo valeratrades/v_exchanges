@@ -2,7 +2,7 @@ cargo-features = ["codegen-backend"]
 
 [package]
 name = "v_exchanges"
-version = "0.15.1"
+version = "0.15.2"
 edition = "2024"
 authors = ["negi-grass", "valeratrades"]
 categories = ["api-bindings", "asynchronous"]
@@ -45,7 +45,7 @@ derive_more.workspace = true
 enum_dispatch = "0.3.13"
 eyre.workspace = true
 reqwest = { version = "^0.12.24", optional = true }
-v_exchanges_adapters = { version = "^0.15.1", path = "../v_exchanges_adapters/", optional = true }
+v_exchanges_adapters = { version = "^0.15.2", path = "../v_exchanges_adapters/", optional = true }
 
 jiff.workspace = true
 secrecy.workspace = true
