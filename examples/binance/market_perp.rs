@@ -9,6 +9,7 @@ async fn main() {
 	let mut binance = ExchangeName::Binance.init_client();
 	let symbol = Symbol::from_str("BTC-USDT.P").unwrap();
 	binance.set_max_tries(3);
+	binance.set_timeout(Duration::from_secs(10)); // Increase timeout for large responses like exchange_info
 
 	let exchange_info = binance.exchange_info(symbol.instrument, None).await.unwrap();
 	dbg!(&exchange_info.pairs.iter().take(2).collect::<Vec<_>>());

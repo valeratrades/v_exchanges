@@ -1,13 +1,15 @@
 use std::{fmt::Debug, path::PathBuf, sync::OnceLock, time::Duration};
 
 pub use bytes::Bytes;
+use eyre::{Report, eyre};
 use jiff::Timestamp;
 use reqwest::Url;
 pub use reqwest::{
 	Method, Request, RequestBuilder, StatusCode,
 	header::{self, HeaderMap},
 };
-use v_utils::{prelude::*, xdg_cache_dir};
+use serde::Serialize;
+use tracing::{Span, debug, error, field::Empty, info, instrument, warn};
 
 use crate::{AuthError, UrlError};
 
@@ -326,7 +328,7 @@ pub enum BuildError {
 
 static TEST_CALLS_PATH: OnceLock<PathBuf> = OnceLock::new();
 fn test_calls_path<Q: Serialize>(url: &Url, query: &Option<Q>) -> PathBuf {
-	let base = TEST_CALLS_PATH.get_or_init(|| xdg_cache_dir!("test_calls"));
+	let base = TEST_CALLS_PATH.get_or_init(|| v_utils::xdg_cache_dir!("test_calls"));
 
 	let mut filename = url.to_string();
 	if query.is_some() {
