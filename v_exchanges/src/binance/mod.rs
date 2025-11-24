@@ -31,17 +31,17 @@ impl Exchange for Binance {
 		self.update_default_option(BinanceOption::RecvWindow(recv_window));
 	}
 
-	async fn exchange_info(&self, instrument: Instrument, _recv_window: Option<std::time::Duration>) -> ExchangeResult<ExchangeInfo> {
+	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
 		match instrument {
 			Instrument::Perp => perp::general::exchange_info(self).await,
 			_ => unimplemented!(),
 		}
 	}
 
-	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange, recv_window: Option<std::time::Duration>) -> ExchangeResult<Klines> {
+	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
 		match symbol.instrument {
-			Instrument::Spot | Instrument::Margin => market::klines(self, symbol, tf.try_into()?, range, recv_window).await,
-			Instrument::Perp => market::klines(self, symbol, tf.try_into()?, range, recv_window).await,
+			Instrument::Spot | Instrument::Margin => market::klines(self, symbol, tf.try_into()?, range).await,
+			Instrument::Perp => market::klines(self, symbol, tf.try_into()?, range).await,
 			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented {
 				exchange: self.name(),
 				instrument: symbol.instrument,
@@ -49,7 +49,7 @@ impl Exchange for Binance {
 		}
 	}
 
-	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument, _recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		match instrument {
 			Instrument::Spot | Instrument::Margin => spot::market::prices(self, pairs).await,
 			Instrument::Perp => perp::market::prices(self, pairs).await,
@@ -57,7 +57,7 @@ impl Exchange for Binance {
 		}
 	}
 
-	async fn price(&self, symbol: Symbol, _recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
+	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
 		match symbol.instrument {
 			Instrument::Spot | Instrument::Margin => spot::market::price(self, symbol.pair).await,
 			Instrument::Perp => perp::market::price(self, symbol.pair).await,
@@ -68,9 +68,9 @@ impl Exchange for Binance {
 		}
 	}
 
-	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange, recv_window: Option<std::time::Duration>) -> ExchangeResult<Vec<crate::core::OpenInterest>> {
+	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<crate::core::OpenInterest>> {
 		match symbol.instrument {
-			Instrument::Perp => market::open_interest(self, symbol, tf.try_into()?, range, recv_window).await,
+			Instrument::Perp => market::open_interest(self, symbol, tf.try_into()?, range).await,
 			_ => Err(ExchangeError::Method(MethodError::MethodNotSupported {
 				exchange: self.name(),
 				instrument: symbol.instrument,
@@ -88,7 +88,7 @@ impl Exchange for Binance {
 	async fn balances(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
 		match instrument {
 			Instrument::Perp => {
-				let prices = self.prices(None, instrument, recv_window).await?;
+				let prices = self.prices(None, instrument).await?;
 				perp::account::balances(self, recv_window, &prices).await
 			}
 			_ => unimplemented!(),

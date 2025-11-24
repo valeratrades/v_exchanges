@@ -52,14 +52,14 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 
 	#[allow(unused_variables)]
 	#[allow(dead_code)]
-	async fn exchange_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<ExchangeInfo> {
+	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
 	#[allow(unused_variables)]
 	#[allow(dead_code)]
-	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange, recv_window: Option<std::time::Duration>) -> ExchangeResult<Klines> {
+	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported {
 			exchange: self.name(),
 			instrument: symbol.instrument,
@@ -69,13 +69,13 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	/// If no pairs are specified, returns for all;
 	#[allow(unused_variables)]
 	#[allow(dead_code)]
-	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 
 	#[allow(unused_variables)]
 	#[allow(dead_code)]
-	async fn price(&self, symbol: Symbol, recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
+	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported {
 			exchange: self.name(),
 			instrument: symbol.instrument,
@@ -86,7 +86,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	/// in output vec: greater the index, fresher the data
 	#[allow(unused_variables)]
 	#[allow(dead_code)]
-	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange, recv_window: Option<std::time::Duration>) -> ExchangeResult<Vec<OpenInterest>> {
+	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported {
 			exchange: self.name(),
 			instrument: symbol.instrument,
@@ -378,6 +378,7 @@ define_str_enum! {
 	}
 }
 
+#[derive(Clone, Debug)]
 pub struct Ticker {
 	pub symbol: Symbol,
 	pub exchange_name: ExchangeName,

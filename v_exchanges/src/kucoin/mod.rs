@@ -34,30 +34,30 @@ impl Exchange for Kucoin {
 		tracing::warn!("KuCoin does not support configurable recv_window - uses a fixed 5-second tolerance window for all authenticated requests");
 	}
 
-	async fn exchange_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<ExchangeInfo> {
+	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
 		match instrument {
-			Instrument::Spot => market::exchange_info(self, recv_window).await,
+			Instrument::Spot => market::exchange_info(self, None).await,
 			_ => unimplemented!(),
 		}
 	}
 
-	async fn price(&self, symbol: Symbol, recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
+	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
 		match symbol.instrument {
-			Instrument::Spot => market::price(self, symbol.pair, recv_window).await,
+			Instrument::Spot => market::price(self, symbol.pair, None).await,
 			_ => unimplemented!(),
 		}
 	}
 
-	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		match instrument {
-			Instrument::Spot => market::prices(self, pairs, recv_window).await,
+			Instrument::Spot => market::prices(self, pairs, None).await,
 			_ => unimplemented!(),
 		}
 	}
 
-	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange, recv_window: Option<std::time::Duration>) -> ExchangeResult<Klines> {
+	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
 		match symbol.instrument {
-			Instrument::Spot => market::klines(self, symbol, tf.try_into()?, range, recv_window).await,
+			Instrument::Spot => market::klines(self, symbol, tf.try_into()?, range, None).await,
 			_ => unimplemented!(),
 		}
 	}
