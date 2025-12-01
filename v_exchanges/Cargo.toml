@@ -104,6 +104,11 @@ required-features = ["bybit"]
 path = "../examples/bybit/market.rs"
 
 [[example]]
+name = "bybit_ws"
+required-features = ["bybit"]
+path = "../examples/bybit/ws.rs"
+
+[[example]]
 name = "kucoin_market"
 required-features = ["kucoin"]
 path = "../examples/kucoin/market.rs"

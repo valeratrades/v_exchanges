@@ -16,9 +16,9 @@ async fn main() {
 	};
 	let client = ticker.exchange_name.init_client();
 
-	let klines: Klines = client.klines(ticker.symbol, "1m".into(), 2.into(), None).await.unwrap();
+	let klines: Klines = client.klines(ticker.symbol, "1m".into(), 2.into()).await.unwrap();
 	println!("{:#?}", klines.v);
 
-	let prices = client.prices(None, ticker.symbol.instrument, None).await.unwrap();
+	let prices = client.prices(None, ticker.symbol.instrument).await.unwrap();
 	println!("{:?}", &prices.iter().collect::<Vec<_>>()[..5]);
 }
