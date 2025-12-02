@@ -1,14 +1,14 @@
 mod account;
 mod market;
 
-use adapters::bybit::BybitOption;
+use adapters::bybit::{BybitOption, BybitOptions};
 use secrecy::SecretString;
-use v_exchanges_adapters::Client;
+use v_exchanges_adapters::{Client, GetOptions};
 use v_utils::trades::{Asset, Timeframe};
 
 use crate::{
 	Balances, ExchangeName, ExchangeResult, Instrument, OpenInterest, Symbol,
-	core::{AssetBalance, Exchange, Klines, RequestRange},
+	core::{AssetBalance, ExchangeImpl, Klines, RequestRange},
 };
 
 #[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
@@ -16,7 +16,7 @@ pub struct Bybit(pub Client);
 
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
 #[async_trait::async_trait]
-impl Exchange for Bybit {
+impl ExchangeImpl for Bybit {
 	fn name(&self) -> ExchangeName {
 		ExchangeName::Bybit
 	}
@@ -28,6 +28,10 @@ impl Exchange for Bybit {
 
 	fn set_recv_window(&mut self, recv_window: std::time::Duration) {
 		self.update_default_option(BybitOption::RecvWindow(recv_window));
+	}
+
+	fn default_recv_window(&self) -> Option<std::time::Duration> {
+		GetOptions::<BybitOptions>::default_options(&**self).recv_window
 	}
 
 	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {

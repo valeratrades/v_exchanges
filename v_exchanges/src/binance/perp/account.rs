@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use eyre::{Result, eyre};
 use serde::Deserialize;
 use serde_with::{DisplayFromStr, serde_as};
-use v_exchanges_adapters::binance::{BinanceAuth, BinanceHttpUrl, BinanceOption, BinanceOptions};
+use v_exchanges_adapters::binance::{BinanceAuth, BinanceHttpUrl, BinanceOption};
 use v_utils::{
 	macros::ScreamIt,
 	trades::{Asset, Pair, Side, Usd},
@@ -12,14 +12,11 @@ use v_utils::{
 use crate::{
 	ExchangeResult,
 	core::{AssetBalance, Balances},
-	recv_window_check,
 };
 
 // balance {{{
 //DUP: difficult to escape duplicating half the [balances] method due to a) not requiring usd value b) binance not having individual asset balance endpoint
 pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
-	use v_exchanges_adapters::GetOptions;
-	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	assert!(client.is_authenticated::<BinanceOption>());
 	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM), BinanceOption::HttpAuth(BinanceAuth::Sign)];
 	if let Some(rw) = recv_window {
@@ -39,8 +36,6 @@ pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, 
 }
 
 pub async fn balances(client: &v_exchanges_adapters::Client, recv_window: Option<std::time::Duration>, prices: &BTreeMap<Pair, f64>) -> ExchangeResult<Balances> {
-	use v_exchanges_adapters::GetOptions;
-	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	assert!(client.is_authenticated::<BinanceOption>());
 	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM), BinanceOption::HttpAuth(BinanceAuth::Sign)];
 	if let Some(rw) = recv_window {
@@ -88,8 +83,6 @@ pub async fn balances(client: &v_exchanges_adapters::Client, recv_window: Option
 
 /// Place a new order on Binance Futures
 pub async fn place_order(client: &v_exchanges_adapters::Client, request: OrderRequest, recv_window: Option<std::time::Duration>) -> ExchangeResult<OrderResponse> {
-	use v_exchanges_adapters::GetOptions;
-	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	assert!(client.is_authenticated::<BinanceOption>());
 
 	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM), BinanceOption::HttpAuth(BinanceAuth::Sign)];
@@ -146,8 +139,6 @@ pub async fn place_order(client: &v_exchanges_adapters::Client, request: OrderRe
 
 /// Query income history
 pub async fn income_history(client: &v_exchanges_adapters::Client, request: IncomeRequest, recv_window: Option<std::time::Duration>) -> ExchangeResult<Vec<IncomeRecord>> {
-	use v_exchanges_adapters::GetOptions;
-	recv_window_check!(recv_window, GetOptions::<BinanceOptions>::default_options(client));
 	assert!(client.is_authenticated::<BinanceOption>());
 
 	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM), BinanceOption::HttpAuth(BinanceAuth::Sign)];

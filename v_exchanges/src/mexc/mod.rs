@@ -3,15 +3,15 @@ mod market;
 
 use std::collections::BTreeMap;
 
-use adapters::mexc::MexcOption;
+use adapters::mexc::{MexcOption, MexcOptions};
 use derive_more::derive::{Deref, DerefMut};
 use secrecy::SecretString;
-use v_exchanges_adapters::Client;
+use v_exchanges_adapters::{Client, GetOptions};
 use v_utils::trades::{Asset, Pair};
 
 use crate::{
 	Balances, ExchangeName, ExchangeResult, Instrument, Symbol,
-	core::{AssetBalance, Exchange},
+	core::{AssetBalance, ExchangeImpl},
 };
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
@@ -19,7 +19,7 @@ pub struct Mexc(pub Client);
 
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
 #[async_trait::async_trait]
-impl Exchange for Mexc {
+impl ExchangeImpl for Mexc {
 	fn name(&self) -> ExchangeName {
 		ExchangeName::Mexc
 	}
@@ -31,6 +31,10 @@ impl Exchange for Mexc {
 
 	fn set_recv_window(&mut self, recv_window: std::time::Duration) {
 		self.update_default_option(MexcOption::RecvWindow(recv_window));
+	}
+
+	fn default_recv_window(&self) -> Option<std::time::Duration> {
+		GetOptions::<MexcOptions>::default_options(&**self).recv_window
 	}
 
 	async fn prices(&self, _pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {

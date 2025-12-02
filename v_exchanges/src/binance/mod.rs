@@ -4,20 +4,23 @@ use std::collections::BTreeMap;
 mod market;
 mod spot;
 mod ws;
-use adapters::{Client, binance::BinanceOption};
+use adapters::{
+	Client, GetOptions,
+	binance::{BinanceOption, BinanceOptions},
+};
 use secrecy::SecretString;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::{
-	AssetBalance, Balances, Exchange, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Klines, MethodError, RequestRange, Trade,
-	core::{Instrument, Symbol},
+	AssetBalance, Balances, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Klines, MethodError, RequestRange, Trade,
+	core::{ExchangeImpl, Instrument, Symbol},
 };
 
 #[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
 pub struct Binance(pub Client);
 
 #[async_trait::async_trait]
-impl Exchange for Binance {
+impl ExchangeImpl for Binance {
 	fn name(&self) -> ExchangeName {
 		ExchangeName::Binance
 	}
@@ -29,6 +32,10 @@ impl Exchange for Binance {
 
 	fn set_recv_window(&mut self, recv_window: std::time::Duration) {
 		self.update_default_option(BinanceOption::RecvWindow(recv_window));
+	}
+
+	fn default_recv_window(&self) -> Option<std::time::Duration> {
+		GetOptions::<BinanceOptions>::default_options(&**self).recv_window
 	}
 
 	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {

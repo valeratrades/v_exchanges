@@ -12,14 +12,14 @@ use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::{
 	Balances, ExchangeName, ExchangeResult, Instrument, RequestRange, Symbol,
-	core::{AssetBalance, Exchange, ExchangeInfo, Klines},
+	core::{AssetBalance, ExchangeImpl, ExchangeInfo, Klines},
 };
 
 #[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
 pub struct Kucoin(pub Client);
 
 #[async_trait::async_trait]
-impl Exchange for Kucoin {
+impl ExchangeImpl for Kucoin {
 	fn name(&self) -> ExchangeName {
 		ExchangeName::Kucoin
 	}
@@ -32,6 +32,10 @@ impl Exchange for Kucoin {
 
 	fn set_recv_window(&mut self, _recv_window: std::time::Duration) {
 		tracing::warn!("KuCoin does not support configurable recv_window - uses a fixed 5-second tolerance window for all authenticated requests");
+	}
+
+	fn default_recv_window(&self) -> Option<std::time::Duration> {
+		None // KuCoin doesn't support configurable recv_window
 	}
 
 	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {

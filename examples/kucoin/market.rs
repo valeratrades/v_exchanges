@@ -15,12 +15,12 @@ async fn main() {
 
 	// Test price
 	println!("Testing price()...");
-	let price = client.price(symbol, None).await.unwrap();
+	let price = client.price(symbol).await.unwrap();
 	println!("BTC-USDT price: ${}\n", price);
 
 	// Test prices (get multiple)
 	println!("Testing prices()...");
-	let prices = client.prices(None, symbol.instrument, None).await.unwrap();
+	let prices = client.prices(None, symbol.instrument).await.unwrap();
 	println!("Total pairs available: {}", prices.len());
 	println!("Sample prices:");
 	for (pair, price) in prices.iter().take(5) {
@@ -30,7 +30,7 @@ async fn main() {
 
 	// Test klines
 	println!("Testing klines()...");
-	let klines = client.klines(symbol, "1h".into(), 5.into(), None).await.unwrap();
+	let klines = client.klines(symbol, "1h".into(), 5.into()).await.unwrap();
 	println!("Retrieved {} klines", klines.len());
 	if let Some(first) = klines.front() {
 		println!("Latest kline: O:{} H:{} L:{} C:{}", first.ohlc.open, first.ohlc.high, first.ohlc.low, first.ohlc.close);
@@ -39,7 +39,7 @@ async fn main() {
 
 	// Test exchange_info
 	println!("Testing exchange_info()...");
-	let exchange_info = client.exchange_info(symbol.instrument, None).await.unwrap();
+	let exchange_info = client.exchange_info(symbol.instrument).await.unwrap();
 	println!("Total trading pairs: {}", exchange_info.pairs.len());
 	if let Some((pair, info)) = exchange_info.pairs.iter().next() {
 		println!("Sample pair: {} (precision: {})", pair, info.price_precision);

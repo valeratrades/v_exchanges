@@ -1,11 +1,10 @@
 use adapters::{
 	Client,
-	mexc::{MexcHttpUrl, MexcOption, MexcOptions},
+	mexc::{MexcHttpUrl, MexcOption},
 };
-use v_exchanges_adapters::GetOptions;
 use v_utils::prelude::*;
 
-use crate::{ExchangeResult, recv_window_check};
+use crate::ExchangeResult;
 
 //TODO: impl spot
 pub async fn price(client: &Client, pair: Pair) -> ExchangeResult<f64> {

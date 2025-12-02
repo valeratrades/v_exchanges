@@ -1,39 +1,5 @@
 use v_utils::prelude::*;
 
-#[macro_export]
-macro_rules! recv_window_check {
-	//NB: requires explicit arg provision, as otherwise `default` branch logic gets confused
-	($recv_window:expr, $self:expr) => {{
-		const MAX_RECV_WINDOW: std::time::Duration = std::time::Duration::from_secs(10 * 60); // 10 minutes
-
-		// Check the provided recv_window first
-		if let Some(rw) = $recv_window {
-			if rw > MAX_RECV_WINDOW {
-				return Err($crate::ExchangeError::Other(eyre::eyre!(
-					"recv_window of {:?} exceeds maximum allowed duration of {:?}",
-					rw,
-					MAX_RECV_WINDOW
-				)));
-			}
-		}
-
-		// Check the client's default recv_window
-		if let Some(rw) = $self.recv_window {
-			if rw > MAX_RECV_WINDOW {
-				return Err($crate::ExchangeError::Other(eyre::eyre!(
-					"client's default recv_window of {:?} exceeds maximum allowed duration of {:?}",
-					rw,
-					MAX_RECV_WINDOW
-				)));
-			}
-		}
-
-		if $recv_window.is_none() && $self.recv_window.is_some() {
-			tracing::warn!("called without recv_window, using global default (not recommended)");
-		}
-	}};
-}
-
 /// # Panics
 /// Fine, because given prospected usages, theoretically only developer will see it.
 pub fn join_params(a: Value, b: Value) -> Value {

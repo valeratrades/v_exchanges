@@ -10,7 +10,7 @@ async fn main() {
 	let symbol = Symbol::new(("BTC", "USDT").into(), Instrument::Perp);
 	mexc.auth(env::var("MEXC_READ_KEY").unwrap(), env::var("MEXC_READ_SECRET").unwrap().into());
 
-	let price = mexc.price(symbol, None).await.unwrap();
+	let price = mexc.price(symbol).await.unwrap();
 	println!("{price:?}");
 
 	let balances = mexc.balances(symbol.instrument, None).await.unwrap();

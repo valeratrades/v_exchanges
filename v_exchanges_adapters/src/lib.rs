@@ -3,9 +3,12 @@
 #![feature(duration_constructors)]
 #![feature(try_blocks)]
 pub extern crate v_exchanges_api_generics as generics;
+use std::sync::Arc;
+
 pub use exchanges::*;
 use generics::UrlError;
 use serde::Serialize;
+use tokio::sync::Semaphore;
 use traits::*;
 use v_exchanges_api_generics::{
 	http::{self, *},
@@ -25,9 +28,15 @@ macro_rules! request_ret {
     };
 }
 
-#[derive(Clone, Debug, Default)]
+/// Default maximum number of simultaneous requests allowed
+pub const DEFAULT_MAX_SIMULTANEOUS_REQUESTS: usize = 100;
+
+#[derive(Clone, Debug)]
 pub struct Client {
 	pub client: http::Client,
+	/// Semaphore for limiting simultaneous requests.
+	/// Shared across clones of this client.
+	pub request_semaphore: Arc<Semaphore>,
 	#[cfg(feature = "binance")]
 	binance: binance::BinanceOptions,
 	#[cfg(feature = "bitflyer")]
@@ -42,7 +51,37 @@ pub struct Client {
 	mexc: mexc::MexcOptions,
 }
 
+impl Default for Client {
+	fn default() -> Self {
+		Self {
+			client: http::Client::default(),
+			request_semaphore: Arc::new(Semaphore::new(DEFAULT_MAX_SIMULTANEOUS_REQUESTS)),
+			#[cfg(feature = "binance")]
+			binance: binance::BinanceOptions::default(),
+			#[cfg(feature = "bitflyer")]
+			bitflyer: bitflyer::BitFlyerOptions::default(),
+			#[cfg(feature = "bybit")]
+			bybit: bybit::BybitOptions::default(),
+			#[cfg(feature = "coincheck")]
+			coincheck: coincheck::CoincheckOptions::default(),
+			#[cfg(feature = "kucoin")]
+			kucoin: kucoin::KucoinOptions::default(),
+			#[cfg(feature = "mexc")]
+			mexc: mexc::MexcOptions::default(),
+		}
+	}
+}
+
 impl Client {
+	/// Set the maximum number of simultaneous requests allowed.
+	///
+	/// This creates a new semaphore with the specified number of permits.
+	/// Note: This will NOT affect existing clones of this client - they will keep using the old semaphore.
+	/// Call this before cloning if you need all instances to share the same limit.
+	pub fn set_max_simultaneous_requests(&mut self, max: usize) {
+		self.request_semaphore = Arc::new(Semaphore::new(max));
+	}
+
 	/// Update the default options for this [Client]
 	pub fn update_default_option<O>(&mut self, option: O)
 	where

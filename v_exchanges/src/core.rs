@@ -14,14 +14,43 @@ use v_utils::{
 
 use crate::error::{ExchangeError, ExchangeResult, MethodError, OutOfRangeError, RequestRangeError};
 
-/// Main trait for all standardized exchange interactions
+const MAX_RECV_WINDOW: std::time::Duration = std::time::Duration::from_secs(10 * 60); // 10 minutes
+
+/// Validates recv_window parameters and warns if using global default.
+/// Returns an error if either the provided or default recv_window exceeds MAX_RECV_WINDOW.
+fn validate_recv_window(recv_window: Option<std::time::Duration>, default_recv_window: Option<std::time::Duration>) -> ExchangeResult<()> {
+	if let Some(rw) = recv_window
+		&& rw > MAX_RECV_WINDOW
+	{
+		return Err(ExchangeError::Other(eyre!("recv_window of {:?} exceeds maximum allowed duration of {:?}", rw, MAX_RECV_WINDOW)));
+	}
+
+	if let Some(rw) = default_recv_window
+		&& rw > MAX_RECV_WINDOW
+	{
+		return Err(ExchangeError::Other(eyre!(
+			"client's default recv_window of {:?} exceeds maximum allowed duration of {:?}",
+			rw,
+			MAX_RECV_WINDOW
+		)));
+	}
+
+	if recv_window.is_none() && default_recv_window.is_some() {
+		tracing::warn!("called without recv_window, using global default (not recommended)");
+	}
+
+	Ok(())
+}
+
+/// Internal trait for exchange implementations.
+/// Exchange implementations should implement this trait, not `Exchange` directly.
 ///
 /// Each **private** method allows to specify `recv_window`.
 ///
 /// # Other
 /// - has too many methods, so for dev purposes most default to `unimplemented!()`.
 #[async_trait::async_trait]
-pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Client> + std::ops::DerefMut {
+pub(crate) trait ExchangeImpl: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Client> + std::ops::DerefMut {
 	fn name(&self) -> ExchangeName;
 	// Config {{{
 	fn auth(&mut self, pubkey: String, secret: SecretString);
@@ -30,35 +59,19 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	/// **WARNING:** This sets a global default and should only be used as a crutch when you can't pass `recv_window` per-request.
 	/// Prefer using the `recv_window` parameter in individual method calls instead.
 	fn set_recv_window(&mut self, recv_window: std::time::Duration);
-	fn set_timeout(&mut self, timeout: std::time::Duration) {
-		self.client.config.timeout = timeout;
-	}
-	fn set_retry_cooldown(&mut self, cooldown: std::time::Duration) {
-		self.client.config.retry_cooldown = cooldown;
-	}
-	fn set_max_tries(&mut self, max: u8) {
-		self.client.config.max_tries = max;
-	}
-	fn set_use_testnes(&mut self, b: bool) {
-		self.client.config.use_testnet = b;
-	}
-	fn set_cache_testnet_calls(&mut self, duration: Option<std::time::Duration>) {
-		self.client.config.cache_testnet_calls = duration;
-	}
-	//DO: same for other fields in [RequestConfig](v_exchanges_api_generics::http::RequestConfig)
+	/// Get the default recv_window configured for this exchange, if any.
+	fn default_recv_window(&self) -> Option<std::time::Duration>;
 	//,}}}
 
 	//Q: do we actually want to return a `MethodNotSupported` error, or should we just `unimplemented!()`?
 
 	#[allow(unused_variables)]
-	#[allow(dead_code)]
 	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
 	#[allow(unused_variables)]
-	#[allow(dead_code)]
 	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported {
 			exchange: self.name(),
@@ -68,13 +81,11 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 
 	/// If no pairs are specified, returns for all;
 	#[allow(unused_variables)]
-	#[allow(dead_code)]
 	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 
 	#[allow(unused_variables)]
-	#[allow(dead_code)]
 	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported {
 			exchange: self.name(),
@@ -85,7 +96,6 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	/// Get Open Interest data
 	/// in output vec: greater the index, fresher the data
 	#[allow(unused_variables)]
-	#[allow(dead_code)]
 	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported {
 			exchange: self.name(),
@@ -96,15 +106,13 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	// Authenticated {{{
 	/// balance of a specific asset. Does not guarantee provision of USD values.
 	#[allow(unused_variables)]
-	#[allow(dead_code)]
 	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 
 	/// vec of _non-zero_ balances exclusively. Provides USD values.
 	#[allow(unused_variables)]
-	#[allow(dead_code)]
-	async fn balances(&self, instrument: Instrument, #[allow(unused_variables)] recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
+	async fn balances(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 	//,}}}
@@ -118,11 +126,123 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	// Websocket {{{
 	// Start a websocket connection for individual trades
 	#[allow(unused_variables)]
-	#[allow(dead_code)]
 	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 	//,}}}
+}
+
+/// Main trait for all standardized exchange interactions.
+///
+/// //NB: NEVER implement this trait manually. It is auto-implemented via blanket impl for all `ExchangeImpl` implementors.
+/// The blanket impl ensures that this trait can only be implemented within this crate.
+///
+/// All HTTP methods (except websocket) are rate-limited by a semaphore that limits the number of
+/// simultaneous outgoing requests. Use `set_max_simultaneous_requests` to configure the limit.
+#[async_trait::async_trait]
+pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Client> + std::ops::DerefMut {
+	fn name(&self) -> ExchangeName;
+	fn auth(&mut self, pubkey: String, secret: SecretString);
+	fn set_recv_window(&mut self, recv_window: std::time::Duration);
+	fn set_timeout(&mut self, timeout: std::time::Duration);
+	fn set_retry_cooldown(&mut self, cooldown: std::time::Duration);
+	fn set_max_tries(&mut self, max: u8);
+	fn set_use_testnet(&mut self, b: bool);
+	fn set_cache_testnet_calls(&mut self, duration: Option<std::time::Duration>);
+	/// Set the maximum number of simultaneous requests allowed.
+	/// Default is 100. The semaphore is shared across all clones of this exchange instance.
+	fn set_max_simultaneous_requests(&mut self, max: usize);
+	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo>;
+	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines>;
+	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>>;
+	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64>;
+	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>>;
+	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance>;
+	async fn balances(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances>;
+	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>>;
+}
+
+/// Blanket impl: any type implementing ExchangeImpl automatically gets Exchange.
+/// This enforces that Exchange can only be implemented within this crate (since ExchangeImpl is pub(crate)).
+#[async_trait::async_trait]
+impl<T: ExchangeImpl> Exchange for T {
+	fn name(&self) -> ExchangeName {
+		ExchangeImpl::name(self)
+	}
+
+	fn auth(&mut self, pubkey: String, secret: SecretString) {
+		ExchangeImpl::auth(self, pubkey, secret)
+	}
+
+	fn set_recv_window(&mut self, recv_window: std::time::Duration) {
+		ExchangeImpl::set_recv_window(self, recv_window)
+	}
+
+	fn set_timeout(&mut self, timeout: std::time::Duration) {
+		self.client.config.timeout = timeout;
+	}
+
+	fn set_retry_cooldown(&mut self, cooldown: std::time::Duration) {
+		self.client.config.retry_cooldown = cooldown;
+	}
+
+	fn set_max_tries(&mut self, max: u8) {
+		self.client.config.max_tries = max;
+	}
+
+	fn set_use_testnet(&mut self, b: bool) {
+		self.client.config.use_testnet = b;
+	}
+
+	fn set_cache_testnet_calls(&mut self, duration: Option<std::time::Duration>) {
+		self.client.config.cache_testnet_calls = duration;
+	}
+
+	fn set_max_simultaneous_requests(&mut self, max: usize) {
+		(**self).set_max_simultaneous_requests(max);
+	}
+
+	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
+		let _permit = self.request_semaphore.acquire().await.expect("semaphore closed");
+		ExchangeImpl::exchange_info(self, instrument).await
+	}
+
+	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
+		let _permit = self.request_semaphore.acquire().await.expect("semaphore closed");
+		ExchangeImpl::klines(self, symbol, tf, range).await
+	}
+
+	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
+		let _permit = self.request_semaphore.acquire().await.expect("semaphore closed");
+		ExchangeImpl::prices(self, pairs, instrument).await
+	}
+
+	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
+		let _permit = self.request_semaphore.acquire().await.expect("semaphore closed");
+		ExchangeImpl::price(self, symbol).await
+	}
+
+	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
+		let _permit = self.request_semaphore.acquire().await.expect("semaphore closed");
+		ExchangeImpl::open_interest(self, symbol, tf, range).await
+	}
+
+	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
+		validate_recv_window(recv_window, ExchangeImpl::default_recv_window(self))?;
+		let _permit = self.request_semaphore.acquire().await.expect("semaphore closed");
+		ExchangeImpl::asset_balance(self, asset, instrument, recv_window).await
+	}
+
+	async fn balances(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
+		validate_recv_window(recv_window, ExchangeImpl::default_recv_window(self))?;
+		let _permit = self.request_semaphore.acquire().await.expect("semaphore closed");
+		ExchangeImpl::balances(self, instrument, recv_window).await
+	}
+
+	// Websocket connections are NOT rate-limited by the semaphore
+	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>> {
+		ExchangeImpl::ws_trades(self, pairs, instrument)
+	}
 }
 
 // Open Interest {{{
