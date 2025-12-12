@@ -41,6 +41,7 @@ impl ExchangeImpl for Kucoin {
 	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
 		match instrument {
 			Instrument::Spot => market::exchange_info(self, None).await,
+			Instrument::Perp => market::futures::exchange_info(self, None).await,
 			_ => unimplemented!(),
 		}
 	}
@@ -48,6 +49,7 @@ impl ExchangeImpl for Kucoin {
 	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
 		match symbol.instrument {
 			Instrument::Spot => market::price(self, symbol.pair, None).await,
+			Instrument::Perp => market::futures::price(self, symbol.pair, None).await,
 			_ => unimplemented!(),
 		}
 	}
@@ -55,6 +57,7 @@ impl ExchangeImpl for Kucoin {
 	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		match instrument {
 			Instrument::Spot => market::prices(self, pairs, None).await,
+			Instrument::Perp => market::futures::prices(self, pairs, None).await,
 			_ => unimplemented!(),
 		}
 	}
@@ -62,6 +65,7 @@ impl ExchangeImpl for Kucoin {
 	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
 		match symbol.instrument {
 			Instrument::Spot => market::klines(self, symbol, tf.try_into()?, range, None).await,
+			Instrument::Perp => market::futures::klines(self, symbol, tf.try_into()?, range, None).await,
 			_ => unimplemented!(),
 		}
 	}

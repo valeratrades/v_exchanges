@@ -261,3 +261,243 @@ pub struct KucoinSymbol {
 	pub enable_trading: bool,
 }
 //,}}}
+
+// ============================================================================
+// Futures Market Data
+// ============================================================================
+
+pub mod futures {
+	use std::collections::{BTreeMap, VecDeque};
+
+	use jiff::Timestamp;
+	use serde::{Deserialize, Serialize};
+	use serde_json::json;
+	use serde_with::{DisplayFromStr, serde_as};
+	use v_exchanges_adapters::kucoin::{KucoinHttpUrl, KucoinOption};
+	use v_utils::trades::{Kline, Ohlc, Pair};
+
+	use crate::{
+		ExchangeResult, RequestRange, Symbol,
+		core::{ExchangeInfo, Klines, PairInfo},
+		kucoin::KucoinTimeframe,
+	};
+
+	/// Kucoin futures uses XBT instead of BTC
+	fn to_kucoin_futures_base(base: &str) -> &str {
+		match base {
+			"BTC" => "XBT",
+			other => other,
+		}
+	}
+
+	/// Convert Kucoin futures base currency back to standard format
+	fn from_kucoin_futures_base(base: &str) -> &str {
+		match base {
+			"XBT" => "BTC",
+			other => other,
+		}
+	}
+
+	// price {{{
+	pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair, _recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
+		// Kucoin futures symbol format: XBTUSDTM (base + quote + "M" for perpetual)
+		let base = to_kucoin_futures_base(pair.base().as_ref());
+		let symbol = format!("{}{}M", base, pair.quote());
+		let params = json!({
+			"symbol": symbol,
+		});
+		let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Futures)];
+		let response: FuturesTickerResponse = client.get("/api/v1/ticker", &params, options).await?;
+		Ok(response.data.price)
+	}
+
+	#[derive(Debug, Deserialize, Serialize)]
+	#[serde(rename_all = "camelCase")]
+	pub struct FuturesTickerResponse {
+		pub code: String,
+		pub data: FuturesTickerData,
+	}
+
+	#[serde_as]
+	#[derive(Debug, Deserialize, Serialize)]
+	#[serde(rename_all = "camelCase")]
+	pub struct FuturesTickerData {
+		pub sequence: i64,
+		pub symbol: String,
+		pub side: String,
+		pub size: i64,
+		pub trade_id: String,
+		#[serde_as(as = "DisplayFromStr")]
+		pub price: f64,
+		#[serde_as(as = "DisplayFromStr")]
+		pub best_bid_price: f64,
+		pub best_bid_size: i64,
+		#[serde_as(as = "DisplayFromStr")]
+		pub best_ask_price: f64,
+		pub best_ask_size: i64,
+		pub ts: i64,
+	}
+	//,}}}
+
+	// prices {{{
+	pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>, _recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+		let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Futures)];
+		let response: ContractsActiveResponse = client.get("/api/v1/contracts/active", &json!({}), options).await?;
+
+		let mut price_map = BTreeMap::new();
+
+		for contract in response.data {
+			// Parse symbol: XBTUSDTM -> BTC-USDT
+			let symbol = &contract.symbol;
+			if !symbol.ends_with('M') {
+				continue;
+			}
+
+			// Convert XBT -> BTC
+			let base = from_kucoin_futures_base(&contract.base_currency);
+			let pair = Pair::new(base, contract.quote_currency.as_str());
+
+			// If pairs filter is specified, only include those pairs
+			if let Some(ref requested_pairs) = pairs
+				&& !requested_pairs.contains(&pair)
+			{
+				continue;
+			}
+
+			price_map.insert(pair, contract.last_trade_price);
+		}
+
+		Ok(price_map)
+	}
+
+	#[derive(Debug, Deserialize, Serialize)]
+	pub struct ContractsActiveResponse {
+		pub code: String,
+		pub data: Vec<ContractInfo>,
+	}
+
+	#[derive(Debug, Deserialize, Serialize)]
+	#[serde(rename_all = "camelCase")]
+	pub struct ContractInfo {
+		pub symbol: String,
+		pub base_currency: String,
+		pub quote_currency: String,
+		pub settle_currency: String,
+		#[serde(rename = "type")]
+		pub contract_type: String,
+		pub status: String,
+		pub multiplier: f64,
+		pub tick_size: f64,
+		pub lot_size: f64,
+		pub max_leverage: i32,
+		pub last_trade_price: f64,
+	}
+	//,}}}
+
+	// klines {{{
+	pub async fn klines(
+		client: &v_exchanges_adapters::Client,
+		symbol: Symbol,
+		tf: KucoinTimeframe,
+		range: RequestRange,
+		_recv_window: Option<std::time::Duration>,
+	) -> ExchangeResult<Klines> {
+		// Kucoin futures symbol format: XBTUSDTM
+		let base = to_kucoin_futures_base(symbol.pair.base().as_ref());
+		let kucoin_symbol = format!("{}{}M", base, symbol.pair.quote());
+
+		// granularity is in minutes for futures API
+		let granularity = (tf.duration().as_secs() / 60) as u32;
+
+		let (from_ts, to_ts) = match range {
+			RequestRange::Span { since, until } => {
+				let start = since.as_millisecond();
+				let end = until.map(|t| t.as_millisecond()).unwrap_or_else(|| Timestamp::now().as_millisecond());
+				(start, end)
+			}
+			RequestRange::Limit(_) => {
+				let end = Timestamp::now();
+				let start = end - tf.duration() * 200; // Futures API returns max 200 candles
+				(start.as_millisecond(), end.as_millisecond())
+			}
+		};
+
+		let params = json!({
+			"symbol": kucoin_symbol,
+			"granularity": granularity,
+			"from": from_ts,
+			"to": to_ts,
+		});
+
+		let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Futures)];
+		let response: FuturesKlineResponse = client.get("/api/v1/kline/query", &params, options).await?;
+
+		let mut klines_vec = VecDeque::new();
+
+		// Futures klines: [timestamp_ms, open, high, low, close, volume, turnover]
+		for kline_data in response.data {
+			if kline_data.len() >= 7 {
+				let timestamp_ms = kline_data[0] as i64;
+
+				let ohlc = Ohlc {
+					open: kline_data[1],
+					high: kline_data[2],
+					low: kline_data[3],
+					close: kline_data[4],
+				};
+
+				klines_vec.push_back(Kline {
+					open_time: Timestamp::from_millisecond(timestamp_ms).map_err(|e| eyre::eyre!("Invalid timestamp: {}", e))?,
+					ohlc,
+					volume_quote: kline_data[6],
+					trades: None,
+					taker_buy_volume_quote: None,
+				});
+			}
+		}
+
+		Ok(Klines::new(klines_vec, *tf))
+	}
+
+	#[derive(Debug, Deserialize, Serialize)]
+	pub struct FuturesKlineResponse {
+		pub code: String,
+		pub data: Vec<Vec<f64>>,
+	}
+	//,}}}
+
+	// exchange_info {{{
+	pub async fn exchange_info(client: &v_exchanges_adapters::Client, _recv_window: Option<std::time::Duration>) -> ExchangeResult<ExchangeInfo> {
+		let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Futures)];
+		let response: ContractsActiveResponse = client.get("/api/v1/contracts/active", &json!({}), options).await?;
+
+		let mut pairs = BTreeMap::new();
+
+		for contract in response.data {
+			// Only include active contracts
+			if contract.status != "Open" {
+				continue;
+			}
+
+			// Convert XBT -> BTC
+			let base = from_kucoin_futures_base(&contract.base_currency);
+			let pair = Pair::new(base, contract.quote_currency.as_str());
+
+			// Calculate price precision from tick_size
+			let price_precision = if contract.tick_size == 0.0 {
+				0
+			} else {
+				(-contract.tick_size.log10()).max(0.0).round() as u8
+			};
+
+			let pair_info = PairInfo { price_precision };
+			pairs.insert(pair, pair_info);
+		}
+
+		Ok(ExchangeInfo {
+			server_time: Timestamp::now(),
+			pairs,
+		})
+	}
+	//,}}}
+}
