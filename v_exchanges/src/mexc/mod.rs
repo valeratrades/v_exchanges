@@ -7,11 +7,11 @@ use adapters::mexc::{MexcOption, MexcOptions};
 use derive_more::derive::{Deref, DerefMut};
 use secrecy::SecretString;
 use v_exchanges_adapters::{Client, GetOptions};
-use v_utils::trades::{Asset, Pair};
+use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::{
 	Balances, ExchangeName, ExchangeResult, Instrument, Symbol,
-	core::{AssetBalance, ExchangeImpl},
+	core::{AssetBalance, ExchangeImpl, Klines, RequestRange},
 };
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
@@ -47,6 +47,13 @@ impl ExchangeImpl for Mexc {
 	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
 		match symbol.instrument {
 			Instrument::Perp => market::price(self, symbol.pair).await,
+			_ => unimplemented!(),
+		}
+	}
+
+	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
+		match symbol.instrument {
+			Instrument::Perp => market::klines(self, symbol, tf.try_into()?, range).await,
 			_ => unimplemented!(),
 		}
 	}
