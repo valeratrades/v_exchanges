@@ -18,7 +18,7 @@ use crate::{
 };
 
 //TODO: impl spot
-pub async fn price(client: &Client, pair: Pair) -> ExchangeResult<f64> {
+pub(super) async fn price(client: &Client, pair: Pair) -> ExchangeResult<f64> {
 	let endpoint = format!("/api/v1/contract/index_price/{}", pair.fmt_mexc());
 	let options = vec![MexcOption::HttpUrl(MexcHttpUrl::Futures)];
 	let r: PriceResponse = client.get_no_query(&endpoint, options).await?;
@@ -42,7 +42,7 @@ impl From<PriceData> for f64 {
 }
 
 // klines {{{
-pub async fn klines(client: &Client, symbol: Symbol, tf: MexcTimeframe, range: RequestRange) -> ExchangeResult<Klines> {
+pub(super) async fn klines(client: &Client, symbol: Symbol, tf: MexcTimeframe, range: RequestRange) -> ExchangeResult<Klines> {
 	let mexc_symbol = symbol.pair.fmt_mexc();
 
 	// Convert timeframe to Mexc format: 1m -> Min1, 5m -> Min5, 1h -> Min60, 4h -> Hour4, 1d -> Day1
@@ -124,7 +124,7 @@ struct KlineData {
 //,}}}
 
 // exchange_info {{{
-pub async fn exchange_info(client: &Client) -> ExchangeResult<ExchangeInfo> {
+pub(super) async fn exchange_info(client: &Client) -> ExchangeResult<ExchangeInfo> {
 	let options = vec![MexcOption::HttpUrl(MexcHttpUrl::Futures)];
 	let response: ContractDetailResponse = client.get_no_query("/api/v1/contract/detail", options).await?;
 

@@ -16,7 +16,7 @@ use crate::{
 };
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BinanceTimeframe, range: RequestRange) -> Result<Klines, ExchangeError> {
+pub(super) async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BinanceTimeframe, range: RequestRange) -> Result<Klines, ExchangeError> {
 	//TODO: test if embedding params into the url works more consistently (comp number of pairs axum-site is ablle ot get)
 	range.ensure_allowed(1..=1000, tf.as_ref())?;
 	let range_params = range.serialize(ExchangeName::Binance);
@@ -99,7 +99,7 @@ pub struct KlineResponse {
 //,}}}
 
 // open_interest {{{
-pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BinanceTimeframe, range: RequestRange) -> Result<Vec<OpenInterest>, ExchangeError> {
+pub(super) async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BinanceTimeframe, range: RequestRange) -> Result<Vec<OpenInterest>, ExchangeError> {
 	range.ensure_allowed(1..=500, tf.as_ref())?;
 	let range_params = range.serialize(ExchangeName::Binance);
 	let base_params = json!({

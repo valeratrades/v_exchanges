@@ -17,7 +17,7 @@ use crate::{
 };
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitInterval, range: RequestRange) -> ExchangeResult<Klines> {
+pub(super) async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitInterval, range: RequestRange) -> ExchangeResult<Klines> {
 	range.ensure_allowed(1..=1000, &tf)?;
 	let range_json = range.serialize(ExchangeName::Bybit);
 	let base_params = filter_nulls(json!({
@@ -88,7 +88,7 @@ pub struct KlineData(
 //,}}}
 
 // price {{{
-pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> ExchangeResult<f64> {
+pub(super) async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> ExchangeResult<f64> {
 	let params = filter_nulls(json!({
 		"category": "linear",
 		"symbol": pair.fmt_bybit(),
@@ -159,7 +159,7 @@ pub struct MarketTickerData {
 //,}}}
 
 // open_interest {{{
-pub async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitIntervalTime, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
+pub(super) async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitIntervalTime, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
 	range.ensure_allowed(1..=200, &tf)?;
 	let range_json = range.serialize(ExchangeName::Bybit);
 

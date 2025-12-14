@@ -12,7 +12,7 @@ use crate::{
 	kucoin::market,
 };
 
-pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, _recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
+pub(super) async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, _recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
 	assert!(client.is_authenticated::<KucoinOption>());
 	let balances: Balances = balances(client, None).await?;
 	let balance: AssetBalance = balances.iter().find(|b| b.asset == asset).copied().unwrap_or_else(|| {
@@ -22,7 +22,7 @@ pub async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, 
 	Ok(balance)
 }
 
-pub async fn balances(client: &Client, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
+pub(super) async fn balances(client: &Client, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
 	assert!(client.is_authenticated::<KucoinOption>());
 
 	let options = vec![KucoinOption::HttpAuth(KucoinAuth::Sign), KucoinOption::HttpUrl(KucoinHttpUrl::Spot)];

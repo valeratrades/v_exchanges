@@ -14,7 +14,7 @@ use crate::{
 };
 
 // price {{{
-pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair, _recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
+pub(super) async fn price(client: &v_exchanges_adapters::Client, pair: Pair, _recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
 	let symbol = format!("{}-{}", pair.base(), pair.quote());
 	let params = json!({
 		"symbol": symbol,
@@ -53,7 +53,7 @@ pub struct TickerData {
 //,}}}
 
 // prices {{{
-pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>, _recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+pub(super) async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>, _recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
 	let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Spot)];
 	let response: AllTickersResponse = client.get("/api/v1/market/allTickers", &json!({}), options).await?;
 
@@ -128,7 +128,13 @@ pub struct TickerInfo {
 //,}}}
 
 // klines {{{
-pub async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: KucoinTimeframe, range: RequestRange, _recv_window: Option<std::time::Duration>) -> ExchangeResult<Klines> {
+pub(super) async fn klines(
+	client: &v_exchanges_adapters::Client,
+	symbol: Symbol,
+	tf: KucoinTimeframe,
+	range: RequestRange,
+	_recv_window: Option<std::time::Duration>,
+) -> ExchangeResult<Klines> {
 	let kucoin_symbol = format!("{}-{}", symbol.pair.base(), symbol.pair.quote());
 
 	// Convert from v_utils format (1h, 1d, 1w) to Kucoin API format (1hour, 1day, 1week)
@@ -194,7 +200,7 @@ pub struct KlineResponse {
 //,}}}
 
 // exchange_info {{{
-pub async fn exchange_info(client: &v_exchanges_adapters::Client, _recv_window: Option<std::time::Duration>) -> ExchangeResult<ExchangeInfo> {
+pub(super) async fn exchange_info(client: &v_exchanges_adapters::Client, _recv_window: Option<std::time::Duration>) -> ExchangeResult<ExchangeInfo> {
 	let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Spot)];
 	let response: SymbolsResponse = client.get("/api/v2/symbols", &json!({}), options).await?;
 
@@ -299,7 +305,7 @@ pub mod futures {
 	}
 
 	// price {{{
-	pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair, _recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
+	pub(in crate::kucoin) async fn price(client: &v_exchanges_adapters::Client, pair: Pair, _recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
 		// Kucoin futures symbol format: XBTUSDTM (base + quote + "M" for perpetual)
 		let base = to_kucoin_futures_base(pair.base().as_ref());
 		let symbol = format!("{}{}M", base, pair.quote());
@@ -340,7 +346,7 @@ pub mod futures {
 	//,}}}
 
 	// prices {{{
-	pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>, _recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
+	pub(in crate::kucoin) async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>, _recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Futures)];
 		let response: ContractsActiveResponse = client.get("/api/v1/contracts/active", &json!({}), options).await?;
 
@@ -395,7 +401,7 @@ pub mod futures {
 	//,}}}
 
 	// klines {{{
-	pub async fn klines(
+	pub(in crate::kucoin) async fn klines(
 		client: &v_exchanges_adapters::Client,
 		symbol: Symbol,
 		tf: KucoinTimeframe,
@@ -467,7 +473,7 @@ pub mod futures {
 	//,}}}
 
 	// exchange_info {{{
-	pub async fn exchange_info(client: &v_exchanges_adapters::Client, _recv_window: Option<std::time::Duration>) -> ExchangeResult<ExchangeInfo> {
+	pub(in crate::kucoin) async fn exchange_info(client: &v_exchanges_adapters::Client, _recv_window: Option<std::time::Duration>) -> ExchangeResult<ExchangeInfo> {
 		let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Futures)];
 		let response: ContractsActiveResponse = client.get("/api/v1/contracts/active", &json!({}), options).await?;
 

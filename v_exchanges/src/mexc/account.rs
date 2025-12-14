@@ -6,7 +6,7 @@ use v_utils::prelude::*;
 
 use crate::{AssetBalance, Balances, ExchangeResult};
 
-pub async fn asset_balance(client: &Client, asset: Asset, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
+pub(super) async fn asset_balance(client: &Client, asset: Asset, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
 	assert!(client.is_authenticated::<MexcOption>());
 	let mut options = vec![MexcOption::HttpUrl(MexcHttpUrl::Futures), MexcOption::HttpAuth(MexcAuth::Sign)];
 	if let Some(rw) = recv_window {
@@ -18,7 +18,7 @@ pub async fn asset_balance(client: &Client, asset: Asset, recv_window: Option<st
 	Ok(r.data.into())
 }
 
-pub async fn balances(client: &Client, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
+pub(super) async fn balances(client: &Client, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
 	assert!(client.is_authenticated::<MexcOption>());
 	let mut options = vec![MexcOption::HttpUrl(MexcHttpUrl::Futures), MexcOption::HttpAuth(MexcAuth::Sign)];
 	if let Some(rw) = recv_window {
