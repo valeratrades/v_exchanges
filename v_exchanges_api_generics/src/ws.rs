@@ -373,13 +373,13 @@ impl<H: WsHandler> WsConnection<H> {
 	///
 	/// `pub` for testing only, does not {have to || is expected to} be exposed in any wrappers.
 	pub async fn reconnect(&mut self) -> Result<(), WsError> {
-		if self.stream.is_some() {
+		if let Some(stream) = self.stream.as_mut() {
 			tracing::info!("Dropping old connection before reconnecting...");
-			{
-				let stream = self.stream.as_mut().unwrap();
-				stream.send(tungstenite::Message::Close(None)).await?;
-				self.stream = None;
+			// Best-effort close - ignore errors since the connection may already be broken
+			if let Err(e) = stream.send(tungstenite::Message::Close(None)).await {
+				tracing::debug!("Failed to send Close frame (connection likely already dead): {e}");
 			}
+			self.stream = None;
 		}
 		self.connect().await
 	}
