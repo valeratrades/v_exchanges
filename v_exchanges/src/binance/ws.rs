@@ -36,20 +36,36 @@ impl ExchangeStream for TradesConnection {
 	type Item = Trade;
 
 	async fn next(&mut self) -> Result<Self::Item, WsError> {
-		let content_event = self.connection.next().await?;
-		let trade_event = match self.instrument {
-			Instrument::Perp => {
-				let interpreted_response = serde_json::from_value::<TradeEventPerp>(content_event.data).expect("Exchange responded with invalid trade event");
-				Trade::from(interpreted_response)
+		loop {
+			let content_event = self.connection.next().await?;
+			let trade = match self.instrument {
+				Instrument::Perp => {
+					let parsed = serde_json::from_value::<TradeEventPerp>(content_event.data.clone()).expect("Exchange responded with invalid trade event");
+					Trade::from(parsed)
+				}
+				Instrument::Spot | Instrument::Margin => {
+					let parsed = serde_json::from_value::<TradeEventSpot>(content_event.data.clone()).expect("Exchange responded with invalid trade event");
+					Trade::from(parsed)
+				}
+				_ => unimplemented!(),
+			};
+			if trade.price == 0.0 || trade.qty_asset == 0.0 {
+				warn_zeroed_trade(&content_event);
+				continue;
 			}
-			Instrument::Spot | Instrument::Margin => {
-				let initial = serde_json::from_value::<TradeEventSpot>(content_event.data).expect("Exchange responded with invalid trade event");
-				Trade::from(initial)
-			}
-			_ => unimplemented!(),
-		};
-		Ok(trade_event)
+			return Ok(trade);
+		}
 	}
+}
+
+fn warn_zeroed_trade(event: &adapters::generics::ws::ContentEvent) {
+	tracing::warn!(
+		raw_json = %event.data,
+		topic = %event.topic,
+		event_type = %event.event_type,
+		event_time = %event.time,
+		"Binance sent a zero-valued trade, skipping"
+	);
 }
 
 #[serde_as]
