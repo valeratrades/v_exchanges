@@ -50,22 +50,21 @@ impl ExchangeStream for TradesConnection {
 				_ => unimplemented!(),
 			};
 			if trade.price == 0.0 || trade.qty_asset == 0.0 {
-				warn_zeroed_trade(&content_event);
+				fn warn_zeroed_trade(event: &adapters::generics::ws::ContentEvent, trade: Trade) {
+					tracing::warn!(
+						raw_json = %event.data,
+						topic = %event.topic,
+						event_type = %event.event_type,
+						event_time = %event.time,
+						"Binance sent a zero-valued trade, skipping.\nWas deserialized to: {trade:?}",
+					);
+				}
+				warn_zeroed_trade(&content_event, trade);
 				continue;
 			}
 			return Ok(trade);
 		}
 	}
-}
-
-fn warn_zeroed_trade(event: &adapters::generics::ws::ContentEvent) {
-	tracing::warn!(
-		raw_json = %event.data,
-		topic = %event.topic,
-		event_type = %event.event_type,
-		event_time = %event.time,
-		"Binance sent a zero-valued trade, skipping"
-	);
 }
 
 #[serde_as]
