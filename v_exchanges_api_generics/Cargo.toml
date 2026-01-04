@@ -36,6 +36,7 @@ derive_more.workspace = true
 eyre.workspace = true
 futures-util.workspace = true
 jiff.workspace = true
+miette.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -23,19 +23,28 @@ pub mod ws;
 pub extern crate reqwest;
 pub extern crate tokio_tungstenite;
 
-#[derive(Debug, derive_more::Display, thiserror::Error, derive_more::From)]
+#[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error, derive_more::From)]
 #[non_exhaustive]
 pub enum AuthError {
+	#[diagnostic(code(v_exchanges::auth::missing_pubkey), help("Provide API public key in your credentials"))]
 	MissingPubkey,
+	#[diagnostic(code(v_exchanges::auth::missing_secret), help("Provide API secret key in your credentials"))]
 	MissingSecret,
+	#[diagnostic(code(v_exchanges::auth::invalid_api_key))]
 	InvalidCharacterInApiKey(String),
+	#[diagnostic(code(v_exchanges::auth::other))]
 	Other(eyre::Report),
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, miette::Diagnostic, thiserror::Error)]
 pub enum UrlError {
 	#[error("Failed to parse URL: {0}")]
+	#[diagnostic(code(v_exchanges::url::parse))]
 	Parse(#[from] url::ParseError),
 	#[error("Exchange does not provide testnet for requested endpoint: {0}")]
+	#[diagnostic(
+		code(v_exchanges::url::missing_testnet),
+		help("Not all exchanges provide testnet endpoints. Check if this exchange supports testnet for this specific API.")
+	)]
 	MissingTestnet(url::Url),
 }

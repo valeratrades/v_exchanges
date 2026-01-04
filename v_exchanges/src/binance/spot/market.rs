@@ -33,7 +33,7 @@ pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pai
 				prices.insert(pair, p.price);
 			}
 			Err(e) => {
-				tracing::warn!("Failed to parse pair from string: {}", e);
+				tracing::warn!("Failed to parse pair from string: {e}");
 				continue;
 			}
 		};

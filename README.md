@@ -11,10 +11,14 @@ A unified library for all crypto exchange interactions, instead of manually wrap
 Before having this, I was never able to get production-ready any project relying on more than one exchange.
 <!-- markdownlint-disable -->
 <details>
-  <summary>
-    <h3>Installation</h3>
-  </summary>
-<pre><code class="language-sh">nix build</code></pre>
+<summary>
+<h3>Installation</h3>
+</summary>
+
+```sh
+nix build
+```
+
 </details>
 <!-- markdownlint-restore -->
 
@@ -80,7 +84,7 @@ if you try the following with different `Exchange`s and `Instruments` encoded in
 <br>
 
 <sup>
-	This repository follows <a href="https://github.com/valeratrades/.github/tree/master/best_practices">my best practices</a> and <a href="https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md">Tiger Style</a> (except "proper capitalization for acronyms": (VsrState, not VSRState) and formatting).
+	This repository follows <a href="https://github.com/valeratrades/.github/tree/master/best_practices">my best practices</a> and <a href="https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md">Tiger Style</a> (except "proper capitalization for acronyms": (VsrState, not VSRState) and formatting). For project's architecture, see <a href="./docs/ARCHITECTURE.md">ARCHITECTURE.md</a>.
 </sup>
 
 #### License
@@ -96,3 +100,4 @@ if you try the following with different `Exchange`s and `Instruments` encoded in
 for inclusion in this crate by you, as defined in the Apache-2.0 license, shall
 be licensed as above, without any additional terms or conditions.
 </sub>
+

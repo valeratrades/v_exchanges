@@ -73,7 +73,7 @@ pub(super) async fn klines(client: &Client, symbol: Symbol, tf: MexcTimeframe, r
 		}
 	};
 
-	let endpoint = format!("/api/v1/contract/kline/{}", mexc_symbol);
+	let endpoint = format!("/api/v1/contract/kline/{mexc_symbol}");
 	let params = json!({
 		"interval": interval,
 		"start": start,

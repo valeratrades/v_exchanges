@@ -308,7 +308,7 @@ pub mod futures {
 	pub(in crate::kucoin) async fn price(client: &v_exchanges_adapters::Client, pair: Pair, _recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
 		// Kucoin futures symbol format: XBTUSDTM (base + quote + "M" for perpetual)
 		let base = to_kucoin_futures_base(pair.base().as_ref());
-		let symbol = format!("{}{}M", base, pair.quote());
+		let symbol = format!("{base}{}M", pair.quote());
 		let params = json!({
 			"symbol": symbol,
 		});
@@ -410,7 +410,7 @@ pub mod futures {
 	) -> ExchangeResult<Klines> {
 		// Kucoin futures symbol format: XBTUSDTM
 		let base = to_kucoin_futures_base(symbol.pair.base().as_ref());
-		let kucoin_symbol = format!("{}{}M", base, symbol.pair.quote());
+		let kucoin_symbol = format!("{base}{}M", symbol.pair.quote());
 
 		// granularity is in minutes for futures API
 		let granularity = (tf.duration().as_secs() / 60) as u32;

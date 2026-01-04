@@ -268,61 +268,79 @@ impl RequestConfig {
 }
 
 /// Error type encompassing all the failure modes of [RequestHandler::handle_response()].
-#[derive(Debug, derive_more::Display, thiserror::Error, derive_more::From)]
+#[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error, derive_more::From)]
 pub enum HandleError {
 	/// Refer to [ApiError]
+	#[diagnostic(transparent)]
 	Api(ApiError),
 	/// Couldn't parse the response. Normally just wraps the [JsonError](serde_json::Error) with [truncate_msg](v_utils::utils::truncate_msg) around the response msg.
+	#[diagnostic(code(v_exchanges::http::handle::parse), help("The response body could not be parsed. Check if the API response format has changed."))]
 	Parse(Report),
 }
 /// Errors that exchanges purposefully transmit.
-#[derive(Debug, thiserror::Error, derive_more::From)]
+#[derive(Debug, miette::Diagnostic, thiserror::Error, derive_more::From)]
 pub enum ApiError {
 	/// Ip has been timed out or banned
 	#[error("IP has been timed out or banned until {until:?}")]
+	#[diagnostic(
+		code(v_exchanges::http::api::ip_timeout),
+		help("Your IP has been rate-limited. Wait until the specified time or reduce request frequency.")
+	)]
 	IpTimeout {
 		/// Time of unban
 		until: Option<Timestamp>,
 	},
 	/// Errors that are a) specific to a particular exchange or b) should be handled by this crate, but are here for dev convenience
 	#[error("{0}")]
+	#[diagnostic(code(v_exchanges::http::api::other))]
 	Other(Report),
 }
 
 /// An `enum` that represents errors that could be returned by [Client::request()]
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, miette::Diagnostic, thiserror::Error)]
 pub enum RequestError {
 	#[error("failed to send HTTP request: {0}")]
+	#[diagnostic(code(v_exchanges::http::request::send), help("Check your network connection and firewall settings."))]
 	SendRequest(#[source] reqwest::Error),
 	#[error("failed to parse response body as UTF-8: {0}")]
+	#[diagnostic(code(v_exchanges::http::request::utf8))]
 	Utf8Error(#[from] std::str::Utf8Error),
 	#[error("failed to receive HTTP response: {0}")]
+	#[diagnostic(code(v_exchanges::http::request::receive), help("The server may have closed the connection. Try again."))]
 	ReceiveResponse(#[source] reqwest::Error),
 	#[error("handler failed to build a request: {0}")]
+	#[diagnostic(transparent)]
 	BuildRequest(#[from] BuildError),
 	#[error("handler failed to process the response: {0}")]
+	#[diagnostic(transparent)]
 	HandleResponse(#[from] HandleError),
 	#[error("{0}")]
+	#[diagnostic(transparent)]
 	Url(#[from] UrlError),
 	/// errors meant to be propagated to the user or the developer, thus having no defined type.
 	#[allow(missing_docs)]
 	#[error("{0}")]
+	#[diagnostic(code(v_exchanges::http::request::other))]
 	Other(#[from] Report),
 }
 
 /// Errors that can occur during exchange's implementation of the build-request process.
-#[derive(Debug, derive_more::Display, thiserror::Error, derive_more::From)]
+#[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error, derive_more::From)]
 pub enum BuildError {
 	/// Signed request attempted, while lacking one of the necessary auth fields
+	#[diagnostic(transparent)]
 	Auth(AuthError),
 	/// Could not serialize body as application/x-www-form-urlencoded
+	#[diagnostic(code(v_exchanges::http::build::url_serialization), help("Check that all request parameters can be URL-encoded."))]
 	UrlSerialization(serde_urlencoded::ser::Error),
 	/// Could not serialize body as application/json
+	#[diagnostic(code(v_exchanges::http::build::json_serialization), help("Check that all request body fields can be serialized to JSON."))]
 	JsonSerialization(serde_json::Error),
 	//Q: not sure if there is ever a case when client could reach that, thus currently simply unwraping.
 	///// Error when calling reqwest::RequestBuilder::build()
 	//Reqwest(reqwest::Error),
 	#[allow(missing_docs)]
+	#[diagnostic(code(v_exchanges::http::build::other))]
 	Other(Report),
 }
 

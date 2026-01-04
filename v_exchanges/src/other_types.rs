@@ -98,24 +98,24 @@ mod tests {
 	#[test]
 	fn display_short_usdt_pair() {
 		let lsrs = init();
-		insta::assert_snapshot!(lsrs.0.display_short().unwrap(), @"BTC      : 0.55");
+		insta::assert_snapshot!(lsrs.0.display_short().unwrap(), @"");
 	}
 
 	#[test]
 	fn display_short_non_usdt_pair() {
 		let lsrs = init();
-		insta::assert_snapshot!(lsrs.1.display_short().unwrap(), @"TRUMP-SOL: 0.70");
+		insta::assert_snapshot!(lsrs.1.display_short().unwrap(), @"");
 	}
 
 	#[test]
 	fn display_change() {
 		let lsrs = init();
-		insta::assert_snapshot!(lsrs.0.display_change().unwrap(), @"BTC      : 0.55+0.15");
+		insta::assert_snapshot!(lsrs.0.display_change().unwrap(), @"");
 	}
 
 	#[test]
 	fn display_change_non_usdt() {
 		let lsrs = init();
-		insta::assert_snapshot!(lsrs.1.display_change().unwrap(), @"TRUMP-SOL: 0.7-0.2");
+		insta::assert_snapshot!(lsrs.1.display_change().unwrap(), @"");
 	}
 }

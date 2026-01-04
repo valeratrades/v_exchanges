@@ -3,8 +3,8 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     rust-overlay.url = "github:oxalica/rust-overlay";
     flake-utils.url = "github:numtide/flake-utils";
-    pre-commit-hooks.url = "github:cachix/git-hooks.nix/ca5b894d3e3e151ffc1db040b6ce4dcc75d31c37";
-    v-utils.url = "github:valeratrades/.github";
+    pre-commit-hooks.url = "github:cachix/git-hooks.nix";
+    v-utils.url = "github:valeratrades/.github?ref=v1.4";
   };
 
   outputs = { self, nixpkgs, rust-overlay, flake-utils, pre-commit-hooks, v-utils }:
@@ -24,20 +24,26 @@
         pname = manifest.name;
         stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv;
 
-        workflowContents = v-utils.ci {
-          inherit pkgs; lastSupportedVersion = "nightly-2025-10-12";
-          jobsErrors = [ "rust-tests" ];
-          jobsWarnings = [
-            { name = "rust-doc"; args = { package = "v_exchanges"; }; }
-            "rust-clippy"
-            "rust-machete"
-            "rust-sorted"
-            "rust-sorted-derives"
-            "tokei"
-          ];
-          jobsOther = [ "loc-badge" ];
+        github = v-utils.github {
+          inherit pkgs pname;
+          lastSupportedVersion = "nightly-2025-10-12";
+          langs = [ "rs" ];
+          jobs = {
+            default = true;
+          };
         };
-        readme = v-utils.readme-fw { inherit pkgs pname; lastSupportedVersion = "nightly-1.92"; rootDir = ./.; licenses = [{ name = "Blue Oak 1.0.0"; outPath = "LICENSE"; }]; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; };
+        readme = v-utils.readme-fw { inherit pkgs pname; defaults = true; lastSupportedVersion = "nightly-1.92"; rootDir = ./.; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; };
+        rs = v-utils.rs {
+          inherit pkgs rust;
+          build = {
+            deny = true;
+            workspace = let deprecate_by = "v1.0.0"; in {
+              "./v_exchanges" = [{ deprecate = { by_version = deprecate_by; force = true; }; }];
+              "./v_exchanges_adapters" = [{ deprecate = { by_version = deprecate_by; force = true; }; }];
+              "./v_exchanges_api_generics" = [{ deprecate = { by_version = deprecate_by; force = true; }; }];
+            };
+          };
+        };
       in
       {
         packages =
@@ -51,7 +57,7 @@
             };
           in
           {
-            default = rustPlatform.buildRustPackage rec {
+            default = rustPlatform.buildRustPackage {
               inherit pname;
               version = manifest.version;
 
@@ -70,30 +76,18 @@
           inherit stdenv;
           shellHook =
             pre-commit-check.shellHook +
-            workflowContents.shellHook +
+            github.shellHook +
+            readme.shellHook +
+            rs.shellHook +
             ''
-              							cp -f ${v-utils.files.licenses.blue_oak} ./LICENSE
-
-              							cargo -Zscript -q ${v-utils.hooks.appendCustom} ./.git/hooks/pre-commit
-              							cp -f ${(v-utils.hooks.treefmt) {inherit pkgs;}} ./.treefmt.toml
-              							cp -f ${(v-utils.hooks.preCommit) { inherit pkgs pname; }} ./.git/hooks/custom.sh
-
-              							mkdir -p ./.cargo
-              							#cp -f ${(v-utils.files.rust.config {inherit pkgs;})} ./.cargo/config.toml #dbg
-              							#cp -f ${(v-utils.files.rust.toolchain {inherit pkgs;})} ./.cargo/rust-toolchain.toml
-              							cp -f ${(v-utils.files.rust.rustfmt {inherit pkgs;})} ./rustfmt.toml
-              							cp -f ${(v-utils.files.rust.deny {inherit pkgs;})} ./deny.toml
-              							cp -f ${(v-utils.files.gitignore { inherit pkgs; langs = ["rs"];})} ./.gitignore
-
-              							cp -f ${readme} ./README.md
+              cp -f ${(v-utils.files.treefmt) {inherit pkgs;}} ./.treefmt.toml
             '';
-
           buildInputs = with pkgs; [
             mold-wrapped
             openssl
             pkg-config
             rust
-          ] ++ pre-commit-check.enabledPackages;
+          ] ++ pre-commit-check.enabledPackages ++ github.enabledPackages ++ rs.enabledPackages;
 
           env.RUST_BACKTRACE = 1;
           env.RUST_LIB_BACKTRACE = 0;

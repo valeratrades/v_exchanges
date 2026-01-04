@@ -6,7 +6,6 @@ use jiff::Timestamp;
 use secrecy::SecretString;
 use serde_json::json;
 use v_utils::{
-	define_str_enum,
 	prelude::*,
 	trades::{Asset, Kline, Pair, Timeframe, Usd},
 	utils::filter_nulls,
@@ -456,18 +455,17 @@ pub struct PairInfo {
 
 // Ticker {{{
 
-define_str_enum! {
-	#[derive(Clone, Debug, Eq, derive_more::From, PartialEq)]
-	#[non_exhaustive]
-	pub enum ExchangeName {
-		Binance => "binance",
-		Bybit => "bybit",
-		Kucoin => "kucoin",
-		Mexc => "mexc",
-		BitFlyer => "bitflyer",
-		Coincheck => "coincheck",
-		Yahoo => "yahook",
-	}
+#[derive(Clone, Debug, strum::Display, strum::EnumString, Eq, PartialEq)]
+#[strum(serialize_all = "lowercase")]
+#[non_exhaustive]
+pub enum ExchangeName {
+	Binance,
+	Bybit,
+	Kucoin,
+	Mexc,
+	BitFlyer,
+	Coincheck,
+	Yahoo,
 }
 impl ExchangeName {
 	pub fn init_client(&self) -> Box<dyn Exchange> {
@@ -485,17 +483,20 @@ impl ExchangeName {
 	}
 }
 
-define_str_enum! {
-	#[derive(Clone, Copy, Debug, Default, Eq, derive_more::From, PartialEq)]
-	#[non_exhaustive]
-	pub enum Instrument {
-		#[default]
-		Spot => "",
-		Perp => ".P",
-		Margin => ".M", //Q: do we care for being able to parse spot/margin diff from ticker defs?
-		PerpInverse => ".PERP_INVERSE",
-		Options => ".OPTIONS",
-	}
+#[derive(Clone, Copy, Debug, Default, serde::Deserialize, strum::Display, strum::EnumString, Eq, Hash, PartialEq, serde::Serialize)]
+#[non_exhaustive]
+pub enum Instrument {
+	#[default]
+	#[strum(serialize = "")]
+	Spot,
+	#[strum(serialize = ".P")]
+	Perp,
+	#[strum(serialize = ".M")]
+	Margin, //Q: do we care for being able to parse spot/margin diff from ticker defs?
+	#[strum(serialize = ".PERP_INVERSE")]
+	PerpInverse,
+	#[strum(serialize = ".OPTIONS")]
+	Options,
 }
 
 #[derive(Clone, Debug)]
@@ -522,7 +523,7 @@ impl std::str::FromStr for Ticker {
 	}
 }
 
-#[derive(Clone, Copy, Debug, Default, derive_new::new)]
+#[derive(Clone, Copy, Debug, Default, serde::Deserialize, Eq, Hash, PartialEq, serde::Serialize, derive_new::new)]
 pub struct Symbol {
 	pub pair: Pair,
 	pub instrument: Instrument,

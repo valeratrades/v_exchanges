@@ -25,6 +25,7 @@ futures-util = "^0.3.31"
 hex = "^0.4.3"
 hmac = "^0.12.1"
 jiff = "^0.2.16"
+miette = { version = "^7.5.0", features = ["fancy"] }
 reqwest = { version = "^0.12.24", features = ["blocking", "json"] }
 secrecy = "^0.10.3"
 serde = { version = "^1.0.228", features = ["derive"] }

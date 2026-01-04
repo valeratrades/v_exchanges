@@ -447,20 +447,30 @@ impl WsConfig {
 	}
 }
 
-#[derive(Debug, derive_more::Display, thiserror::Error, derive_more::From)]
+#[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error, derive_more::From)]
 pub enum WsError {
+	#[diagnostic(transparent)]
 	Definition(WsDefinitionError),
+	#[diagnostic(code(v_exchanges::ws::tungstenite), help("WebSocket protocol error. The connection may need to be reestablished."))]
 	Tungstenite(tungstenite::Error),
+	#[diagnostic(transparent)]
 	Auth(AuthError),
+	#[diagnostic(code(v_exchanges::ws::parse), help("Failed to parse WebSocket message. Check if the exchange API has changed."))]
 	Parse(serde_json::Error),
+	#[diagnostic(code(v_exchanges::ws::subscription))]
 	Subscription(String),
+	#[diagnostic(code(v_exchanges::ws::network), help("Network connection failed. Check your internet connection."))]
 	NetworkConnection,
+	#[diagnostic(transparent)]
 	Url(UrlError),
+	#[diagnostic(code(v_exchanges::ws::unexpected_event), help("Received an unexpected event from the WebSocket. This may indicate an API change."))]
 	UnexpectedEvent(serde_json::Value),
+	#[diagnostic(code(v_exchanges::ws::other))]
 	Other(eyre::Report),
 }
-#[derive(Debug, derive_more::Display, thiserror::Error)]
+#[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error)]
 pub enum WsDefinitionError {
+	#[diagnostic(code(v_exchanges::ws::definition::missing_url), help("WebSocket base URL must be configured in WsConfig."))]
 	MissingUrl,
 }
 
