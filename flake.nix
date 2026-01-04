@@ -30,6 +30,10 @@
           langs = [ "rs" ];
           jobs = {
             default = true;
+            # not sure I like the `default`s option on the interface after this now {{{1
+            warnings.exclude = [ "rust-doc" ];
+            warnings.augment = [{ name = "rust-doc"; args = { package = "v_exchanges"; }; }];
+            #,}}}1
           };
         };
         readme = v-utils.readme-fw { inherit pkgs pname; defaults = true; lastSupportedVersion = "nightly-1.92"; rootDir = ./.; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; };

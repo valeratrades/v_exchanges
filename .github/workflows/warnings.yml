@@ -39,7 +39,7 @@ jobs:
       with:
         name: modified-cargo-files
     - uses: dtolnay/install@cargo-docs-rs
-    - run: cargo docs-rs
+    - run: cargo docs-rs -p v_exchanges
     timeout-minutes: 45
   rust-machete:
     name: Unused Dependencies
