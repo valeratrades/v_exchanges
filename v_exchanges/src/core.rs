@@ -15,32 +15,240 @@ use crate::error::{ExchangeError, ExchangeResult, MethodError, OutOfRangeError, 
 
 const MAX_RECV_WINDOW: std::time::Duration = std::time::Duration::from_secs(10 * 60); // 10 minutes
 
-/// Validates recv_window parameters and warns if using global default.
-/// Returns an error if either the provided or default recv_window exceeds MAX_RECV_WINDOW.
-fn validate_recv_window(recv_window: Option<std::time::Duration>, default_recv_window: Option<std::time::Duration>) -> ExchangeResult<()> {
-	if let Some(rw) = recv_window
-		&& rw > MAX_RECV_WINDOW
-	{
-		return Err(ExchangeError::Other(eyre!("recv_window of {:?} exceeds maximum allowed duration of {:?}", rw, MAX_RECV_WINDOW)));
+/// Main trait for all standardized exchange interactions.
+///
+/// //NB: NEVER implement this trait manually. It is auto-implemented via blanket impl for all `ExchangeImpl` implementors.
+/// The blanket impl ensures that this trait can only be implemented within this crate.
+///
+/// All HTTP methods (except websocket) are rate-limited by a semaphore that limits the number of
+/// simultaneous outgoing requests. Use `set_max_simultaneous_requests` to configure the limit.
+#[async_trait::async_trait]
+pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Client> + std::ops::DerefMut {
+	fn name(&self) -> ExchangeName;
+	fn auth(&mut self, pubkey: String, secret: SecretString);
+	fn set_recv_window(&mut self, recv_window: std::time::Duration);
+	fn set_timeout(&mut self, timeout: std::time::Duration);
+	fn set_retry_cooldown(&mut self, cooldown: std::time::Duration);
+	fn set_max_tries(&mut self, max: u8);
+	fn set_use_testnet(&mut self, b: bool);
+	fn set_cache_testnet_calls(&mut self, duration: Option<std::time::Duration>);
+	/// Set the maximum number of simultaneous requests allowed.
+	/// Default is 100. The semaphore is shared across all clones of this exchange instance.
+	fn set_max_simultaneous_requests(&mut self, max: usize);
+	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo>;
+	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines>;
+	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>>;
+	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64>;
+	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>>;
+	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance>;
+	async fn balances(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances>;
+	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>>;
+}
+/// Concerns itself with exact types.
+#[async_trait::async_trait]
+pub trait ExchangeStream: std::fmt::Debug + Send + Sync {
+	type Item;
+
+	async fn next(&mut self) -> eyre::Result<Self::Item, WsError>;
+}
+#[async_trait::async_trait]
+pub trait SubscribeOrder {
+	type Order;
+
+	async fn place_and_subscribe(&mut self, topics: Vec<Self::Order>) -> Result<(), WsError>;
+}
+/// most exchanges default to returning OI value in asset quantity, not quote. Exception would be Inverse on Bybit.
+/// Which actually makes sense, as same endpoints accept things like "BTCETH", where quote value would be irrelevant.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct OpenInterest {
+	pub val_asset: f64,
+	pub val_quote: Option<f64>,
+	/// Binance's /futures/data/openInterestHist returns CMC's MC as well
+	pub marketcap: Option<f64>,
+	pub timestamp: Timestamp,
+}
+/// Does not have any gaps in the data, (as klines are meant to be indexed naively when used). TODO: enforce this.
+///
+/// # Arch
+/// the greater the index, the newer the value
+#[derive(Clone, Debug, Default, Deref, DerefMut, derive_new::new)]
+pub struct Klines {
+	#[deref_mut]
+	#[deref]
+	pub v: VecDeque<Kline>,
+	pub tf: Timeframe,
+}
+#[derive(Clone, Copy, Debug)]
+pub enum RequestRange {
+	/// Preferred way of defining the range
+	Span { since: Timestamp, until: Option<Timestamp> },
+	/// For quick and dirty
+	//TODO!: have it contain an enum, with either exact value, either just `Max`, then each exchange matches on it
+	Limit(u32),
+}
+impl RequestRange {
+	pub fn ensure_allowed(&self, allowed: std::ops::RangeInclusive<u32>, tf: &Timeframe) -> Result<(), RequestRangeError> {
+		match self {
+			RequestRange::Span { since: start, until: end } =>
+				if let Some(end) = end {
+					if start > end {
+						return Err(eyre!("Start time is greater than end time").into());
+					}
+					let effective_limit =
+						((*end - *start).get_milliseconds() / tf.duration().as_millis() as i64/*ok to downcast, because i64 will be sufficient for entirety of my lifetime*/) as u32;
+					if effective_limit > *allowed.end() {
+						return Err(OutOfRangeError::new(allowed, effective_limit).into());
+					}
+				},
+			RequestRange::Limit(limit) =>
+				if !allowed.contains(limit) {
+					return Err(OutOfRangeError::new(allowed, *limit).into());
+				},
+		}
+		Ok(())
 	}
 
-	if let Some(rw) = default_recv_window
-		&& rw > MAX_RECV_WINDOW
-	{
-		return Err(ExchangeError::Other(eyre!(
-			"client's default recv_window of {:?} exceeds maximum allowed duration of {:?}",
-			rw,
-			MAX_RECV_WINDOW
-		)));
+	pub fn serialize(&self, exchange: ExchangeName) -> serde_json::Value {
+		match exchange {
+			#[cfg(feature = "binance")]
+			ExchangeName::Binance => self.serialize_common(),
+			#[cfg(feature = "bybit")]
+			ExchangeName::Bybit => self.serialize_common(),
+			_ => unimplemented!(),
+		}
 	}
 
-	if recv_window.is_none() && default_recv_window.is_some() {
-		tracing::warn!("called without recv_window, using global default (not recommended)");
+	fn serialize_common(&self) -> serde_json::Value {
+		filter_nulls(match self {
+			RequestRange::Span { since: start, until: end } => json!({
+				"startTime": start.as_millisecond(),
+				"endTime": end.map(|dt| dt.as_millisecond()),
+			}),
+			RequestRange::Limit(limit) => json!({
+				"limit": limit,
+			}),
+		})
 	}
-
-	Ok(())
 }
 
+#[derive(Clone, Copy, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
+pub struct AssetBalance {
+	pub asset: Asset,
+	pub underlying: f64,
+	/// Optional, as for most exchanges appending it costs another call to `price{s}` endpoint
+	#[deref_mut]
+	#[deref]
+	pub usd: Option<Usd>,
+	// Binance
+	//cross_wallet_balance: f64,
+	//cross_unrealized_pnl: f64,
+	//available_balance: f64,
+	//max_withdraw_amount: f64,
+	//margin_available: bool,
+	// Mexc
+	//available_balance: f64,
+	//available_cash: f64,
+	//available_open: f64,
+	//bonus: f64,
+	//cash_balance: f64,
+	//currency: String,
+	//equity: f64,
+	//frozen_balance: f64,
+	//position_margin: f64,
+	//unrealized: f64,
+}
+#[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut, derive_new::new)]
+pub struct Balances {
+	#[deref_mut]
+	#[deref]
+	v: Vec<AssetBalance>,
+	/// breaks zero-cost of the abstraction, but I assume that most calls to this actually want usd, so it's warranted.
+	pub total: Usd,
+}
+#[derive(Clone, Debug, Default)]
+pub struct ExchangeInfo {
+	pub server_time: Timestamp,
+	pub pairs: BTreeMap<Pair, PairInfo>,
+}
+impl ExchangeInfo {
+	pub fn usdt_pairs(&self) -> impl Iterator<Item = Pair> {
+		self.pairs.keys().filter(|p| p.is_usdt()).copied()
+	}
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct PairInfo {
+	pub price_precision: u8,
+}
+#[derive(Clone, Debug, strum::Display, strum::EnumString, Eq, PartialEq)]
+#[strum(serialize_all = "lowercase")]
+#[non_exhaustive]
+pub enum ExchangeName {
+	Binance,
+	Bybit,
+	Kucoin,
+	Mexc,
+	BitFlyer,
+	Coincheck,
+	Yahoo,
+}
+impl ExchangeName {
+	pub fn init_client(&self) -> Box<dyn Exchange> {
+		match self {
+			#[cfg(feature = "binance")]
+			Self::Binance => Box::new(crate::Binance(Client::default())),
+			#[cfg(feature = "bybit")]
+			Self::Bybit => Box::new(crate::Bybit(Client::default())),
+			#[cfg(feature = "kucoin")]
+			Self::Kucoin => Box::new(crate::Kucoin(Client::default())),
+			#[cfg(feature = "mexc")]
+			Self::Mexc => Box::new(crate::Mexc(Client::default())),
+			_ => unimplemented!(),
+		}
+	}
+}
+
+#[derive(Clone, Copy, Debug, Default, serde::Deserialize, strum::Display, strum::EnumString, Eq, Hash, PartialEq, serde::Serialize)]
+#[non_exhaustive]
+pub enum Instrument {
+	#[default]
+	#[strum(serialize = "")]
+	Spot,
+	#[strum(serialize = ".P")]
+	Perp,
+	#[strum(serialize = ".M")]
+	Margin, //Q: do we care for being able to parse spot/margin diff from ticker defs?
+	#[strum(serialize = ".PERP_INVERSE")]
+	PerpInverse,
+	#[strum(serialize = ".OPTIONS")]
+	Options,
+}
+#[derive(Clone, Debug)]
+pub struct Ticker {
+	pub symbol: Symbol,
+	pub exchange_name: ExchangeName,
+}
+#[derive(Clone, Copy, Debug, Default, serde::Deserialize, Eq, Hash, PartialEq, serde::Serialize, derive_new::new)]
+pub struct Symbol {
+	pub pair: Pair,
+	pub instrument: Instrument,
+}
+#[derive(Clone, Debug, Default)]
+pub struct Trade {
+	pub time: Timestamp,
+	pub qty_asset: f64,
+	pub price: f64,
+}
+pub struct BookSnapshot {
+	pub time: Timestamp,
+	pub asks: Vec<(f64, f64)>,
+	pub bids: Vec<(f64, f64)>,
+}
+pub struct BookDelta {
+	pub time: Timestamp,
+	pub asks: Vec<(f64, f64)>,
+	pub bids: Vec<(f64, f64)>,
+}
 /// Internal trait for exchange implementations.
 /// Exchange implementations should implement this trait, not `Exchange` directly.
 ///
@@ -130,35 +338,28 @@ pub(crate) trait ExchangeImpl: std::fmt::Debug + Send + Sync + std::ops::Deref<T
 	}
 	//,}}}
 }
+/// Validates recv_window parameters and warns if using global default.
+/// Returns an error if either the provided or default recv_window exceeds MAX_RECV_WINDOW.
+fn validate_recv_window(recv_window: Option<std::time::Duration>, default_recv_window: Option<std::time::Duration>) -> ExchangeResult<()> {
+	if let Some(rw) = recv_window
+		&& rw > MAX_RECV_WINDOW
+	{
+		return Err(ExchangeError::Other(eyre!("recv_window of {rw:?} exceeds maximum allowed duration of {MAX_RECV_WINDOW:?}")));
+	}
 
-/// Main trait for all standardized exchange interactions.
-///
-/// //NB: NEVER implement this trait manually. It is auto-implemented via blanket impl for all `ExchangeImpl` implementors.
-/// The blanket impl ensures that this trait can only be implemented within this crate.
-///
-/// All HTTP methods (except websocket) are rate-limited by a semaphore that limits the number of
-/// simultaneous outgoing requests. Use `set_max_simultaneous_requests` to configure the limit.
-#[async_trait::async_trait]
-pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Client> + std::ops::DerefMut {
-	fn name(&self) -> ExchangeName;
-	fn auth(&mut self, pubkey: String, secret: SecretString);
-	fn set_recv_window(&mut self, recv_window: std::time::Duration);
-	fn set_timeout(&mut self, timeout: std::time::Duration);
-	fn set_retry_cooldown(&mut self, cooldown: std::time::Duration);
-	fn set_max_tries(&mut self, max: u8);
-	fn set_use_testnet(&mut self, b: bool);
-	fn set_cache_testnet_calls(&mut self, duration: Option<std::time::Duration>);
-	/// Set the maximum number of simultaneous requests allowed.
-	/// Default is 100. The semaphore is shared across all clones of this exchange instance.
-	fn set_max_simultaneous_requests(&mut self, max: usize);
-	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo>;
-	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines>;
-	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>>;
-	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64>;
-	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>>;
-	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance>;
-	async fn balances(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances>;
-	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>>;
+	if let Some(rw) = default_recv_window
+		&& rw > MAX_RECV_WINDOW
+	{
+		return Err(ExchangeError::Other(eyre!(
+			"client's default recv_window of {rw:?} exceeds maximum allowed duration of {MAX_RECV_WINDOW:?}"
+		)));
+	}
+
+	if recv_window.is_none() && default_recv_window.is_some() {
+		tracing::warn!("called without recv_window, using global default (not recommended)");
+	}
+
+	Ok(())
 }
 
 /// Blanket impl: any type implementing ExchangeImpl automatically gets Exchange.
@@ -245,33 +446,12 @@ impl<T: ExchangeImpl> Exchange for T {
 }
 
 // Open Interest {{{
-/// most exchanges default to returning OI value in asset quantity, not quote. Exception would be Inverse on Bybit.
-/// Which actually makes sense, as same endpoints accept things like "BTCETH", where quote value would be irrelevant.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct OpenInterest {
-	pub val_asset: f64,
-	pub val_quote: Option<f64>,
-	/// Binance's /futures/data/openInterestHist returns CMC's MC as well
-	pub marketcap: Option<f64>,
-	pub timestamp: Timestamp,
-}
 //,}}}
 
 // Klines {{{
 
 //Q: maybe add a `vectorize` method? Should add, question is really if it should be returning a) df b) all fields, including optional and oi c) t, o, h, l, c, v
 // probably should figure out rust-typed dataframes for this first
-/// Does not have any gaps in the data, (as klines are meant to be indexed naively when used). TODO: enforce this.
-///
-/// # Arch
-/// the greater the index, the newer the value
-#[derive(Clone, Debug, Default, Deref, DerefMut, derive_new::new)]
-pub struct Klines {
-	#[deref_mut]
-	#[deref]
-	pub v: VecDeque<Kline>,
-	pub tf: Timeframe,
-}
 impl Iterator for Klines {
 	type Item = Kline;
 
@@ -282,58 +462,6 @@ impl Iterator for Klines {
 //,}}}
 
 // RequestRange {{{
-#[derive(Clone, Copy, Debug)]
-pub enum RequestRange {
-	/// Preferred way of defining the range
-	Span { since: Timestamp, until: Option<Timestamp> },
-	/// For quick and dirty
-	//TODO!: have it contain an enum, with either exact value, either just `Max`, then each exchange matches on it
-	Limit(u32),
-}
-impl RequestRange {
-	pub fn ensure_allowed(&self, allowed: std::ops::RangeInclusive<u32>, tf: &Timeframe) -> Result<(), RequestRangeError> {
-		match self {
-			RequestRange::Span { since: start, until: end } =>
-				if let Some(end) = end {
-					if start > end {
-						return Err(eyre!("Start time is greater than end time").into());
-					}
-					let effective_limit =
-						((*end - *start).get_milliseconds() / tf.duration().as_millis() as i64/*ok to downcast, because i64 will be sufficient for entirety of my lifetime*/) as u32;
-					if effective_limit > *allowed.end() {
-						return Err(OutOfRangeError::new(allowed, effective_limit).into());
-					}
-				},
-			RequestRange::Limit(limit) =>
-				if !allowed.contains(limit) {
-					return Err(OutOfRangeError::new(allowed, *limit).into());
-				},
-		}
-		Ok(())
-	}
-
-	pub fn serialize(&self, exchange: ExchangeName) -> serde_json::Value {
-		match exchange {
-			#[cfg(feature = "binance")]
-			ExchangeName::Binance => self.serialize_common(),
-			#[cfg(feature = "bybit")]
-			ExchangeName::Bybit => self.serialize_common(),
-			_ => unimplemented!(),
-		}
-	}
-
-	fn serialize_common(&self) -> serde_json::Value {
-		filter_nulls(match self {
-			RequestRange::Span { since: start, until: end } => json!({
-				"startTime": start.as_millisecond(),
-				"endTime": end.map(|dt| dt.as_millisecond()),
-			}),
-			RequestRange::Limit(limit) => json!({
-				"limit": limit,
-			}),
-		})
-	}
-}
 impl Default for RequestRange {
 	fn default() -> Self {
 		RequestRange::Span {
@@ -400,110 +528,12 @@ impl From<(i64, i64)> for RequestRange {
 //,}}}
 
 // Balance {{{
-#[derive(Clone, Copy, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
-pub struct AssetBalance {
-	pub asset: Asset,
-	pub underlying: f64,
-	/// Optional, as for most exchanges appending it costs another call to `price{s}` endpoint
-	#[deref_mut]
-	#[deref]
-	pub usd: Option<Usd>,
-	// Binance
-	//cross_wallet_balance: f64,
-	//cross_unrealized_pnl: f64,
-	//available_balance: f64,
-	//max_withdraw_amount: f64,
-	//margin_available: bool,
-	// Mexc
-	//available_balance: f64,
-	//available_cash: f64,
-	//available_open: f64,
-	//bonus: f64,
-	//cash_balance: f64,
-	//currency: String,
-	//equity: f64,
-	//frozen_balance: f64,
-	//position_margin: f64,
-	//unrealized: f64,
-}
-#[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut, derive_new::new)]
-pub struct Balances {
-	#[deref_mut]
-	#[deref]
-	v: Vec<AssetBalance>,
-	/// breaks zero-cost of the abstraction, but I assume that most calls to this actually want usd, so it's warranted.
-	pub total: Usd,
-}
 //,}}}
 
 // Exchange Info {{{
-#[derive(Clone, Debug, Default)]
-pub struct ExchangeInfo {
-	pub server_time: Timestamp,
-	pub pairs: BTreeMap<Pair, PairInfo>,
-}
-impl ExchangeInfo {
-	pub fn usdt_pairs(&self) -> impl Iterator<Item = Pair> {
-		self.pairs.keys().filter(|p| p.is_usdt()).copied()
-	}
-}
-#[derive(Clone, Debug, Default)]
-pub struct PairInfo {
-	pub price_precision: u8,
-}
 //,}}}
 
 // Ticker {{{
-
-#[derive(Clone, Debug, strum::Display, strum::EnumString, Eq, PartialEq)]
-#[strum(serialize_all = "lowercase")]
-#[non_exhaustive]
-pub enum ExchangeName {
-	Binance,
-	Bybit,
-	Kucoin,
-	Mexc,
-	BitFlyer,
-	Coincheck,
-	Yahoo,
-}
-impl ExchangeName {
-	pub fn init_client(&self) -> Box<dyn Exchange> {
-		match self {
-			#[cfg(feature = "binance")]
-			Self::Binance => Box::new(crate::Binance(Client::default())),
-			#[cfg(feature = "bybit")]
-			Self::Bybit => Box::new(crate::Bybit(Client::default())),
-			#[cfg(feature = "kucoin")]
-			Self::Kucoin => Box::new(crate::Kucoin(Client::default())),
-			#[cfg(feature = "mexc")]
-			Self::Mexc => Box::new(crate::Mexc(Client::default())),
-			_ => unimplemented!(),
-		}
-	}
-}
-
-#[derive(Clone, Copy, Debug, Default, serde::Deserialize, strum::Display, strum::EnumString, Eq, Hash, PartialEq, serde::Serialize)]
-#[non_exhaustive]
-pub enum Instrument {
-	#[default]
-	#[strum(serialize = "")]
-	Spot,
-	#[strum(serialize = ".P")]
-	Perp,
-	#[strum(serialize = ".M")]
-	Margin, //Q: do we care for being able to parse spot/margin diff from ticker defs?
-	#[strum(serialize = ".PERP_INVERSE")]
-	PerpInverse,
-	#[strum(serialize = ".OPTIONS")]
-	Options,
-}
-
-#[derive(Clone, Debug)]
-pub struct Ticker {
-	pub symbol: Symbol,
-	pub exchange_name: ExchangeName,
-}
 
 impl std::fmt::Display for Ticker {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -521,12 +551,6 @@ impl std::str::FromStr for Ticker {
 
 		Ok(Ticker { symbol, exchange_name })
 	}
-}
-
-#[derive(Clone, Copy, Debug, Default, serde::Deserialize, Eq, Hash, PartialEq, serde::Serialize, derive_new::new)]
-pub struct Symbol {
-	pub pair: Pair,
-	pub instrument: Instrument,
 }
 
 impl std::fmt::Display for Symbol {
@@ -554,39 +578,9 @@ impl From<&str> for Symbol {
 //,}}}
 
 // Websocket {{{
-/// Concerns itself with exact types.
-#[async_trait::async_trait]
-pub trait ExchangeStream: std::fmt::Debug + Send + Sync {
-	type Item;
-
-	async fn next(&mut self) -> eyre::Result<Self::Item, WsError>;
-}
-#[async_trait::async_trait]
-pub trait SubscribeOrder {
-	type Order;
-
-	async fn place_and_subscribe(&mut self, topics: Vec<Self::Order>) -> Result<(), WsError>;
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct Trade {
-	pub time: Timestamp,
-	pub qty_asset: f64,
-	pub price: f64,
-}
 
 //dbg: placeholder, ignore contents
-pub struct BookSnapshot {
-	pub time: Timestamp,
-	pub asks: Vec<(f64, f64)>,
-	pub bids: Vec<(f64, f64)>,
-}
 //dbg: placeholder, ignore contents
-pub struct BookDelta {
-	pub time: Timestamp,
-	pub asks: Vec<(f64, f64)>,
-	pub bids: Vec<(f64, f64)>,
-}
 //,}}}
 
 mod test {

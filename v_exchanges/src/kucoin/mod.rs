@@ -1,3 +1,5 @@
+#[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
+pub struct Kucoin(pub Client);
 mod account;
 mod market;
 
@@ -14,9 +16,6 @@ use crate::{
 	Balances, ExchangeName, ExchangeResult, Instrument, RequestRange, Symbol,
 	core::{AssetBalance, ExchangeImpl, ExchangeInfo, Klines},
 };
-
-#[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
-pub struct Kucoin(pub Client);
 
 #[async_trait::async_trait]
 impl ExchangeImpl for Kucoin {

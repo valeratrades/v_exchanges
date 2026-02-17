@@ -17,45 +17,6 @@ use crate::{
 };
 
 // klines {{{
-pub(super) async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitInterval, range: RequestRange) -> ExchangeResult<Klines> {
-	range.ensure_allowed(1..=1000, &tf)?;
-	let range_json = range.serialize(ExchangeName::Bybit);
-	let base_params = filter_nulls(json!({
-		"category": "linear", // can be ["linear", "inverse", "spot"] afaiu, could drive some generics with this later, but for now hardcode
-		"symbol": symbol.pair.fmt_bybit(),
-		"interval": tf.to_string(),
-	}));
-
-	let mut base_map = base_params.as_object().unwrap().clone();
-	let range_map = range_json.as_object().unwrap();
-	base_map.extend(range_map.clone());
-	let params = filter_nulls(serde_json::Value::Object(base_map));
-
-	let options = vec![BybitOption::None];
-	let kline_response: KlineResponse = client.get("/v5/market/kline", &params, options).await.unwrap();
-
-	let mut klines = VecDeque::with_capacity(kline_response.result.list.len());
-	for k in kline_response.result.list {
-		if kline_response.time > k.0 + tf.duration().as_millis() as i64
-		/*take `as_millis`, so ok to downcast in all practical applications*/
-		{
-			klines.push_back(Kline {
-				open_time: Timestamp::from_millisecond(k.0).unwrap(),
-				ohlc: Ohlc {
-					open: k.1,
-					close: k.2,
-					high: k.3,
-					low: k.4,
-				},
-				volume_quote: k.5,
-				trades: None,
-				taker_buy_volume_quote: None,
-			});
-		}
-	}
-	Ok(Klines::new(klines, *tf))
-}
-
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KlineResponse {
@@ -65,7 +26,6 @@ pub struct KlineResponse {
 	pub ret_msg: String,
 	pub time: i64,
 }
-
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResponseResult {
@@ -73,7 +33,6 @@ pub struct ResponseResult {
 	pub list: Vec<KlineData>,
 	pub symbol: String,
 }
-
 #[serde_as]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct KlineData(
@@ -85,19 +44,6 @@ pub struct KlineData(
 	#[serde_as(as = "DisplayFromStr")] pub f64,
 	#[serde_as(as = "DisplayFromStr")] pub f64,
 );
-//,}}}
-
-// price {{{
-pub(super) async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> ExchangeResult<f64> {
-	let params = filter_nulls(json!({
-		"category": "linear",
-		"symbol": pair.fmt_bybit(),
-	}));
-	let options = vec![BybitOption::None];
-	let response: MarketTickerResponse = client.get("/v5/market/tickers", &params, options).await?;
-	Ok(response.result.list[0].last_price)
-}
-
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketTickerResponse {
@@ -107,14 +53,12 @@ pub struct MarketTickerResponse {
 	pub ret_ext_info: std::collections::HashMap<String, Value>,
 	pub time: i64,
 }
-
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketTickerResult {
 	pub category: String,
 	pub list: Vec<MarketTickerData>,
 }
-
 #[serde_as]
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -156,6 +100,84 @@ pub struct MarketTickerData {
 	#[serde_as(as = "DisplayFromStr")]
 	pub ask1_size: f64,
 }
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenInterestResponse {
+	pub ret_code: i32,
+	pub ret_msg: String,
+	pub result: OpenInterestResult,
+	pub ret_ext_info: std::collections::HashMap<String, Value>,
+	pub time: i64,
+}
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenInterestResult {
+	pub symbol: String,
+	pub category: String,
+	pub list: Vec<OpenInterestData>,
+	pub next_page_cursor: String,
+}
+#[serde_as]
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenInterestData {
+	#[serde_as(as = "DisplayFromStr")]
+	pub open_interest: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub timestamp: i64,
+}
+pub(super) async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitInterval, range: RequestRange) -> ExchangeResult<Klines> {
+	range.ensure_allowed(1..=1000, &tf)?;
+	let range_json = range.serialize(ExchangeName::Bybit);
+	let base_params = filter_nulls(json!({
+		"category": "linear", // can be ["linear", "inverse", "spot"] afaiu, could drive some generics with this later, but for now hardcode
+		"symbol": symbol.pair.fmt_bybit(),
+		"interval": tf.to_string(),
+	}));
+
+	let mut base_map = base_params.as_object().unwrap().clone();
+	let range_map = range_json.as_object().unwrap();
+	base_map.extend(range_map.clone());
+	let params = filter_nulls(serde_json::Value::Object(base_map));
+
+	let options = vec![BybitOption::None];
+	let kline_response: KlineResponse = client.get("/v5/market/kline", &params, options).await.unwrap();
+
+	let mut klines = VecDeque::with_capacity(kline_response.result.list.len());
+	for k in kline_response.result.list {
+		if kline_response.time > k.0 + tf.duration().as_millis() as i64
+		/*take `as_millis`, so ok to downcast in all practical applications*/
+		{
+			klines.push_back(Kline {
+				open_time: Timestamp::from_millisecond(k.0).unwrap(),
+				ohlc: Ohlc {
+					open: k.1,
+					close: k.2,
+					high: k.3,
+					low: k.4,
+				},
+				volume_quote: k.5,
+				trades: None,
+				taker_buy_volume_quote: None,
+			});
+		}
+	}
+	Ok(Klines::new(klines, *tf))
+}
+
+//,}}}
+
+// price {{{
+pub(super) async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> ExchangeResult<f64> {
+	let params = filter_nulls(json!({
+		"category": "linear",
+		"symbol": pair.fmt_bybit(),
+	}));
+	let options = vec![BybitOption::None];
+	let response: MarketTickerResponse = client.get("/v5/market/tickers", &params, options).await?;
+	Ok(response.result.list[0].last_price)
+}
+
 //,}}}
 
 // open_interest {{{
@@ -220,32 +242,4 @@ pub(super) async fn open_interest(client: &v_exchanges_adapters::Client, symbol:
 	Ok(result)
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OpenInterestResponse {
-	pub ret_code: i32,
-	pub ret_msg: String,
-	pub result: OpenInterestResult,
-	pub ret_ext_info: std::collections::HashMap<String, Value>,
-	pub time: i64,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OpenInterestResult {
-	pub symbol: String,
-	pub category: String,
-	pub list: Vec<OpenInterestData>,
-	pub next_page_cursor: String,
-}
-
-#[serde_as]
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OpenInterestData {
-	#[serde_as(as = "DisplayFromStr")]
-	pub open_interest: f64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub timestamp: i64,
-}
 //,}}}

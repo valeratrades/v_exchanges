@@ -7,8 +7,6 @@ pub extern crate v_exchanges_adapters as adapters;
 
 pub mod core;
 pub mod error;
-pub(crate) mod other_types;
-
 pub mod prelude {
 	pub use std::str::FromStr as _; // it's very annoying to have to manually bring it into the scope every single time. Putting this into preludes of all libraries with any exposed `FromStr` impls at this point.
 
@@ -32,25 +30,23 @@ pub mod prelude {
 	pub use crate::yahoo::*;
 	pub use crate::{core::*, error::*, other_types::*};
 }
-pub use prelude::*;
-
-pub(crate) mod utils;
-
 #[cfg(feature = "binance")]
 #[cfg_attr(docsrs, doc(cfg(feature = "binance")))]
 pub mod binance;
-
 #[cfg(feature = "bybit")]
 #[cfg_attr(docsrs, doc(cfg(feature = "bybit")))]
 pub mod bybit;
-
 #[cfg(feature = "kucoin")]
 #[cfg_attr(docsrs, doc(cfg(feature = "kucoin")))]
 pub mod kucoin;
-
 #[cfg(feature = "mexc")]
 #[cfg_attr(docsrs, doc(cfg(feature = "mexc")))]
 pub mod mexc;
+pub(crate) mod other_types;
+
+pub use prelude::*;
+
+pub(crate) mod utils;
 
 cfg_if::cfg_if! {
 	if #[cfg(feature = "data")] {

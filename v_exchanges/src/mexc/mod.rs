@@ -1,3 +1,5 @@
+#[derive(Clone, Debug, Default, Deref, DerefMut)]
+pub struct Mexc(pub Client);
 mod account;
 mod market;
 
@@ -13,9 +15,6 @@ use crate::{
 	Balances, ExchangeName, ExchangeResult, Instrument, Symbol,
 	core::{AssetBalance, ExchangeImpl, Klines, RequestRange},
 };
-
-#[derive(Clone, Debug, Default, Deref, DerefMut)]
-pub struct Mexc(pub Client);
 
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
 #[async_trait::async_trait]

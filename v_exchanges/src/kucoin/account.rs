@@ -12,11 +12,32 @@ use crate::{
 	kucoin::market,
 };
 
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountResponse {
+	pub code: String,
+	pub data: Vec<AccountData>,
+}
+#[serde_as]
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountData {
+	pub id: String,
+	pub currency: String,
+	#[serde(rename = "type")]
+	pub account_type: String,
+	#[serde_as(as = "DisplayFromStr")]
+	pub balance: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub available: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub holds: f64,
+}
 pub(super) async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, _recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
 	assert!(client.is_authenticated::<KucoinOption>());
 	let balances: Balances = balances(client, None).await?;
 	let balance: AssetBalance = balances.iter().find(|b| b.asset == asset).copied().unwrap_or_else(|| {
-		warn!("No balance found for asset: {:?}", asset);
+		warn!("No balance found for asset: {asset:?}");
 		AssetBalance { asset, ..Default::default() }
 	});
 	Ok(balance)
@@ -66,27 +87,4 @@ pub(super) async fn balances(client: &Client, recv_window: Option<std::time::Dur
 	});
 
 	Ok(Balances::new(balances, total))
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountResponse {
-	pub code: String,
-	pub data: Vec<AccountData>,
-}
-
-#[serde_as]
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountData {
-	pub id: String,
-	pub currency: String,
-	#[serde(rename = "type")]
-	pub account_type: String,
-	#[serde_as(as = "DisplayFromStr")]
-	pub balance: f64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub available: f64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub holds: f64,
 }

@@ -57,7 +57,7 @@ pub(super) async fn klines(client: &Client, symbol: Symbol, tf: MexcTimeframe, r
 		"1d" => "Day1",
 		"1W" => "Week1",
 		"1M" => "Month1",
-		_ => return Err(eyre::eyre!("Unsupported timeframe: {}", tf_str).into()),
+		_ => return Err(eyre::eyre!("Unsupported timeframe: {tf_str}").into()),
 	};
 
 	let (start, end) = match range {
@@ -95,7 +95,7 @@ pub(super) async fn klines(client: &Client, symbol: Symbol, tf: MexcTimeframe, r
 		};
 
 		klines_vec.push_back(Kline {
-			open_time: Timestamp::from_second(data.time[i]).map_err(|e| eyre::eyre!("Invalid timestamp: {}", e))?,
+			open_time: Timestamp::from_second(data.time[i]).map_err(|e| eyre::eyre!("Invalid timestamp: {e}"))?,
 			ohlc,
 			volume_quote: data.amount[i],
 			trades: None,

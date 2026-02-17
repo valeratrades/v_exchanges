@@ -122,6 +122,45 @@ pub struct FuturesSymbol {
 	#[serde_as(as = "DisplayFromStr")]
 	pub market_take_bound: f64,
 }
+impl FuturesSymbol {
+	fn get_filter<T: for<'de> Deserialize<'de>>(&self, filter_type: &str) -> Option<T> {
+		self.filters.iter().find_map(|filter| {
+			if filter["filterType"] == filter_type {
+				serde_json::from_value(filter.clone()).ok()
+			} else {
+				None
+			}
+		})
+	}
+
+	pub fn price_filter(&self) -> Option<PriceFilter> {
+		self.get_filter("PRICE_FILTER")
+	}
+
+	pub fn lot_size_filter(&self) -> Option<LotSizeFilter> {
+		self.get_filter("LOT_SIZE")
+	}
+
+	pub fn market_lot_size_filter(&self) -> Option<MarketLotSizeFilter> {
+		self.get_filter("MARKET_LOT_SIZE")
+	}
+
+	pub fn max_num_orders_filter(&self) -> Option<MaxNumOrdersFilter> {
+		self.get_filter("MAX_NUM_ORDERS")
+	}
+
+	pub fn max_num_algo_orders_filter(&self) -> Option<MaxNumAlgoOrdersFilter> {
+		self.get_filter("MAX_NUM_ALGO_ORDERS")
+	}
+
+	pub fn min_notional_filter(&self) -> Option<MinNotionalFilter> {
+		self.get_filter("MIN_NOTIONAL")
+	}
+
+	pub fn percent_price_filter(&self) -> Option<PercentPriceFilter> {
+		self.get_filter("PERCENT_PRICE")
+	}
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "filterType")]
@@ -206,46 +245,6 @@ pub struct PercentPriceFilter {
 	#[serde_as(as = "DisplayFromStr")]
 	pub multiplier_down: f64,
 	pub multiplier_decimal: u8,
-}
-
-impl FuturesSymbol {
-	fn get_filter<T: for<'de> Deserialize<'de>>(&self, filter_type: &str) -> Option<T> {
-		self.filters.iter().find_map(|filter| {
-			if filter["filterType"] == filter_type {
-				serde_json::from_value(filter.clone()).ok()
-			} else {
-				None
-			}
-		})
-	}
-
-	pub fn price_filter(&self) -> Option<PriceFilter> {
-		self.get_filter("PRICE_FILTER")
-	}
-
-	pub fn lot_size_filter(&self) -> Option<LotSizeFilter> {
-		self.get_filter("LOT_SIZE")
-	}
-
-	pub fn market_lot_size_filter(&self) -> Option<MarketLotSizeFilter> {
-		self.get_filter("MARKET_LOT_SIZE")
-	}
-
-	pub fn max_num_orders_filter(&self) -> Option<MaxNumOrdersFilter> {
-		self.get_filter("MAX_NUM_ORDERS")
-	}
-
-	pub fn max_num_algo_orders_filter(&self) -> Option<MaxNumAlgoOrdersFilter> {
-		self.get_filter("MAX_NUM_ALGO_ORDERS")
-	}
-
-	pub fn min_notional_filter(&self) -> Option<MinNotionalFilter> {
-		self.get_filter("MIN_NOTIONAL")
-	}
-
-	pub fn percent_price_filter(&self) -> Option<PercentPriceFilter> {
-		self.get_filter("PERCENT_PRICE")
-	}
 }
 
 #[cfg(test)]

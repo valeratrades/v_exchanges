@@ -1,6 +1,8 @@
 pub mod data; // interfaced with directly, not through `Exchange` trait, thus must be public.
 pub mod perp; // public for accessing order placement and income history functions
 use std::collections::BTreeMap;
+#[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
+pub struct Binance(pub Client);
 mod market;
 mod spot;
 mod ws;
@@ -15,9 +17,6 @@ use crate::{
 	AssetBalance, Balances, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Klines, MethodError, RequestRange, Trade,
 	core::{ExchangeImpl, Instrument, Symbol},
 };
-
-#[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
-pub struct Binance(pub Client);
 
 #[async_trait::async_trait]
 impl ExchangeImpl for Binance {
