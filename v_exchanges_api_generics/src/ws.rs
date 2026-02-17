@@ -290,7 +290,8 @@ impl<H: WsHandler> WsConnection<H> {
 						continue;
 					}
 					tungstenite::Error::Io(e) => {
-						tracing::warn!("received `tungstenite::Error::Io` from polling: {e:?}. Likely indicates connection issues. Skipping.");
+						tracing::error!("received `tungstenite::Error::Io` from polling: {e:?}. Atm don't know valid cases of this happening given intact application state...");
+						self.stream = None;
 						continue;
 					}
 					tungstenite::Error::Tls(_tls_error) => todo!(),
