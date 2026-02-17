@@ -4,6 +4,28 @@ env:
   RUSTUP_MAX_RETRIES: '10'
   RUST_BACKTRACE: short
 jobs:
+  code-duplication:
+    if: github.event_name != 'pull_request'
+    name: Code Duplication
+    needs: pre_ci
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+      with:
+        path: my_gh_stuff
+        repository: valeratrades/.github
+        sparse-checkout: github/workflows
+        sparse-checkout-cone-mode: false
+    - name: Setup nightly Rust
+      uses: dtolnay/rust-toolchain@nightly
+    - name: Install qlty
+      uses: qltysh/qlty-action/install@main
+    - name: Initialize qlty
+      run: qlty init --no --no-upgrade-check
+    - name: Check for code duplication
+      run: cargo +nightly -Zscript -q my_gh_stuff/github/workflows/code-duplication.rs
+    timeout-minutes: 15
   pre_ci:
     uses: valeratrades/.github/.github/workflows/pre_ci.yml@master
   rust-clippy:

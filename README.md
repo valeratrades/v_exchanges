@@ -23,7 +23,7 @@ nix build
 <!-- markdownlint-restore -->
 
 ## Usage
-Example evocations of crate's methods are exposed in [./examples], with their `[[example]]` references defined [./v_exchanges/Cargo.toml].
+Example evocations of crate's methods are exposed in [./.readme_assets/examples], with their `[[example]]` references defined [./.readme_assets/v_exchanges/Cargo.toml].
 To run:
 ```sh
 cargo run -p v_exchanges --example binance_market_perp

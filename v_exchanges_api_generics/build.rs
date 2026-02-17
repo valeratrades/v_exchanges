@@ -80,6 +80,12 @@ fn find_deprecated_attrs(
 			find_deprecated_attrs(&path, current, default_deprecate_at, expired, missing_since);
 		} else if path.extension().is_some_and(|ext| ext == "rs") {
 			if let Ok(content) = std::fs::read_to_string(&path) {
+				// Auto-patch legacy v-prefixed since values
+				patch_legacy_v_prefix(&path, &content);
+
+				// Re-read content after potential patching
+				let content = std::fs::read_to_string(&path).unwrap_or(content);
+
 				for (line_num, line) in content.lines().enumerate() {
 					let trimmed = line.trim_start();
 					if trimmed.starts_with("#[deprecated") {
@@ -142,6 +148,55 @@ fn collect_force_updates(dir: &std::path::Path, target_version: &str, updates: &
 	}
 }
 
+/// Patch legacy `since = "vX.Y.Z"` to `since = "X.Y.Z"` in a file
+//DEPRECATE: had some libs wrongly formatted, - here due to legacy. Won't be ran in normal workflows, - so it's fine that we're modifying files in place.
+fn patch_legacy_v_prefix(path: &std::path::Path, content: &str) {
+	let mut needs_patch = false;
+	for line in content.lines() {
+		let trimmed = line.trim_start();
+		if trimmed.starts_with("#[deprecated") {
+			if let Some(since_version) = extract_since(trimmed) {
+				if since_version.starts_with('v') {
+					needs_patch = true;
+					break;
+				}
+			}
+		}
+	}
+
+	if !needs_patch {
+		return;
+	}
+
+	let mut new_lines = Vec::new();
+	for line in content.lines() {
+		let trimmed = line.trim_start();
+		if trimmed.starts_with("#[deprecated") {
+			if let Some(since_version) = extract_since(trimmed) {
+				if since_version.starts_with('v') {
+					// Strip the 'v' prefix
+					let corrected_version = &since_version[1..];
+					let new_line = line
+						.replace(&format!("since = \"{}\"", since_version), &format!("since = \"{}\"", corrected_version))
+						.replace(&format!("since=\"{}\"", since_version), &format!("since = \"{}\"", corrected_version));
+					new_lines.push(new_line);
+					continue;
+				}
+			}
+		}
+		new_lines.push(line.to_string());
+	}
+
+	let mut new_content = new_lines.join("\n");
+	if content.ends_with('\n') {
+		new_content.push('\n');
+	}
+
+	if let Err(e) = std::fs::write(path, new_content) {
+		eprintln!("Warning: failed to patch legacy v-prefix in {}: {}", path.display(), e);
+	}
+}
+
 /// Extract the `since` value from a #[deprecated(since = "...")] attribute
 fn extract_since(attr: &str) -> Option<&str> {
 	let start = attr.find("since")? + 5;
@@ -184,6 +239,8 @@ fn update_since_in_file(path: &str, line_num: usize, old_line: &str, target_vers
 fn update_deprecated_since(line: &str, version: &str) -> String {
 	let trimmed = line.trim_start();
 	let indent = &line[..line.len() - trimmed.len()];
+	// Strip 'v' prefix from version for proper semver format
+	let version = version.strip_prefix('v').unwrap_or(version);
 
 	if let Some(since_start) = trimmed.find("since") {
 		// Replace existing since value

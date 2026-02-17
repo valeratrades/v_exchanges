@@ -8,8 +8,7 @@
 **/*.db
 
 ## Personal
-**/_*
-!**/__scripts/
+**/_.*
 .local.sh
 [push]
 **/TODO.md
