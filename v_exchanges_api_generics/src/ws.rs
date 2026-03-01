@@ -15,7 +15,7 @@ use tokio_tungstenite::{
 };
 use tracing::instrument;
 
-use crate::{AuthError, UrlError};
+use crate::{ConstructAuthError, UrlError};
 
 type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -455,7 +455,7 @@ pub enum WsError {
 	#[diagnostic(code(v_exchanges::ws::tungstenite), help("WebSocket protocol error. The connection may need to be reestablished."))]
 	Tungstenite(tungstenite::Error),
 	#[diagnostic(transparent)]
-	Auth(AuthError),
+	Auth(ConstructAuthError),
 	#[diagnostic(code(v_exchanges::ws::parse), help("Failed to parse WebSocket message. Check if the exchange API has changed."))]
 	Parse(serde_json::Error),
 	#[diagnostic(code(v_exchanges::ws::subscription))]

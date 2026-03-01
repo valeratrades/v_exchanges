@@ -15,7 +15,7 @@ pub enum Error {
 	#[diagnostic(transparent)]
 	Timeframe(UnsupportedTimeframeError),
 	#[diagnostic(transparent)]
-	Ws(WsError),
+	Ws(WsError), //HACK: I don't think this level should nest `Auth` but the other way around
 	#[diagnostic(transparent)]
 	Range(RequestRangeError),
 	#[diagnostic(code(v_exchanges::other))]

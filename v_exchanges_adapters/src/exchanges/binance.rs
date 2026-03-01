@@ -4,7 +4,7 @@ use std::{collections::HashSet, marker::PhantomData, str::FromStr, time::SystemT
 
 use eyre::eyre;
 use generics::{
-	AuthError, UrlError,
+	ConstructAuthError, UrlError,
 	http::{ApiError, BuildError, HandleError, *},
 	tokio_tungstenite::tungstenite,
 	ws::{ContentEvent, ResponseOrContent, Topic, WsConfig, WsError, WsHandler},
@@ -43,7 +43,7 @@ where
 
 		if self.options.http_auth != BinanceAuth::None {
 			// https://binance-docs.github.io/apidocs/spot/en/#signed-trade-user_data-and-margin-endpoint-security
-			let pubkey = self.options.pubkey.as_deref().ok_or(AuthError::MissingPubkey)?;
+			let pubkey = self.options.pubkey.as_deref().ok_or(ConstructAuthError::MissingPubkey)?;
 			builder = builder.header("X-MBX-APIKEY", pubkey);
 
 			if self.options.http_auth == BinanceAuth::Sign {
@@ -55,7 +55,7 @@ where
 					builder = builder.query(&[("recvWindow", recv_window.as_millis() as u64)]);
 				}
 
-				let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(AuthError::MissingSecret)?;
+				let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(ConstructAuthError::MissingSecret)?;
 				let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap(); // hmac accepts key of any length
 
 				let mut request = builder.build().expect("From what I understand, can't trigger this from client-side");
@@ -166,8 +166,8 @@ impl WsHandler for BinanceWsHandler {
 		if self.options.ws_config.auth {
 			//TODO: implement ws auth once I can acquire ed25519 keys: https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-api-general-info#log-in-with-api-key-signed
 
-			let _pubkey = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
-			let _secret = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
+			let _pubkey = self.options.pubkey.as_ref().ok_or(ConstructAuthError::MissingPubkey)?;
+			let _secret = self.options.secret.as_ref().ok_or(ConstructAuthError::MissingSecret)?;
 
 			//TODO!!!: auth for binance
 			/*
@@ -234,7 +234,7 @@ impl WsHandler for BinanceWsHandler {
 		//TEST: handle listen-key expiration //NB: Claude wrote this, no clue if logic is correct
 		if event_type == "listenKeyExpired" {
 			tracing::error!("Listen key expired. This requires re-authentication and reconnection.");
-			return Err(WsError::Auth(AuthError::Other(eyre!("Listen key expired"))));
+			return Err(WsError::Auth(ConstructAuthError::Other(eyre!("Listen key expired"))));
 		}
 
 		let content = ContentEvent {

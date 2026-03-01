@@ -25,7 +25,7 @@ pub extern crate tokio_tungstenite;
 
 #[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error, derive_more::From)]
 #[non_exhaustive]
-pub enum AuthError {
+pub enum ConstructAuthError {
 	#[diagnostic(code(v_exchanges::auth::missing_pubkey), help("Provide API public key in your credentials"))]
 	MissingPubkey,
 	#[diagnostic(code(v_exchanges::auth::missing_secret), help("Provide API secret key in your credentials"))]

@@ -3,7 +3,7 @@
 
 use std::{borrow::Cow, marker::PhantomData, time::SystemTime, vec};
 
-use generics::{AuthError, UrlError, tokio_tungstenite::tungstenite};
+use generics::{ConstructAuthError, UrlError, tokio_tungstenite::tungstenite};
 use hmac::{Hmac, Mac};
 use jiff::Timestamp;
 use secrecy::{ExposeSecret as _, SecretString};
@@ -171,8 +171,8 @@ where
 			return Ok(builder.build().expect("My understanding is client can't trigger this. So fail fast for dev"));
 		}
 
-		let pubkey = self.options.pubkey.as_deref().ok_or(AuthError::MissingPubkey)?;
-		let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(AuthError::MissingSecret)?;
+		let pubkey = self.options.pubkey.as_deref().ok_or(ConstructAuthError::MissingPubkey)?;
+		let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(ConstructAuthError::MissingSecret)?;
 
 		let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
 		let timestamp = time.as_millis();
@@ -384,7 +384,10 @@ where
 			headers.insert("X-BAPI-SIGN-TYPE", HeaderValue::from(2));
 		}
 		headers.insert("X-BAPI-SIGN", HeaderValue::from_str(&signature).unwrap()); // hex digits are valid
-		headers.insert("X-BAPI-API-KEY", HeaderValue::from_str(key).or(Err(AuthError::InvalidCharacterInApiKey(key.to_owned())))?);
+		headers.insert(
+			"X-BAPI-API-KEY",
+			HeaderValue::from_str(key).or(Err(ConstructAuthError::InvalidCharacterInApiKey(key.to_owned())))?,
+		);
 		headers.insert("X-BAPI-TIMESTAMP", HeaderValue::from(timestamp as u64));
 		if let Some(window) = window {
 			let window_ms = window.as_millis() as u64;
@@ -416,8 +419,8 @@ impl WsHandler for BybitWsHandler {
 	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
 		match self.options.ws_auth {
 			true => {
-				let pubkey = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
-				let secret = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
+				let pubkey = self.options.pubkey.as_ref().ok_or(ConstructAuthError::MissingPubkey)?;
+				let secret = self.options.secret.as_ref().ok_or(ConstructAuthError::MissingSecret)?;
 				let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("always after the epoch");
 				//XXX: expiration time here is hardcoded to 1s, which would override any specifications of a longer recv_window on top.
 				let expires = time.as_millis() as u64 + 1000; //TODO: figure out how large can I make this
@@ -506,7 +509,7 @@ impl WsHandler for BybitWsHandler {
 							self.handle_subscribe(self.options.ws_topics.clone().into_iter().map(Topic::String).collect())?,
 						))
 					}
-					false => Err(AuthError::Other(eyre!("Authentication was not successful: {ret_msg}")).into()),
+					false => Err(ConstructAuthError::Other(eyre!("Authentication was not successful: {ret_msg}")).into()),
 				},
 				Operation::Subscribe => {
 					if jrpc["success"].as_bool() == Some(true) {
@@ -515,7 +518,7 @@ impl WsHandler for BybitWsHandler {
 						match self.options.ws_auth || &ret_msg != "Request not authorized" {
 							true => return Err(WsError::Subscription(ret_msg)),
 							false => {
-								return Err(AuthError::Other(eyre!("Tried to access a private endpoint without authentication")).into());
+								return Err(ConstructAuthError::Other(eyre!("Tried to access a private endpoint without authentication")).into());
 							}
 						}
 					}

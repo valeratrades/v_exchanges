@@ -11,7 +11,7 @@ pub use reqwest::{
 use serde::Serialize;
 use tracing::{Span, debug, error, field::Empty, info, instrument, warn};
 
-use crate::{AuthError, UrlError};
+use crate::{ConstructAuthError, UrlError};
 
 /// The User Agent string
 pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_PKG_VERSION"));
@@ -288,6 +288,7 @@ pub enum ApiError {
 	)]
 	IpTimeout {
 		/// Time of unban
+		#[allow(unused_assignments)] //erroneous detection, - we use it in the description
 		until: Option<Timestamp>,
 	},
 	/// Errors that are a) specific to a particular exchange or b) should be handled by this crate, but are here for dev convenience
@@ -329,7 +330,7 @@ pub enum RequestError {
 pub enum BuildError {
 	/// Signed request attempted, while lacking one of the necessary auth fields
 	#[diagnostic(transparent)]
-	Auth(AuthError),
+	Auth(ConstructAuthError),
 	/// Could not serialize body as application/x-www-form-urlencoded
 	#[diagnostic(code(v_exchanges::http::build::url_serialization), help("Check that all request parameters can be URL-encoded."))]
 	UrlSerialization(serde_urlencoded::ser::Error),
