@@ -121,6 +121,11 @@ required-features = ["mexc"]
 path = "../examples/mexc.rs"
 
 [[example]]
+name = "auth_errors"
+required-features = ["binance", "bybit"]
+path = "../examples/auth_errors.rs"
+
+[[example]]
 name = "healthcheck"
 required-features = ["binance", "bybit", "kucoin", "mexc"]
 path = "../examples/healthcheck.rs"

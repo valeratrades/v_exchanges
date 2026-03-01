@@ -291,10 +291,34 @@ pub enum ApiError {
 		#[allow(unused_assignments)] //erroneous detection, - we use it in the description
 		until: Option<Timestamp>,
 	},
+	/// Authentication/authorization errors shared across all exchanges
+	#[error("{0}")]
+	#[diagnostic(transparent)]
+	Auth(AuthError),
 	/// Errors that are a) specific to a particular exchange or b) should be handled by this crate, but are here for dev convenience
 	#[error("{0}")]
 	#[diagnostic(code(v_exchanges::http::api::other))]
 	Other(Report),
+}
+
+/// Authentication errors that map uniformly across exchanges
+#[derive(Debug, miette::Diagnostic, thiserror::Error)]
+pub enum AuthError {
+	#[error("API key has expired: {msg}")]
+	#[diagnostic(code(v_exchanges::http::api::auth::key_expired), help("Generate a new API key from the exchange dashboard."))]
+	KeyExpired {
+		#[allow(unused_assignments)]
+		msg: String,
+	},
+	#[error("Unauthorized: {msg}")]
+	#[diagnostic(
+		code(v_exchanges::http::api::auth::unauthorized),
+		help("Check that your API key and secret are correct and have the required permissions.")
+	)]
+	Unauthorized {
+		#[allow(unused_assignments)]
+		msg: String,
+	},
 }
 
 /// An `enum` that represents errors that could be returned by [Client::request()]

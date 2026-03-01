@@ -132,13 +132,105 @@ pub enum BybitHandlerError {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 struct BybitError {
-	code: i32,
+	code: BybitErrorCode,
 	msg: String,
 }
 impl From<BybitError> for ApiError {
 	fn from(e: BybitError) -> Self {
-		//HACK
-		ApiError::Other(eyre!("Bybit error {}: {}", e.code, e.msg))
+		use v_exchanges_api_generics::http::AuthError;
+		match e.code {
+			BybitErrorCode::ApiKeyExpired(_) => AuthError::KeyExpired { msg: e.msg }.into(),
+			BybitErrorCode::InvalidApiKey(_) | BybitErrorCode::ErrorSign(_) | BybitErrorCode::AuthenticationFailed(_) | BybitErrorCode::UnmatchedIp(_) =>
+				AuthError::Unauthorized { msg: e.msg }.into(),
+			BybitErrorCode::PermissionDenied(_) => AuthError::Unauthorized { msg: e.msg }.into(),
+			_ => ApiError::Other(eyre!("Bybit error {}: {}", e.code.as_i32(), e.msg)),
+		}
+	}
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[serde(from = "i32", into = "i32")]
+pub enum BybitErrorCode {
+	// 10xxx - General / Auth
+	InvalidApiKey(i32),
+	ErrorSign(i32),
+	PermissionDenied(i32),
+	TooManyVisits(i32),
+	AuthenticationFailed(i32),
+	IpBanned(i32),
+	UnmatchedIp(i32),
+	InvalidDuplicateRequest(i32),
+	ServerError(i32),
+	RouteNotFound(i32),
+	IpRateLimit(i32),
+	ComplianceRules(i32),
+
+	// 33xxx - Derivatives-specific
+	ApiKeyExpired(i32),
+
+	// 110xxx - Order/Position errors
+	OrderNotExist(i32),
+	InsufficientBalance(i32),
+
+	#[default]
+	Ok,
+	Other(i32),
+}
+
+impl BybitErrorCode {
+	fn as_i32(self) -> i32 {
+		match self {
+			Self::Ok => 0,
+			Self::InvalidApiKey(c)
+			| Self::ErrorSign(c)
+			| Self::PermissionDenied(c)
+			| Self::TooManyVisits(c)
+			| Self::AuthenticationFailed(c)
+			| Self::IpBanned(c)
+			| Self::UnmatchedIp(c)
+			| Self::InvalidDuplicateRequest(c)
+			| Self::ServerError(c)
+			| Self::RouteNotFound(c)
+			| Self::IpRateLimit(c)
+			| Self::ComplianceRules(c)
+			| Self::ApiKeyExpired(c)
+			| Self::OrderNotExist(c)
+			| Self::InsufficientBalance(c)
+			| Self::Other(c) => c,
+		}
+	}
+}
+
+impl From<i32> for BybitErrorCode {
+	fn from(code: i32) -> Self {
+		match code {
+			0 => Self::Ok,
+			10003 => Self::InvalidApiKey(code),
+			10004 => Self::ErrorSign(code),
+			10005 => Self::PermissionDenied(code),
+			10006 => Self::TooManyVisits(code),
+			10007 => Self::AuthenticationFailed(code),
+			10009 => Self::IpBanned(code),
+			10010 => Self::UnmatchedIp(code),
+			10014 => Self::InvalidDuplicateRequest(code),
+			10016 => Self::ServerError(code),
+			10017 => Self::RouteNotFound(code),
+			10018 => Self::IpRateLimit(code),
+			10024 => Self::ComplianceRules(code),
+			33004 => Self::ApiKeyExpired(code),
+			110001 => Self::OrderNotExist(code),
+			110007 => Self::InsufficientBalance(code),
+			code => {
+				tracing::warn!("Encountered unknown Bybit error code: {code}");
+				Self::Other(code)
+			}
+		}
+	}
+}
+
+impl From<BybitErrorCode> for i32 {
+	fn from(code: BybitErrorCode) -> Self {
+		code.as_i32()
 	}
 }
 
@@ -204,7 +296,7 @@ where
 				// Non-zero retCode indicates an error
 				let ret_msg = value.get("retMsg").and_then(|v| v.as_str()).unwrap_or("Unknown error");
 				let error = BybitError {
-					code: ret_code as i32,
+					code: BybitErrorCode::from(ret_code as i32),
 					msg: ret_msg.to_string(),
 				};
 				return Err(ApiError::from(error).into());
@@ -216,14 +308,20 @@ where
 				HandleError::Parse(eyre!("Failed to parse successful response: {error}\nResponse body: {response_str}"))
 			})
 		} else {
+			if status == 403 {
+				return Err(ApiError::IpTimeout { until: None }.into());
+			}
+			if status == 401 {
+				use v_exchanges_api_generics::http::AuthError;
+				let msg = match std::str::from_utf8(&response_body) {
+					Ok(s) if !s.is_empty() => s.to_string(),
+					_ => "HTTP 401 Unauthorized".to_string(),
+				};
+				return Err(ApiError::Auth(AuthError::Unauthorized { msg }).into());
+			}
 			// https://bybit-exchange.github.io/docs/spot/v3/#t-ratelimits
 			let api_error: BybitError = match serde_json::from_slice(&response_body) {
-				Ok(parsed) =>
-					if status == 403 {
-						return Err(ApiError::IpTimeout { until: None }.into());
-					} else {
-						parsed
-					},
+				Ok(parsed) => parsed,
 				Err(error) => {
 					let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
 					return Err(HandleError::Parse(eyre!("Failed to parse error response: {error}\nResponse body: {response_str}")));

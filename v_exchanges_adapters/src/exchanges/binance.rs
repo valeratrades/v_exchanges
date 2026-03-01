@@ -521,8 +521,12 @@ pub struct BinanceError {
 }
 impl From<BinanceError> for ApiError {
 	fn from(e: BinanceError) -> Self {
-		//HACK
-		eyre!("Binance API error: {}", e.msg).into()
+		use generics::http::AuthError;
+		match e.code {
+			BinanceErrorCode::RejectedMbxKey(_) | BinanceErrorCode::InvalidListenKey(_) => AuthError::KeyExpired { msg: e.msg }.into(),
+			BinanceErrorCode::Unauthorized(_) | BinanceErrorCode::InvalidSignature(_) | BinanceErrorCode::BadApiKeyFmt(_) => AuthError::Unauthorized { msg: e.msg }.into(),
+			_ => ApiError::Other(eyre!("Binance API error: {}", e.msg)),
+		}
 	}
 }
 
