@@ -148,7 +148,8 @@ impl From<BybitError> for ApiError {
 	}
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(from = "i32", into = "i32")]
 pub enum BybitErrorCode {
 	// 10xxx - General / Auth

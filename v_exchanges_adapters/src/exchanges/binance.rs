@@ -530,6 +530,7 @@ impl From<BinanceError> for ApiError {
 	}
 }
 
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(from = "i32")]
 pub enum BinanceErrorCode {

@@ -33,6 +33,7 @@ async fn main() {
 			match auth_err {
 				AuthError::KeyExpired { msg } => println!("  KeyExpired: {msg}"),
 				AuthError::Unauthorized { msg } => println!("  Unauthorized: {msg}"),
+				other => println!("  Other auth error: {other}"),
 			}
 		}
 		Err(e) => println!("  Got different error (may be expected if exchange returns different code): {e}"),
@@ -59,6 +60,7 @@ async fn main() {
 			match auth_err {
 				AuthError::KeyExpired { msg } => println!("  KeyExpired: {msg}"),
 				AuthError::Unauthorized { msg } => println!("  Unauthorized: {msg}"),
+				other => println!("  Other auth error: {other}"),
 			}
 		}
 		Err(e) => println!("  Got different error (may be expected if exchange returns different code): {e}"),

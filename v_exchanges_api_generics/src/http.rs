@@ -278,6 +278,7 @@ pub enum HandleError {
 	Parse(Report),
 }
 /// Errors that exchanges purposefully transmit.
+#[non_exhaustive]
 #[derive(Debug, miette::Diagnostic, thiserror::Error, derive_more::From)]
 pub enum ApiError {
 	/// Ip has been timed out or banned
@@ -302,6 +303,7 @@ pub enum ApiError {
 }
 
 /// Authentication errors that map uniformly across exchanges
+#[non_exhaustive]
 #[derive(Debug, miette::Diagnostic, thiserror::Error)]
 pub enum AuthError {
 	#[error("API key has expired: {msg}")]
