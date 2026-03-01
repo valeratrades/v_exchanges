@@ -67,6 +67,7 @@ pub struct CoincheckOptions {
 }
 
 /// A `enum` that represents the base url of the Coincheck HTTP API.
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum CoincheckHttpUrl {
 	/// `https://coincheck.com`
@@ -86,6 +87,7 @@ pub enum CoincheckWebSocketUrl {
 	None,
 }
 
+#[non_exhaustive]
 #[derive(Debug)]
 pub enum CoincheckHandlerError {
 	ApiError(serde_json::Value),
@@ -141,14 +143,14 @@ where
 				.secret
 				.as_ref()
 				.map(|s| s.expose_secret())
-				.ok_or(BuildError::Auth(generics::AuthError::MissingSecret))?;
+				.ok_or(BuildError::Auth(generics::ConstructAuthError::MissingSecret))?;
 			let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap(); // hmac accepts key of any length
 
 			hmac.update(sign_contents.as_bytes());
 			let signature = hex::encode(hmac.finalize().into_bytes());
 
-			let key = HeaderValue::from_str(self.options.key.as_deref().ok_or(BuildError::Auth(generics::AuthError::MissingPubkey))?)
-				.map_err(|e| BuildError::Auth(generics::AuthError::InvalidCharacterInApiKey(e.to_string())))?;
+			let key = HeaderValue::from_str(self.options.key.as_deref().ok_or(BuildError::Auth(generics::ConstructAuthError::MissingPubkey))?)
+				.map_err(|e| BuildError::Auth(generics::ConstructAuthError::InvalidCharacterInApiKey(e.to_string())))?;
 			let headers = request.headers_mut();
 			headers.insert("ACCESS-KEY", key);
 			headers.insert("ACCESS-NONCE", HeaderValue::from(timestamp));

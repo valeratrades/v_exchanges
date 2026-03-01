@@ -438,6 +438,7 @@ pub enum BinanceAuth {
 	None,
 }
 
+#[non_exhaustive]
 #[derive(Debug)]
 pub enum BinanceHandlerError {
 	ApiError(BinanceError),

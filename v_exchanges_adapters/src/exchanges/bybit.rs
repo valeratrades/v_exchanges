@@ -123,6 +123,7 @@ pub enum BybitHttpAuth {
 	None,
 }
 
+#[non_exhaustive]
 #[derive(Debug)]
 pub enum BybitHandlerError {
 	ApiError(serde_json::Value),

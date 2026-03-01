@@ -2,7 +2,7 @@
 
 use std::{marker::PhantomData, str::FromStr, time::SystemTime};
 
-use generics::{AuthError, UrlError};
+use generics::{ConstructAuthError, UrlError};
 use hmac::{Hmac, Mac};
 use jiff::{SignedDuration, Timestamp};
 use secrecy::{ExposeSecret as _, SecretString};
@@ -103,12 +103,76 @@ pub enum MexcAuth {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MexcError {
-	pub code: i32,
+	pub code: MexcErrorCode,
 	pub msg: String,
 }
 impl From<MexcError> for ApiError {
 	fn from(e: MexcError) -> Self {
-		ApiError::Other(eyre!("MEXC API error: {}: {}", e.code, e.msg))
+		use v_exchanges_api_generics::http::AuthError;
+		match e.code {
+			MexcErrorCode::Unauthorized(_) | MexcErrorCode::InvalidApiKey(_) | MexcErrorCode::InvalidSignature(_) | MexcErrorCode::ApiKeyExpired(_) | MexcErrorCode::SignatureNotValid(_) =>
+				AuthError::Unauthorized { msg: e.msg }.into(),
+			_ => ApiError::Other(eyre!("MEXC API error {}: {}", e.code.as_i32(), e.msg)),
+		}
+	}
+}
+
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(from = "i32", into = "i32")]
+pub enum MexcErrorCode {
+	// Auth
+	Unauthorized(i32),
+	InvalidApiKey(i32),
+	InvalidSignature(i32),
+	ApiKeyExpired(i32),
+	SignatureNotValid(i32),
+
+	// Rate limiting
+	TooManyRequests(i32),
+
+	// General
+	BadSymbol(i32),
+	PermissionDenied(i32),
+
+	Other(i32),
+}
+
+impl MexcErrorCode {
+	fn as_i32(self) -> i32 {
+		match self {
+			Self::Unauthorized(c)
+			| Self::InvalidApiKey(c)
+			| Self::InvalidSignature(c)
+			| Self::ApiKeyExpired(c)
+			| Self::SignatureNotValid(c)
+			| Self::TooManyRequests(c)
+			| Self::BadSymbol(c)
+			| Self::PermissionDenied(c)
+			| Self::Other(c) => c,
+		}
+	}
+}
+
+impl From<i32> for MexcErrorCode {
+	fn from(code: i32) -> Self {
+		match code {
+			602 => Self::Unauthorized(code),
+			10001 => Self::InvalidApiKey(code),
+			140002 => Self::InvalidSignature(code),
+			700001 => Self::ApiKeyExpired(code),
+			700002 => Self::SignatureNotValid(code),
+			700007 | 700013 => Self::InvalidSignature(code),
+			70011 => Self::PermissionDenied(code),
+			10007 => Self::BadSymbol(code),
+			code => Self::Other(code),
+		}
+	}
+}
+
+impl From<MexcErrorCode> for i32 {
+	fn from(code: MexcErrorCode) -> Self {
+		code.as_i32()
 	}
 }
 
@@ -141,7 +205,7 @@ where
 		}
 
 		if self.options.http_auth != MexcAuth::None {
-			let pubkey = self.options.pubkey.as_deref().ok_or(AuthError::MissingPubkey)?;
+			let pubkey = self.options.pubkey.as_deref().ok_or(ConstructAuthError::MissingPubkey)?;
 			builder = builder.header("ApiKey", pubkey);
 
 			let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
@@ -153,7 +217,7 @@ where
 			}
 
 			if self.options.http_auth == MexcAuth::Sign {
-				let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(AuthError::MissingSecret)?;
+				let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(ConstructAuthError::MissingSecret)?;
 				let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
 
 				let mut request = builder.build().expect("My understanding is that this doesn't fail on client, so fail fast for dev");
@@ -182,6 +246,14 @@ where
 				HandleError::Parse(eyre!("Failed to parse response: {error}\nResponse body: {response_str}"))
 			})
 		} else {
+			if status == 401 {
+				use v_exchanges_api_generics::http::AuthError;
+				let msg = match std::str::from_utf8(&response_body) {
+					Ok(s) if !s.is_empty() => s.to_string(),
+					_ => "HTTP 401 Unauthorized".to_string(),
+				};
+				return Err(ApiError::Auth(AuthError::Unauthorized { msg }).into());
+			}
 			//Q: does MEXC even have this, or am I just blindly copying from Binance?
 			if status == 429 {
 				let retry_after_sec = if let Some(value) = headers.get("Retry-After") {

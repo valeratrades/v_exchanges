@@ -4,7 +4,7 @@ use std::{collections::HashSet, marker::PhantomData, time::SystemTime};
 
 use eyre::eyre;
 use generics::{
-	AuthError, UrlError,
+	ConstructAuthError, UrlError,
 	http::{ApiError, BuildError, HandleError, *},
 	tokio_tungstenite::tungstenite,
 	ws::{ContentEvent, ResponseOrContent, Topic, WsConfig, WsError, WsHandler},
@@ -45,14 +45,14 @@ where
 		};
 
 		if self.options.http_auth != KucoinAuth::None {
-			let pubkey = self.options.pubkey.as_deref().ok_or(AuthError::MissingPubkey)?;
-			let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(AuthError::MissingSecret)?;
+			let pubkey = self.options.pubkey.as_deref().ok_or(ConstructAuthError::MissingPubkey)?;
+			let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(ConstructAuthError::MissingSecret)?;
 			let passphrase = self
 				.options
 				.passphrase
 				.as_ref()
 				.map(|s| s.expose_secret())
-				.ok_or_else(|| AuthError::Other(eyre!("Missing passphrase")))?;
+				.ok_or_else(|| ConstructAuthError::Other(eyre!("Missing passphrase")))?;
 
 			let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
 			let timestamp = time.as_millis();
@@ -82,19 +82,19 @@ where
 
 			headers.insert(
 				"KC-API-KEY",
-				header::HeaderValue::from_str(pubkey).map_err(|e| AuthError::InvalidCharacterInApiKey(e.to_string()))?,
+				header::HeaderValue::from_str(pubkey).map_err(|e| ConstructAuthError::InvalidCharacterInApiKey(e.to_string()))?,
 			);
 			headers.insert(
 				"KC-API-SIGN",
-				header::HeaderValue::from_str(&signature).map_err(|e| AuthError::Other(eyre!("Invalid signature: {}", e)))?,
+				header::HeaderValue::from_str(&signature).map_err(|e| ConstructAuthError::Other(eyre!("Invalid signature: {}", e)))?,
 			);
 			headers.insert(
 				"KC-API-TIMESTAMP",
-				header::HeaderValue::from_str(&timestamp.to_string()).map_err(|e| AuthError::Other(eyre!("Invalid timestamp: {}", e)))?,
+				header::HeaderValue::from_str(&timestamp.to_string()).map_err(|e| ConstructAuthError::Other(eyre!("Invalid timestamp: {}", e)))?,
 			);
 			headers.insert(
 				"KC-API-PASSPHRASE",
-				header::HeaderValue::from_str(&encrypted_passphrase).map_err(|e| AuthError::Other(eyre!("Invalid passphrase: {}", e)))?,
+				header::HeaderValue::from_str(&encrypted_passphrase).map_err(|e| ConstructAuthError::Other(eyre!("Invalid passphrase: {}", e)))?,
 			);
 			headers.insert("KC-API-KEY-VERSION", header::HeaderValue::from_static("2"));
 			headers.insert("Content-Type", header::HeaderValue::from_static("application/json"));
@@ -120,7 +120,7 @@ where
 				// Non-200000 code indicates an error
 				let msg = value.get("msg").and_then(|v| v.as_str()).unwrap_or("Unknown error");
 				let error = KucoinError {
-					code: code.to_string(),
+					code: KucoinErrorCode::from(code.to_string()),
 					msg: msg.to_string(),
 				};
 				return Err(ApiError::from(error).into());
@@ -132,6 +132,14 @@ where
 				HandleError::Parse(eyre!("Failed to parse successful response: {error}\nResponse body: {response_str}"))
 			})
 		} else {
+			if status == 401 {
+				use generics::http::AuthError;
+				let msg = match std::str::from_utf8(&response_body) {
+					Ok(s) if !s.is_empty() => s.to_string(),
+					_ => "HTTP 401 Unauthorized".to_string(),
+				};
+				return Err(ApiError::Auth(AuthError::Unauthorized { msg }).into());
+			}
 			let api_error: KucoinError = match serde_json::from_slice(&response_body) {
 				Ok(parsed) => parsed,
 				Err(error) => {
@@ -169,8 +177,8 @@ impl WsHandler for KucoinWsHandler {
 
 	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
 		if self.options.ws_config.auth {
-			let _pubkey = self.options.pubkey.as_ref().ok_or(AuthError::MissingPubkey)?;
-			let _secret = self.options.secret.as_ref().ok_or(AuthError::MissingSecret)?;
+			let _pubkey = self.options.pubkey.as_ref().ok_or(ConstructAuthError::MissingPubkey)?;
+			let _secret = self.options.secret.as_ref().ok_or(ConstructAuthError::MissingSecret)?;
 			//TODO: implement ws auth for kucoin
 		}
 
@@ -381,13 +389,84 @@ impl HandlerOption for KucoinOption {
 // Error Codes {{{
 #[derive(Clone, Debug, Deserialize)]
 pub struct KucoinError {
-	pub code: String,
+	pub code: KucoinErrorCode,
 	pub msg: String,
 }
 impl From<KucoinError> for ApiError {
 	fn from(e: KucoinError) -> Self {
-		//HACK
-		eyre!("Kucoin API error {}: {}", e.code, e.msg).into()
+		use generics::http::AuthError;
+		match e.code {
+			KucoinErrorCode::MissingAuthHeader
+			| KucoinErrorCode::ApiKeyNotExist
+			| KucoinErrorCode::PassphraseError
+			| KucoinErrorCode::SignatureError
+			| KucoinErrorCode::IpNotWhitelisted
+			| KucoinErrorCode::AccessDenied => AuthError::Unauthorized { msg: e.msg }.into(),
+			_ => ApiError::Other(eyre!("Kucoin API error {}: {}", e.code.as_str(), e.msg)),
+		}
+	}
+}
+
+#[non_exhaustive]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(from = "String")]
+pub enum KucoinErrorCode {
+	// Auth (400001-400007)
+	MissingAuthHeader,
+	TimestampInvalid,
+	ApiKeyNotExist,
+	PassphraseError,
+	SignatureError,
+	IpNotWhitelisted,
+	AccessDenied,
+
+	// General
+	InsufficientBalance,
+	ParameterError,
+	ServerError,
+
+	Success,
+	Other(String),
+}
+
+impl KucoinErrorCode {
+	fn as_str(&self) -> &str {
+		match self {
+			Self::Success => "200000",
+			Self::MissingAuthHeader => "400001",
+			Self::TimestampInvalid => "400002",
+			Self::ApiKeyNotExist => "400003",
+			Self::PassphraseError => "400004",
+			Self::SignatureError => "400005",
+			Self::IpNotWhitelisted => "400006",
+			Self::AccessDenied => "400007",
+			Self::InsufficientBalance => "200004",
+			Self::ParameterError => "400100",
+			Self::ServerError => "500000",
+			Self::Other(s) => s,
+		}
+	}
+}
+
+impl From<String> for KucoinErrorCode {
+	fn from(code: String) -> Self {
+		match code.as_str() {
+			"200000" => Self::Success,
+			"400001" => Self::MissingAuthHeader,
+			"400002" => Self::TimestampInvalid,
+			"400003" => Self::ApiKeyNotExist,
+			"400004" => Self::PassphraseError,
+			"400005" => Self::SignatureError,
+			"400006" => Self::IpNotWhitelisted,
+			"400007" => Self::AccessDenied,
+			"200004" => Self::InsufficientBalance,
+			"400100" => Self::ParameterError,
+			"500000" => Self::ServerError,
+			_ => {
+				tracing::warn!("Encountered unknown Kucoin error code: {code}");
+				Self::Other(code)
+			}
+		}
 	}
 }
 //,}}}
