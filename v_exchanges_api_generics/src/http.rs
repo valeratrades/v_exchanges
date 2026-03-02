@@ -44,6 +44,25 @@ impl Client {
 		let url = base_url.join(url).map_err(|_| RequestError::Other(eyre!("Failed to parse provided URL")))?;
 		debug!(?config);
 
+		// Mock cache: check before making any requests
+		let mock_path = config.mock_cache_dir.as_ref().map(|dir| mock_cache_path(dir, &url));
+		if let Some(ref path) = mock_path {
+			if let Ok(file) = std::fs::read_to_string(path)
+				&& path
+					.metadata()
+					.expect("already read the file, guaranteed to exist")
+					.modified()
+					.expect("switch OSes, you're on something stupid")
+					.elapsed()
+					.unwrap() < MOCK_CACHE_DURATION
+			{
+				debug!("Mock cache hit: {}", path.display());
+				let body = Bytes::from(file);
+				let (status, headers) = (StatusCode::OK, header::HeaderMap::new());
+				return handler.handle_response(status, headers, body).map_err(RequestError::HandleResponse);
+			}
+		}
+
 		for i in 1..=config.max_tries {
 			//HACK: hate to create a new request every time, but I haven't yet figured out how to provide by reference
 			let mut request_builder = self.client.request(method.clone(), url.clone()).timeout(config.timeout);
@@ -88,6 +107,17 @@ impl Client {
 					{
 						let truncated_body = v_utils::utils::truncate_msg(std::str::from_utf8(&body)?.trim());
 						debug!(truncated_body);
+					}
+
+					// Persist to mock cache on successful response
+					if status.is_success() {
+						if let Some(ref path) = mock_path {
+							if let Some(parent) = path.parent() {
+								std::fs::create_dir_all(parent).ok();
+							}
+							std::fs::write(path, &body).ok();
+							debug!("Mock cache write: {}", path.display());
+						}
 					}
 
 					match config.use_testnet {
@@ -259,6 +289,10 @@ pub struct RequestConfig {
 	pub use_testnet: bool,
 	/// if `test` is true, then we will try to read the file with the cached result of any request to the same URL, aged less than specified [Duration]
 	pub cache_testnet_calls: Option<Duration> = Some(Duration::from_days(30)),
+
+	/// When set, responses are cached under this directory. On cache hit (< 30 days old), the cached response is returned without making a network request.
+	/// On cache miss or stale cache, the real request is made, the response is persisted, then returned.
+	pub mock_cache_dir: Option<PathBuf>,
 }
 
 impl RequestConfig {
@@ -381,4 +415,14 @@ fn test_calls_path<Q: Serialize>(url: &Url, query: &Option<Q>) -> PathBuf {
 		filename.push_str(&serde_urlencoded::to_string(query).unwrap_or_default());
 	}
 	base.join(filename)
+}
+
+const MOCK_CACHE_DURATION: Duration = Duration::from_days(30);
+
+/// Constructs a cache path from the mock cache dir and the URL.
+/// Uses host + path as the meaningful parts (no query params, no scheme).
+fn mock_cache_path(cache_dir: &PathBuf, url: &Url) -> PathBuf {
+	let host = url.host_str().unwrap_or("unknown");
+	let path = url.path().trim_start_matches('/');
+	cache_dir.join(host).join(path)
 }

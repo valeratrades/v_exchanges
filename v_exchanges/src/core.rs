@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, VecDeque};
 
-use adapters::{Client, generics::ws::WsError};
+use adapters::{Client, HttpClient, generics::ws::WsError};
 use derive_more::{Deref, DerefMut};
 use jiff::Timestamp;
 use secrecy::SecretString;
@@ -206,6 +206,20 @@ impl ExchangeName {
 			_ => unimplemented!(),
 		}
 	}
+
+	pub fn init_mock_client(&self) -> Box<dyn Exchange> {
+		match self {
+			#[cfg(feature = "binance")]
+			Self::Binance => Box::new(crate::Binance(Client::new_mock())),
+			#[cfg(feature = "bybit")]
+			Self::Bybit => Box::new(crate::Bybit(Client::new_mock())),
+			#[cfg(feature = "kucoin")]
+			Self::Kucoin => Box::new(crate::Kucoin(Client::new_mock())),
+			#[cfg(feature = "mexc")]
+			Self::Mexc => Box::new(crate::Mexc(Client::new_mock())),
+			_ => unimplemented!(),
+		}
+	}
 }
 
 #[derive(Clone, Copy, Debug, Default, serde::Deserialize, strum::Display, strum::EnumString, Eq, Hash, PartialEq, serde::Serialize)]
@@ -379,23 +393,23 @@ impl<T: ExchangeImpl> Exchange for T {
 	}
 
 	fn set_timeout(&mut self, timeout: std::time::Duration) {
-		self.client.config.timeout = timeout;
+		self.http_client_mut().config.timeout = timeout;
 	}
 
 	fn set_retry_cooldown(&mut self, cooldown: std::time::Duration) {
-		self.client.config.retry_cooldown = cooldown;
+		self.http_client_mut().config.retry_cooldown = cooldown;
 	}
 
 	fn set_max_tries(&mut self, max: u8) {
-		self.client.config.max_tries = max;
+		self.http_client_mut().config.max_tries = max;
 	}
 
 	fn set_use_testnet(&mut self, b: bool) {
-		self.client.config.use_testnet = b;
+		self.http_client_mut().config.use_testnet = b;
 	}
 
 	fn set_cache_testnet_calls(&mut self, duration: Option<std::time::Duration>) {
-		self.client.config.cache_testnet_calls = duration;
+		self.http_client_mut().config.cache_testnet_calls = duration;
 	}
 
 	fn set_max_simultaneous_requests(&mut self, max: usize) {
@@ -403,39 +417,39 @@ impl<T: ExchangeImpl> Exchange for T {
 	}
 
 	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
-		let _permit = self.request_semaphore.acquire().await.expect("semaphore closed");
+		let _permit = self.request_semaphore().acquire().await.expect("semaphore closed");
 		ExchangeImpl::exchange_info(self, instrument).await
 	}
 
 	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
-		let _permit = self.request_semaphore.acquire().await.expect("semaphore closed");
+		let _permit = self.request_semaphore().acquire().await.expect("semaphore closed");
 		ExchangeImpl::klines(self, symbol, tf, range).await
 	}
 
 	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
-		let _permit = self.request_semaphore.acquire().await.expect("semaphore closed");
+		let _permit = self.request_semaphore().acquire().await.expect("semaphore closed");
 		ExchangeImpl::prices(self, pairs, instrument).await
 	}
 
 	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
-		let _permit = self.request_semaphore.acquire().await.expect("semaphore closed");
+		let _permit = self.request_semaphore().acquire().await.expect("semaphore closed");
 		ExchangeImpl::price(self, symbol).await
 	}
 
 	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
-		let _permit = self.request_semaphore.acquire().await.expect("semaphore closed");
+		let _permit = self.request_semaphore().acquire().await.expect("semaphore closed");
 		ExchangeImpl::open_interest(self, symbol, tf, range).await
 	}
 
 	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
 		validate_recv_window(recv_window, ExchangeImpl::default_recv_window(self))?;
-		let _permit = self.request_semaphore.acquire().await.expect("semaphore closed");
+		let _permit = self.request_semaphore().acquire().await.expect("semaphore closed");
 		ExchangeImpl::asset_balance(self, asset, instrument, recv_window).await
 	}
 
 	async fn balances(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
 		validate_recv_window(recv_window, ExchangeImpl::default_recv_window(self))?;
-		let _permit = self.request_semaphore.acquire().await.expect("semaphore closed");
+		let _permit = self.request_semaphore().acquire().await.expect("semaphore closed");
 		ExchangeImpl::balances(self, instrument, recv_window).await
 	}
 
