@@ -101,16 +101,27 @@ pub enum MexcAuth {
 	None,
 }
 
+/// Envelope used by MEXC futures API, which returns errors with HTTP 200
+#[derive(Deserialize)]
+struct MexcEnvelope {
+	success: bool,
+	code: i32,
+	#[serde(default)]
+	message: String,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MexcError {
 	pub code: MexcErrorCode,
+	#[serde(alias = "message")]
 	pub msg: String,
 }
 impl From<MexcError> for ApiError {
 	fn from(e: MexcError) -> Self {
 		use v_exchanges_api_generics::http::AuthError;
 		match e.code {
-			MexcErrorCode::Unauthorized(_) | MexcErrorCode::InvalidApiKey(_) | MexcErrorCode::InvalidSignature(_) | MexcErrorCode::ApiKeyExpired(_) | MexcErrorCode::SignatureNotValid(_) =>
+			MexcErrorCode::ApiKeyExpired(_) => AuthError::KeyExpired { msg: e.msg }.into(),
+			MexcErrorCode::Unauthorized(_) | MexcErrorCode::InvalidApiKey(_) | MexcErrorCode::InvalidSignature(_) | MexcErrorCode::SignatureNotValid(_) =>
 				AuthError::Unauthorized { msg: e.msg }.into(),
 			_ => ApiError::Other(eyre!("MEXC API error {}: {}", e.code.as_i32(), e.msg)),
 		}
@@ -160,7 +171,7 @@ impl From<i32> for MexcErrorCode {
 			602 => Self::Unauthorized(code),
 			10001 => Self::InvalidApiKey(code),
 			140002 => Self::InvalidSignature(code),
-			700001 => Self::ApiKeyExpired(code),
+			402 | 700001 => Self::ApiKeyExpired(code),
 			700002 => Self::SignatureNotValid(code),
 			700007 | 700013 => Self::InvalidSignature(code),
 			70011 => Self::PermissionDenied(code),
@@ -241,6 +252,16 @@ where
 
 	fn handle_response(&self, status: StatusCode, headers: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError> {
 		if status.is_success() {
+			// MEXC futures API returns errors with HTTP 200 but `"success": false` in the body
+			if let Ok(envelope) = serde_json::from_slice::<MexcEnvelope>(&response_body) {
+				if !envelope.success {
+					let api_error = MexcError {
+						code: envelope.code.into(),
+						msg: envelope.message,
+					};
+					return Err(ApiError::from(api_error).into());
+				}
+			}
 			serde_json::from_slice(&response_body).map_err(|error| {
 				let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
 				HandleError::Parse(eyre!("Failed to parse response: {error}\nResponse body: {response_str}"))
