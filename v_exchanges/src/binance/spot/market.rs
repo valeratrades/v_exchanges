@@ -20,9 +20,9 @@ pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pai
 				"symbols": pairs.into_iter().map(|p| p.to_string()).collect::<Vec<String>>(),
 			});
 			dbg!(&params);
-			client.get("/api/v3/ticker/price", &params, options).await.unwrap()
+			client.get("/api/v3/ticker/price", &params, options).await?
 		}
-		None => client.get_no_query("/api/v3/ticker/price", options).await.unwrap(),
+		None => client.get_no_query("/api/v3/ticker/price", options).await?,
 	};
 
 	//let mut prices = Vec::with_capacity(r.0.len());
@@ -47,7 +47,7 @@ pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> Exchang
 	});
 
 	let options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::Spot)];
-	let r: AssetPriceResponse = client.get("/api/v3/ticker/price", &params, options).await.unwrap();
+	let r: AssetPriceResponse = client.get("/api/v3/ticker/price", &params, options).await?;
 	let price = r.price;
 	Ok(price)
 }

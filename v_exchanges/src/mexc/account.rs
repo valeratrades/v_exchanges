@@ -13,7 +13,7 @@ pub(super) async fn asset_balance(client: &Client, asset: Asset, recv_window: Op
 		options.push(MexcOption::RecvWindow(rw));
 	}
 	let endpoint = format!("/api/v1/private/account/asset/{asset}");
-	let r: AssetBalanceResponse = client.get_no_query(&endpoint, options).await.unwrap();
+	let r: AssetBalanceResponse = client.get_no_query(&endpoint, options).await?;
 
 	Ok(r.data.into())
 }
@@ -24,7 +24,7 @@ pub(super) async fn balances(client: &Client, recv_window: Option<std::time::Dur
 	if let Some(rw) = recv_window {
 		options.push(MexcOption::RecvWindow(rw));
 	}
-	let rs: BalancesResponse = client.get_no_query("/api/v1/private/account/assets", options).await.unwrap();
+	let rs: BalancesResponse = client.get_no_query("/api/v1/private/account/assets", options).await?;
 
 	let non_zero: Vec<AssetBalance> = rs.data.into_iter().filter(|r| r.equity != 0.).map(|r| r.into()).collect();
 	// dance with tambourine to request for usdt prices of all assets except usdt itself

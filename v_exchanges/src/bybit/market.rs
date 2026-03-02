@@ -141,7 +141,7 @@ pub(super) async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol
 	let params = filter_nulls(serde_json::Value::Object(base_map));
 
 	let options = vec![BybitOption::None];
-	let kline_response: KlineResponse = client.get("/v5/market/kline", &params, options).await.unwrap();
+	let kline_response: KlineResponse = client.get("/v5/market/kline", &params, options).await?;
 
 	let mut klines = VecDeque::with_capacity(kline_response.result.list.len());
 	for k in kline_response.result.list {

@@ -244,7 +244,7 @@ pub(in crate::binance) async fn asset_balance(client: &v_exchanges_adapters::Cli
 	if let Some(rw) = recv_window {
 		options.push(BinanceOption::RecvWindow(rw));
 	}
-	let r: Vec<AssetBalanceResponse> = client.get_no_query("/fapi/v3/balance", options).await.unwrap();
+	let r: Vec<AssetBalanceResponse> = client.get_no_query("/fapi/v3/balance", options).await?;
 	let vec_balance: Vec<AssetBalance> = r
 		.into_iter()
 		.map(|r| AssetBalance {
@@ -263,7 +263,7 @@ pub(in crate::binance) async fn balances(client: &v_exchanges_adapters::Client, 
 	if let Some(rw) = recv_window {
 		options.push(BinanceOption::RecvWindow(rw));
 	}
-	let rs: Vec<AssetBalanceResponse> = client.get_no_query("/fapi/v3/balance", options).await.unwrap();
+	let rs: Vec<AssetBalanceResponse> = client.get_no_query("/fapi/v3/balance", options).await?;
 
 	fn usd_value(underlying: f64, asset: Asset, prices: &BTreeMap<Pair, f64>) -> Result<Usd> {
 		if underlying == 0. {
