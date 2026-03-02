@@ -1,4 +1,7 @@
-use adapters::generics::{http::RequestError, ws::WsError};
+use adapters::generics::{
+	http::{ApiError, AuthError, HandleError, RequestError},
+	ws::WsError,
+};
 use v_utils::{prelude::*, trades::Timeframe};
 
 use crate::{ExchangeName, Instrument};
@@ -8,18 +11,36 @@ pub type ExchangeResult<T> = Result<T, Error>;
 
 #[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error, derive_more::From)]
 pub enum Error {
+	/// exchange-specific or method-specific stuff
 	#[diagnostic(transparent)]
+	#[from(skip)]
 	Request(RequestError),
+	/// Specific to websocket
 	#[diagnostic(transparent)]
-	Method(MethodError),
+	Ws(WsError),
+
+	// commonly understood cases {{{1
 	#[diagnostic(transparent)]
 	Timeframe(UnsupportedTimeframeError),
 	#[diagnostic(transparent)]
-	Ws(WsError), //HACK: I don't think this level should nest `Auth` but the other way around
-	#[diagnostic(transparent)]
 	Range(RequestRangeError),
+	#[diagnostic(transparent)]
+	Auth(AuthError),
+	//,}}}1
+	/// our internal markings
+	#[diagnostic(transparent)]
+	Method(MethodError),
 	#[diagnostic(code(v_exchanges::other))]
 	Other(Report),
+}
+
+impl From<RequestError> for Error {
+	fn from(e: RequestError) -> Self {
+		match e {
+			RequestError::HandleResponse(HandleError::Api(ApiError::Auth(auth))) => Self::Auth(auth),
+			other => Self::Request(other),
+		}
+	}
 }
 
 /// Re-export as ExchangeError for internal use to avoid rewrites
