@@ -1,5 +1,4 @@
 use adapters::Client;
-use eyre::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{DisplayFromStr, serde_as};
@@ -45,17 +44,13 @@ pub struct AccountInfo {
 	pub account_mm_rate: Option<Value>,
 	pub account_type: AccountType,
 	pub coin: Vec<CoinInfo>,
-	#[serde_as(as = "DisplayFromStr")]
-	pub total_available_balance: f64,
+	pub total_available_balance: Option<Value>, // can be "" in portfolio-margin mode
 	#[serde_as(as = "DisplayFromStr")]
 	/// in USD
 	pub total_equity: f64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub total_initial_margin: f64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub total_maintenance_margin: f64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub total_margin_balance: f64,
+	pub total_initial_margin: Option<Value>,     // can be "" in portfolio-margin mode
+	pub total_maintenance_margin: Option<Value>, // can be "" in portfolio-margin mode
+	pub total_margin_balance: Option<Value>,     // can be "" in portfolio-margin mode
 	#[serde(rename = "totalPerpUPL")]
 	#[serde_as(as = "DisplayFromStr")]
 	pub total_perp_upl: f64,
@@ -137,5 +132,3 @@ pub(super) async fn balances(client: &Client, recv_window: Option<std::time::Dur
 	let balances = Balances::new(vec_balance, account_info.total_equity.into());
 	Ok(balances)
 }
-
-//XXX: some fields are `String`s instead of `f64` because bybit can just send an empty string for some of them.
