@@ -2,7 +2,11 @@ use adapters::generics::{
 	http::{ApiError, AuthError, HandleError, RequestError},
 	ws::WsError,
 };
-use v_utils::{prelude::*, trades::Timeframe};
+use v_utils::{
+	prelude::*,
+	trades::Timeframe,
+	utils::{Sysexit, SysexitCode},
+};
 
 use crate::{ExchangeName, Instrument};
 
@@ -45,6 +49,15 @@ impl From<RequestError> for Error {
 
 /// Re-export as ExchangeError for internal use to avoid rewrites
 pub use Error as ExchangeError;
+
+impl SysexitCode for Error {
+	fn sysexit(&self) -> Sysexit {
+		match self {
+			Self::Auth(_) => Sysexit::NoPerm,
+			_ => Sysexit::None,
+		}
+	}
+}
 
 #[derive(Debug, miette::Diagnostic, thiserror::Error, derive_new::new)]
 #[error("Chosen exchange does not support the requested timeframe. Provided: {provided}, allowed: {allowed:?}")]

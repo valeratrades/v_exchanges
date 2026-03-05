@@ -36,12 +36,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@clippy
-    - name: Install mold
-      uses: rui314/setup-mold@v1
     - name: Download modified by pre-ci Cargo.toml files
       uses: actions/download-artifact@v4
       with:
         name: modified-cargo-files
+    - run: rm -f .cargo/config.toml .cargo/config
     - run: cargo clippy --tests -- -Dwarnings
     timeout-minutes: 45
   rust-doc:
@@ -54,8 +53,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@nightly
-    - name: Install mold
-      uses: rui314/setup-mold@v1
     - name: Download modified by pre-ci Cargo.toml files
       uses: actions/download-artifact@v4
       with:

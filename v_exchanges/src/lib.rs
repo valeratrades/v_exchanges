@@ -6,6 +6,8 @@
 pub extern crate v_exchanges_adapters as adapters;
 
 pub mod core;
+// false positive: derive_new generates assignments that rustc thinks are dead, but fields are read by thiserror/Display
+#[allow(unused_assignments)]
 pub mod error;
 pub mod prelude {
 	pub use std::str::FromStr as _; // it's very annoying to have to manually bring it into the scope every single time. Putting this into preludes of all libraries with any exposed `FromStr` impls at this point.
