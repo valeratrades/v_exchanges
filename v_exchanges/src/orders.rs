@@ -1,7 +1,17 @@
+use arrayvec::ArrayString;
 use jiff::Timestamp;
+use uuid::Uuid;
 use v_utils::trades::{Pair, Side};
 
 use crate::Instrument;
+
+#[derive(Clone, Debug, Default)]
+pub struct OrderId {
+	#[default = Uuid::now_v7()]
+	pub id: Uuid,
+	pub parent: Option<Uuid>,
+	pub exchange_id: Option<ArrayString<32>>,
+}
 
 /// Exchange-agnostic limit order.
 ///
@@ -28,7 +38,15 @@ pub struct LimitOrder {
 	#[new(default)]
 	pub stp: Option<SelfTradePreventionMode>,
 	#[new(default)]
-	pub client_order_id: Option<String>,
+	pub order_id: OrderId,
+	#[new(default)]
+	pub contingency: Option<Contingency>,
+	#[new(default)]
+	pub tags: Vec<ArrayString<32>>,
+	//TODO: I think we need a consistent generic way to tag an order.
+	//Q: how do I make it not only id itself, but also allow for including info of its parent strategy
+
+	//Q: nautilus has `quote_quantity: bool`. Do I want it? Or should I on the contrary avoid it as plague, for fear of overcomplicating the logic?
 }
 
 /// Exchange-agnostic market order.
@@ -43,7 +61,7 @@ pub struct MarketOrder {
 	#[new(default)]
 	pub stp: Option<SelfTradePreventionMode>,
 	#[new(default)]
-	pub client_order_id: Option<String>,
+	pub order_id: OrderId,
 }
 
 /// Stop-limit order: a limit order that activates when the trigger price is hit.
@@ -64,7 +82,7 @@ pub struct StopLimitOrder {
 	#[new(default)]
 	pub stp: Option<SelfTradePreventionMode>,
 	#[new(default)]
-	pub client_order_id: Option<String>,
+	pub order_id: OrderId,
 }
 
 /// Stop-market order: a market order that activates when the trigger price is hit.
@@ -82,7 +100,7 @@ pub struct StopMarketOrder {
 	#[new(default)]
 	pub stp: Option<SelfTradePreventionMode>,
 	#[new(default)]
-	pub client_order_id: Option<String>,
+	pub order_id: OrderId,
 }
 
 /// Trailing stop-market order.
@@ -103,7 +121,7 @@ pub struct TrailingStopOrder {
 	#[new(default)]
 	pub stp: Option<SelfTradePreventionMode>,
 	#[new(default)]
-	pub client_order_id: Option<String>,
+	pub order_id: OrderId,
 }
 
 /// Trigger configuration for conditional orders (stop-limit, stop-market, take-profit, etc.)
@@ -177,6 +195,15 @@ pub enum TimeInForce {
 	Gtd(Timestamp),
 }
 
+/// Contingency linkage between orders.
+#[derive(Clone, Debug)]
+pub enum Contingency {
+	/// One-Cancels-the-Other: when one order fills or cancels, the linked order is canceled.
+	Oco(Vec<Uuid>),
+	/// One-Triggers-the-Other: when the parent order fills, the linked orders are submitted.
+	Oto(Vec<Uuid>),
+}
+
 /// Binance: EXPIRE_MAKER/EXPIRE_TAKER/EXPIRE_BOTH; OKX: cancel_maker/cancel_taker/cancel_both
 #[derive(Clone, Copy, Debug, strum::Display, Eq, PartialEq)]
 pub enum SelfTradePreventionMode {
@@ -191,8 +218,7 @@ pub enum SelfTradePreventionMode {
 /// Unified response from placing any order.
 #[derive(Clone, Debug, derive_new::new)]
 pub struct OrderPlaced {
-	pub exchange_order_id: String,
-	pub client_order_id: Option<String>,
+	pub order_id: OrderId,
 	pub status: OrderStatus,
 }
 

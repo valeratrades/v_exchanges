@@ -38,33 +38,35 @@ mexc = ["v_exchanges_adapters/mexc"]
 data = ["dep:reqwest"]
 
 [dependencies]
+v_exchanges_adapters = { version = "^0.17.0", path = "../v_exchanges_adapters/", optional = true }
+
+enum_dispatch = "0.3.13"
+reqwest = { version = "^0.13.2", optional = true, features = ["json", "query"] }
+strum = { version = "0.28", features = ["derive"] }
+
+arrayvec.workspace = true
 async-trait.workspace = true
 cfg-if.workspace = true
 derive-new.workspace = true
 derive_more.workspace = true
-enum_dispatch = "0.3.13"
 eyre.workspace = true
-reqwest = { version = "^0.13.2", optional = true }
-v_exchanges_adapters = { version = "^0.17.0", path = "../v_exchanges_adapters/", optional = true }
-
 jiff.workspace = true
 miette.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
-strum = { version = "0.28", features = ["derive"] }
-#dynosaur.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-v_utils.workspace = true 
+uuid.workspace = true
+v_utils.workspace = true
 
 [dev-dependencies]
 color-eyre = "^0.6.5"
+
 insta.workspace = true
 
-# Random test stuff, for dev purposes only
 [[example]]
 name = "test"
 path = "../examples/test.rs"

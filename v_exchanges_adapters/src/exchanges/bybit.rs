@@ -131,24 +131,6 @@ pub enum BybitHandlerError {
 	ParseError,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-struct BybitError {
-	code: BybitErrorCode,
-	msg: String,
-}
-impl From<BybitError> for ApiError {
-	fn from(e: BybitError) -> Self {
-		use v_exchanges_api_generics::http::AuthError;
-		match e.code {
-			BybitErrorCode::ApiKeyExpired(_) => AuthError::KeyExpired { msg: e.msg }.into(),
-			BybitErrorCode::InvalidApiKey(_) | BybitErrorCode::ErrorSign(_) | BybitErrorCode::AuthenticationFailed(_) | BybitErrorCode::UnmatchedIp(_) =>
-				AuthError::Unauthorized { msg: e.msg }.into(),
-			BybitErrorCode::PermissionDenied(_) => AuthError::Unauthorized { msg: e.msg }.into(),
-			_ => ApiError::Other(eyre!("Bybit error {}: {}", e.code.as_i32(), e.msg)),
-		}
-	}
-}
-
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(from = "i32", into = "i32")]
@@ -178,7 +160,6 @@ pub enum BybitErrorCode {
 	Ok,
 	Other(i32),
 }
-
 impl BybitErrorCode {
 	fn as_i32(self) -> i32 {
 		match self {
@@ -203,137 +184,11 @@ impl BybitErrorCode {
 	}
 }
 
-impl From<i32> for BybitErrorCode {
-	fn from(code: i32) -> Self {
-		match code {
-			0 => Self::Ok,
-			10003 => Self::InvalidApiKey(code),
-			10004 => Self::ErrorSign(code),
-			10005 => Self::PermissionDenied(code),
-			10006 => Self::TooManyVisits(code),
-			10007 => Self::AuthenticationFailed(code),
-			10009 => Self::IpBanned(code),
-			10010 => Self::UnmatchedIp(code),
-			10014 => Self::InvalidDuplicateRequest(code),
-			10016 => Self::ServerError(code),
-			10017 => Self::RouteNotFound(code),
-			10018 => Self::IpRateLimit(code),
-			10024 => Self::ComplianceRules(code),
-			33004 => Self::ApiKeyExpired(code),
-			110001 => Self::OrderNotExist(code),
-			110007 => Self::InsufficientBalance(code),
-			code => {
-				tracing::warn!("Encountered unknown Bybit error code: {code}");
-				Self::Other(code)
-			}
-		}
-	}
-}
-
-impl From<BybitErrorCode> for i32 {
-	fn from(code: BybitErrorCode) -> Self {
-		code.as_i32()
-	}
-}
-
 /// A `struct` that implements [RequestHandler]
 pub struct BybitRequestHandler<'a, R: DeserializeOwned> {
 	options: BybitOptions,
 	_phantom: PhantomData<&'a R>,
 }
-
-impl<B, R> RequestHandler<B> for BybitRequestHandler<'_, R>
-where
-	B: Serialize,
-	R: DeserializeOwned,
-{
-	type Successful = R;
-
-	fn base_url(&self, is_test: bool) -> Result<Url, UrlError> {
-		match is_test {
-			true => self.options.http_url.url_testnet().ok_or_else(|| UrlError::MissingTestnet(self.options.http_url.url_mainnet())),
-			false => Ok(self.options.http_url.url_mainnet()),
-		}
-	}
-
-	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, BuildError> {
-		if self.options.http_auth == BybitHttpAuth::None {
-			if let Some(body) = request_body {
-				let json = serde_json::to_string(body)?;
-				builder = builder.header(header::CONTENT_TYPE, "application/json").body(json);
-			}
-			return Ok(builder.build().expect("My understanding is client can't trigger this. So fail fast for dev"));
-		}
-
-		let pubkey = self.options.pubkey.as_deref().ok_or(ConstructAuthError::MissingPubkey)?;
-		let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(ConstructAuthError::MissingSecret)?;
-
-		let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
-		let timestamp = time.as_millis();
-
-		let hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap(); // hmac accepts key of any length
-
-		match self.options.http_auth {
-			BybitHttpAuth::SpotV1 => Self::v1_auth(builder, request_body, pubkey, timestamp, hmac, true, self.options.recv_window),
-			BybitHttpAuth::BelowV3 => Self::v1_auth(builder, request_body, pubkey, timestamp, hmac, false, self.options.recv_window),
-			BybitHttpAuth::UsdcContractV1 => Self::v3_auth(builder, request_body, pubkey, timestamp, hmac, true, self.options.recv_window),
-			BybitHttpAuth::V3AndAbove => Self::v3_auth(builder, request_body, pubkey, timestamp, hmac, false, self.options.recv_window),
-			BybitHttpAuth::None => unreachable!("we're already handled this case"),
-		}
-	}
-
-	fn handle_response(&self, status: StatusCode, _: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError> {
-		if status.is_success() {
-			// Bybit returns HTTP 200 even for API errors, so we need to check retCode
-			// First, try to parse as a generic response to check for errors
-			let value: serde_json::Value = serde_json::from_slice(&response_body).map_err(|error| {
-				let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
-				HandleError::Parse(eyre!("Failed to parse response: {error}\nResponse body: {response_str}"))
-			})?;
-
-			// Check if response contains retCode field (V3/V5 API format)
-			if let Some(ret_code) = value.get("retCode").and_then(|v| v.as_i64())
-				&& ret_code != 0
-			{
-				// Non-zero retCode indicates an error
-				let ret_msg = value.get("retMsg").and_then(|v| v.as_str()).unwrap_or("Unknown error");
-				let error = BybitError {
-					code: BybitErrorCode::from(ret_code as i32),
-					msg: ret_msg.to_string(),
-				};
-				return Err(ApiError::from(error).into());
-			}
-
-			// No error, deserialize to the expected type
-			serde_json::from_value(value.clone()).map_err(|error| {
-				let response_str = v_utils::utils::truncate_msg(value.to_string());
-				HandleError::Parse(eyre!("Failed to parse successful response: {error}\nResponse body: {response_str}"))
-			})
-		} else {
-			if status == 403 {
-				return Err(ApiError::IpTimeout { until: None }.into());
-			}
-			if status == 401 {
-				use v_exchanges_api_generics::http::AuthError;
-				let msg = match std::str::from_utf8(&response_body) {
-					Ok(s) if !s.is_empty() => s.to_string(),
-					_ => "HTTP 401 Unauthorized".to_string(),
-				};
-				return Err(ApiError::Auth(AuthError::Unauthorized { msg }).into());
-			}
-			// https://bybit-exchange.github.io/docs/spot/v3/#t-ratelimits
-			let api_error: BybitError = match serde_json::from_slice(&response_body) {
-				Ok(parsed) => parsed,
-				Err(error) => {
-					let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
-					return Err(HandleError::Parse(eyre!("Failed to parse error response: {error}\nResponse body: {response_str}")));
-				}
-			};
-			Err(ApiError::from(api_error).into())
-		}
-	}
-}
-
 impl<R> BybitRequestHandler<'_, R>
 where
 	R: DeserializeOwned,
@@ -497,11 +352,165 @@ where
 	}
 }
 
-// Ws stuff {{{
 #[derive(Debug, derive_new::new)]
 pub struct BybitWsHandler {
 	options: BybitOptions,
 }
+/// A `enum` that represents the base url of the Bybit Ws API.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum BybitWsUrlBase {
+	/// `wss://stream.bybit.com`
+	#[default]
+	Bybit,
+	/// `wss://stream.bytick.com`
+	Bytick,
+	/// The url will not be modified by [BybitWsHandler]
+	None,
+}
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+struct BybitError {
+	code: BybitErrorCode,
+	msg: String,
+}
+impl From<BybitError> for ApiError {
+	fn from(e: BybitError) -> Self {
+		use v_exchanges_api_generics::http::AuthError;
+		match e.code {
+			BybitErrorCode::ApiKeyExpired(_) => AuthError::KeyExpired { msg: e.msg }.into(),
+			BybitErrorCode::InvalidApiKey(_) | BybitErrorCode::ErrorSign(_) | BybitErrorCode::AuthenticationFailed(_) | BybitErrorCode::UnmatchedIp(_) =>
+				AuthError::Unauthorized { msg: e.msg }.into(),
+			BybitErrorCode::PermissionDenied(_) => AuthError::Unauthorized { msg: e.msg }.into(),
+			_ => ApiError::Other(eyre!("Bybit error {}: {}", e.code.as_i32(), e.msg)),
+		}
+	}
+}
+
+impl From<i32> for BybitErrorCode {
+	fn from(code: i32) -> Self {
+		match code {
+			0 => Self::Ok,
+			10003 => Self::InvalidApiKey(code),
+			10004 => Self::ErrorSign(code),
+			10005 => Self::PermissionDenied(code),
+			10006 => Self::TooManyVisits(code),
+			10007 => Self::AuthenticationFailed(code),
+			10009 => Self::IpBanned(code),
+			10010 => Self::UnmatchedIp(code),
+			10014 => Self::InvalidDuplicateRequest(code),
+			10016 => Self::ServerError(code),
+			10017 => Self::RouteNotFound(code),
+			10018 => Self::IpRateLimit(code),
+			10024 => Self::ComplianceRules(code),
+			33004 => Self::ApiKeyExpired(code),
+			110001 => Self::OrderNotExist(code),
+			110007 => Self::InsufficientBalance(code),
+			code => {
+				tracing::warn!("Encountered unknown Bybit error code: {code}");
+				Self::Other(code)
+			}
+		}
+	}
+}
+
+impl From<BybitErrorCode> for i32 {
+	fn from(code: BybitErrorCode) -> Self {
+		code.as_i32()
+	}
+}
+
+impl<B, R> RequestHandler<B> for BybitRequestHandler<'_, R>
+where
+	B: Serialize,
+	R: DeserializeOwned,
+{
+	type Successful = R;
+
+	fn base_url(&self, is_test: bool) -> Result<Url, UrlError> {
+		match is_test {
+			true => self.options.http_url.url_testnet().ok_or_else(|| UrlError::MissingTestnet(self.options.http_url.url_mainnet())),
+			false => Ok(self.options.http_url.url_mainnet()),
+		}
+	}
+
+	fn build_request(&self, mut builder: RequestBuilder, request_body: &Option<B>, _: u8) -> Result<Request, BuildError> {
+		if self.options.http_auth == BybitHttpAuth::None {
+			if let Some(body) = request_body {
+				let json = serde_json::to_string(body)?;
+				builder = builder.header(header::CONTENT_TYPE, "application/json").body(json);
+			}
+			return Ok(builder.build().expect("My understanding is client can't trigger this. So fail fast for dev"));
+		}
+
+		let pubkey = self.options.pubkey.as_deref().ok_or(ConstructAuthError::MissingPubkey)?;
+		let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(ConstructAuthError::MissingSecret)?;
+
+		let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
+		let timestamp = time.as_millis();
+
+		let hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap(); // hmac accepts key of any length
+
+		match self.options.http_auth {
+			BybitHttpAuth::SpotV1 => Self::v1_auth(builder, request_body, pubkey, timestamp, hmac, true, self.options.recv_window),
+			BybitHttpAuth::BelowV3 => Self::v1_auth(builder, request_body, pubkey, timestamp, hmac, false, self.options.recv_window),
+			BybitHttpAuth::UsdcContractV1 => Self::v3_auth(builder, request_body, pubkey, timestamp, hmac, true, self.options.recv_window),
+			BybitHttpAuth::V3AndAbove => Self::v3_auth(builder, request_body, pubkey, timestamp, hmac, false, self.options.recv_window),
+			BybitHttpAuth::None => unreachable!("we're already handled this case"),
+		}
+	}
+
+	fn handle_response(&self, status: StatusCode, _: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError> {
+		if status.is_success() {
+			// Bybit returns HTTP 200 even for API errors, so we need to check retCode
+			// First, try to parse as a generic response to check for errors
+			let value: serde_json::Value = serde_json::from_slice(&response_body).map_err(|error| {
+				let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
+				HandleError::Parse(eyre!("Failed to parse response: {error}\nResponse body: {response_str}"))
+			})?;
+
+			// Check if response contains retCode field (V3/V5 API format)
+			if let Some(ret_code) = value.get("retCode").and_then(|v| v.as_i64())
+				&& ret_code != 0
+			{
+				// Non-zero retCode indicates an error
+				let ret_msg = value.get("retMsg").and_then(|v| v.as_str()).unwrap_or("Unknown error");
+				let error = BybitError {
+					code: BybitErrorCode::from(ret_code as i32),
+					msg: ret_msg.to_string(),
+				};
+				return Err(ApiError::from(error).into());
+			}
+
+			// No error, deserialize to the expected type
+			serde_json::from_value(value.clone()).map_err(|error| {
+				let response_str = v_utils::utils::truncate_msg(value.to_string());
+				HandleError::Parse(eyre!("Failed to parse successful response: {error}\nResponse body: {response_str}"))
+			})
+		} else {
+			if status == 403 {
+				return Err(ApiError::IpTimeout { until: None }.into());
+			}
+			if status == 401 {
+				use v_exchanges_api_generics::http::AuthError;
+				let msg = match std::str::from_utf8(&response_body) {
+					Ok(s) if !s.is_empty() => s.to_string(),
+					_ => "HTTP 401 Unauthorized".to_string(),
+				};
+				return Err(ApiError::Auth(AuthError::Unauthorized { msg }).into());
+			}
+			// https://bybit-exchange.github.io/docs/spot/v3/#t-ratelimits
+			let api_error: BybitError = match serde_json::from_slice(&response_body) {
+				Ok(parsed) => parsed,
+				Err(error) => {
+					let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
+					return Err(HandleError::Parse(eyre!("Failed to parse error response: {error}\nResponse body: {response_str}")));
+				}
+			};
+			Err(ApiError::from(api_error).into())
+		}
+	}
+}
+
+// Ws stuff {{{
 impl WsHandler for BybitWsHandler {
 	fn config(&self) -> Result<WsConfig, UrlError> {
 		let mut config = self.options.ws_config.clone();
@@ -629,17 +638,6 @@ impl WsHandler for BybitWsHandler {
 			BybitResponse::Content(content) => Ok(ResponseOrContent::Content(ContentEvent::from(content))),
 		}
 	}
-}
-/// A `enum` that represents the base url of the Bybit Ws API.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum BybitWsUrlBase {
-	/// `wss://stream.bybit.com`
-	#[default]
-	Bybit,
-	/// `wss://stream.bytick.com`
-	Bytick,
-	/// The url will not be modified by [BybitWsHandler]
-	None,
 }
 impl EndpointUrl for BybitWsUrlBase {
 	fn url_mainnet(&self) -> Url {

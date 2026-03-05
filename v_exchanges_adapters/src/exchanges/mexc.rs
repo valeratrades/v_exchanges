@@ -14,8 +14,6 @@ use v_utils::prelude::*;
 
 use crate::traits::*;
 
-static MAX_RECV_WINDOW: std::time::Duration = std::time::Duration::from_millis(60000); // as of (2025/01/18)
-
 /// Options that can be set when creating handlers
 #[derive(Debug, Default)]
 pub enum MexcOption {
@@ -41,7 +39,6 @@ pub enum MexcOption {
 	/// Topics to subscribe to on Ws connections
 	WsTopics(Vec<String>),
 }
-
 /// A struct that represents a set of MexcOptions
 #[derive(Clone, derive_more::Debug, Default)]
 pub struct MexcOptions {
@@ -65,7 +62,6 @@ pub struct MexcOptions {
 	/// see [MexcOption::WsTopics]
 	pub ws_topics: HashSet<String>,
 }
-
 /// Enum that represents the base url of the MEXC REST API
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[non_exhaustive]
@@ -75,24 +71,6 @@ pub enum MexcHttpUrl {
 	#[default]
 	None,
 }
-impl EndpointUrl for MexcHttpUrl {
-	fn url_mainnet(&self) -> Url {
-		match self {
-			Self::Spot => Url::parse("https://api.mexc.com").unwrap(),
-			Self::Futures => Url::parse("https://contract.mexc.com").unwrap(),
-			Self::None => Url::parse("").unwrap(),
-		}
-	}
-
-	fn url_testnet(&self) -> Option<Url> {
-		match self {
-			Self::Spot => Some(Url::parse("https://api-testnet.mexc.com").unwrap()),
-			Self::Futures => Some(Url::parse("https://contract-testnet.mexc.com").unwrap()),
-			Self::None => Some(Url::parse("").unwrap()),
-		}
-	}
-}
-
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum MexcAuth {
 	Sign,
@@ -100,34 +78,12 @@ pub enum MexcAuth {
 	#[default]
 	None,
 }
-
-/// Envelope used by MEXC futures API, which returns errors with HTTP 200
-#[derive(Deserialize)]
-struct MexcEnvelope {
-	success: bool,
-	code: i32,
-	#[serde(default)]
-	message: String,
-}
-
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MexcError {
 	pub code: MexcErrorCode,
 	#[serde(alias = "message")]
 	pub msg: String,
 }
-impl From<MexcError> for ApiError {
-	fn from(e: MexcError) -> Self {
-		use v_exchanges_api_generics::http::AuthError;
-		match e.code {
-			MexcErrorCode::ApiKeyExpired(_) => AuthError::KeyExpired { msg: e.msg }.into(),
-			MexcErrorCode::Unauthorized(_) | MexcErrorCode::InvalidApiKey(_) | MexcErrorCode::InvalidSignature(_) | MexcErrorCode::SignatureNotValid(_) =>
-				AuthError::Unauthorized { msg: e.msg }.into(),
-			_ => ApiError::Other(eyre!("MEXC API error {}: {}", e.code.as_i32(), e.msg)),
-		}
-	}
-}
-
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(from = "i32", into = "i32")]
@@ -148,7 +104,6 @@ pub enum MexcErrorCode {
 
 	Other(i32),
 }
-
 impl MexcErrorCode {
 	fn as_i32(self) -> i32 {
 		match self {
@@ -161,6 +116,66 @@ impl MexcErrorCode {
 			| Self::BadSymbol(c)
 			| Self::PermissionDenied(c)
 			| Self::Other(c) => c,
+		}
+	}
+}
+
+/// A struct that implements RequestHandler
+pub struct MexcRequestHandler<'a, R: DeserializeOwned> {
+	options: MexcOptions,
+	_phantom: PhantomData<&'a R>,
+}
+/// A struct that implements [WsHandler]
+#[derive(Debug, derive_new::new)]
+pub struct MexcWsHandler {
+	options: MexcOptions,
+}
+/// Enum that represents the base url of the MEXC Ws API
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum MexcWsUrl {
+	Spot,
+	Futures,
+	#[default]
+	None,
+}
+static MAX_RECV_WINDOW: std::time::Duration = std::time::Duration::from_millis(60000); // as of (2025/01/18)
+
+impl EndpointUrl for MexcHttpUrl {
+	fn url_mainnet(&self) -> Url {
+		match self {
+			Self::Spot => Url::parse("https://api.mexc.com").unwrap(),
+			Self::Futures => Url::parse("https://contract.mexc.com").unwrap(),
+			Self::None => Url::parse("").unwrap(),
+		}
+	}
+
+	fn url_testnet(&self) -> Option<Url> {
+		match self {
+			Self::Spot => Some(Url::parse("https://api-testnet.mexc.com").unwrap()),
+			Self::Futures => Some(Url::parse("https://contract-testnet.mexc.com").unwrap()),
+			Self::None => Some(Url::parse("").unwrap()),
+		}
+	}
+}
+
+/// Envelope used by MEXC futures API, which returns errors with HTTP 200
+#[derive(Deserialize)]
+struct MexcEnvelope {
+	success: bool,
+	code: i32,
+	#[serde(default)]
+	message: String,
+}
+
+impl From<MexcError> for ApiError {
+	fn from(e: MexcError) -> Self {
+		use v_exchanges_api_generics::http::AuthError;
+		match e.code {
+			MexcErrorCode::ApiKeyExpired(_) => AuthError::KeyExpired { msg: e.msg }.into(),
+			MexcErrorCode::Unauthorized(_) | MexcErrorCode::InvalidApiKey(_) | MexcErrorCode::InvalidSignature(_) | MexcErrorCode::SignatureNotValid(_) =>
+				AuthError::Unauthorized { msg: e.msg }.into(),
+			_ => ApiError::Other(eyre!("MEXC API error {}: {}", e.code.as_i32(), e.msg)),
 		}
 	}
 }
@@ -185,12 +200,6 @@ impl From<MexcErrorCode> for i32 {
 	fn from(code: MexcErrorCode) -> Self {
 		code.as_i32()
 	}
-}
-
-/// A struct that implements RequestHandler
-pub struct MexcRequestHandler<'a, R: DeserializeOwned> {
-	options: MexcOptions,
-	_phantom: PhantomData<&'a R>,
 }
 
 impl<B, R> RequestHandler<B> for MexcRequestHandler<'_, R>
@@ -315,11 +324,6 @@ where
 }
 
 // Ws stuff {{{
-/// A struct that implements [WsHandler]
-#[derive(Debug, derive_new::new)]
-pub struct MexcWsHandler {
-	options: MexcOptions,
-}
 impl WsHandler for MexcWsHandler {
 	fn config(&self) -> Result<WsConfig, UrlError> {
 		let mut config = self.options.ws_config.clone();
@@ -340,15 +344,6 @@ impl WsHandler for MexcWsHandler {
 	fn handle_subscribe(&mut self, _topics: HashSet<Topic>) -> Result<Vec<generics::tokio_tungstenite::tungstenite::Message>, WsError> {
 		todo!()
 	}
-}
-/// Enum that represents the base url of the MEXC Ws API
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-#[non_exhaustive]
-pub enum MexcWsUrl {
-	Spot,
-	Futures,
-	#[default]
-	None,
 }
 impl EndpointUrl for MexcWsUrl {
 	fn url_mainnet(&self) -> Url {

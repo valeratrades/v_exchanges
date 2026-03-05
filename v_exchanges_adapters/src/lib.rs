@@ -31,53 +31,23 @@ macro_rules! request_ret {
 /// Default maximum number of simultaneous requests allowed
 pub const DEFAULT_MAX_SIMULTANEOUS_REQUESTS: usize = 100;
 
+/// Core HTTP transport interface.
+pub trait HttpClient {
+	fn http_client(&self) -> &http::Client;
+	fn http_client_mut(&mut self) -> &mut http::Client;
+}
+pub trait GetOptions<O: HandlerOptions> {
+	fn default_options(&self) -> &O;
+	fn default_options_mut(&mut self) -> &mut O;
+	fn is_authenticated(&self) -> bool {
+		self.default_options().is_authenticated()
+	}
+}
 #[derive(Clone, Debug)]
 pub enum Client {
 	True(ClientInner),
 	Mock(ClientInner),
 }
-
-#[derive(Clone, Debug)]
-pub struct ClientInner {
-	pub client: http::Client,
-	/// Semaphore for limiting simultaneous requests.
-	/// Shared across clones of this client.
-	pub request_semaphore: Arc<Semaphore>,
-	#[cfg(feature = "binance")]
-	binance: binance::BinanceOptions,
-	#[cfg(feature = "bitflyer")]
-	bitflyer: bitflyer::BitFlyerOptions,
-	#[cfg(feature = "bybit")]
-	bybit: bybit::BybitOptions,
-	#[cfg(feature = "coincheck")]
-	coincheck: coincheck::CoincheckOptions,
-	#[cfg(feature = "kucoin")]
-	kucoin: kucoin::KucoinOptions,
-	#[cfg(feature = "mexc")]
-	mexc: mexc::MexcOptions,
-}
-
-impl Default for ClientInner {
-	fn default() -> Self {
-		Self {
-			client: http::Client::default(),
-			request_semaphore: Arc::new(Semaphore::new(DEFAULT_MAX_SIMULTANEOUS_REQUESTS)),
-			#[cfg(feature = "binance")]
-			binance: binance::BinanceOptions::default(),
-			#[cfg(feature = "bitflyer")]
-			bitflyer: bitflyer::BitFlyerOptions::default(),
-			#[cfg(feature = "bybit")]
-			bybit: bybit::BybitOptions::default(),
-			#[cfg(feature = "coincheck")]
-			coincheck: coincheck::CoincheckOptions::default(),
-			#[cfg(feature = "kucoin")]
-			kucoin: kucoin::KucoinOptions::default(),
-			#[cfg(feature = "mexc")]
-			mexc: mexc::MexcOptions::default(),
-		}
-	}
-}
-
 impl Client {
 	fn inner(&self) -> &ClientInner {
 		match self {
@@ -100,41 +70,7 @@ impl Client {
 	pub fn request_semaphore(&self) -> &Arc<Semaphore> {
 		&self.inner().request_semaphore
 	}
-}
 
-impl Default for Client {
-	fn default() -> Self {
-		Client::True(ClientInner::default())
-	}
-}
-
-/// Core HTTP transport interface.
-pub trait HttpClient {
-	fn http_client(&self) -> &http::Client;
-	fn http_client_mut(&mut self) -> &mut http::Client;
-}
-
-impl HttpClient for ClientInner {
-	fn http_client(&self) -> &http::Client {
-		&self.client
-	}
-
-	fn http_client_mut(&mut self) -> &mut http::Client {
-		&mut self.client
-	}
-}
-
-impl HttpClient for Client {
-	fn http_client(&self) -> &http::Client {
-		&self.inner().client
-	}
-
-	fn http_client_mut(&mut self) -> &mut http::Client {
-		&mut self.inner_mut().client
-	}
-}
-
-impl Client {
 	/// Set the maximum number of simultaneous requests allowed.
 	///
 	/// This creates a new semaphore with the specified number of permits.
@@ -264,11 +200,70 @@ impl Client {
 	}
 }
 
-pub trait GetOptions<O: HandlerOptions> {
-	fn default_options(&self) -> &O;
-	fn default_options_mut(&mut self) -> &mut O;
-	fn is_authenticated(&self) -> bool {
-		self.default_options().is_authenticated()
+#[derive(Clone, Debug)]
+pub struct ClientInner {
+	pub client: http::Client,
+	/// Semaphore for limiting simultaneous requests.
+	/// Shared across clones of this client.
+	pub request_semaphore: Arc<Semaphore>,
+	#[cfg(feature = "binance")]
+	binance: binance::BinanceOptions,
+	#[cfg(feature = "bitflyer")]
+	bitflyer: bitflyer::BitFlyerOptions,
+	#[cfg(feature = "bybit")]
+	bybit: bybit::BybitOptions,
+	#[cfg(feature = "coincheck")]
+	coincheck: coincheck::CoincheckOptions,
+	#[cfg(feature = "kucoin")]
+	kucoin: kucoin::KucoinOptions,
+	#[cfg(feature = "mexc")]
+	mexc: mexc::MexcOptions,
+}
+
+impl Default for ClientInner {
+	fn default() -> Self {
+		Self {
+			client: http::Client::default(),
+			request_semaphore: Arc::new(Semaphore::new(DEFAULT_MAX_SIMULTANEOUS_REQUESTS)),
+			#[cfg(feature = "binance")]
+			binance: binance::BinanceOptions::default(),
+			#[cfg(feature = "bitflyer")]
+			bitflyer: bitflyer::BitFlyerOptions::default(),
+			#[cfg(feature = "bybit")]
+			bybit: bybit::BybitOptions::default(),
+			#[cfg(feature = "coincheck")]
+			coincheck: coincheck::CoincheckOptions::default(),
+			#[cfg(feature = "kucoin")]
+			kucoin: kucoin::KucoinOptions::default(),
+			#[cfg(feature = "mexc")]
+			mexc: mexc::MexcOptions::default(),
+		}
+	}
+}
+
+impl Default for Client {
+	fn default() -> Self {
+		Client::True(ClientInner::default())
+	}
+}
+
+impl HttpClient for ClientInner {
+	fn http_client(&self) -> &http::Client {
+		&self.client
+	}
+
+	fn http_client_mut(&mut self) -> &mut http::Client {
+		&mut self.client
+	}
+}
+
+impl HttpClient for Client {
+	fn http_client(&self) -> &http::Client {
+		&self.inner().client
+	}
+
+	fn http_client_mut(&mut self) -> &mut http::Client {
+		&mut self.inner_mut().client
 	}
 }
 

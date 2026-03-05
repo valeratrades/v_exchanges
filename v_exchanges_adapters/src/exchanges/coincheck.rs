@@ -76,6 +76,15 @@ pub enum CoincheckHttpUrl {
 	#[default]
 	None,
 }
+impl CoincheckHttpUrl {
+	/// The base URL that this variant represents.
+	fn as_str(&self) -> &'static str {
+		match self {
+			Self::Main => "https://coincheck.com",
+			Self::None => "",
+		}
+	}
+}
 
 /// A `enum` that represents the base url of the Coincheck Realtime API
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -85,6 +94,15 @@ pub enum CoincheckWebSocketUrl {
 	Default,
 	/// The url will not be modified by [CoincheckWebSocketHandler]
 	None,
+}
+impl CoincheckWebSocketUrl {
+	/// The base URL that this variant represents.
+	fn as_str(&self) -> &'static str {
+		match self {
+			Self::Default => "wss://ws-api.coincheck.com/",
+			Self::None => "",
+		}
+	}
 }
 
 #[non_exhaustive]
@@ -127,7 +145,7 @@ where
 			builder = builder.header(header::CONTENT_TYPE, "application/x-www-form-urlencoded").body(encoded);
 		}
 
-		let mut request = builder.build().map_err(|e| BuildError::Other(eyre::eyre!("failed to build request: {}", e)))?;
+		let mut request = builder.build().map_err(|e| BuildError::Other(eyre::eyre!("failed to build request: {e}")))?;
 
 		if self.options.http_auth {
 			// https://coincheck.com/ja/documents/exchange/api#auth
@@ -136,7 +154,7 @@ where
 
 			let body = request.body().and_then(|body| body.as_bytes()).map(String::from_utf8_lossy).unwrap_or_default();
 
-			let sign_contents = format!("{}{}{}", timestamp, request.url(), body);
+			let sign_contents = format!("{timestamp}{}{body}", request.url());
 
 			let secret = self
 				.options
@@ -164,14 +182,14 @@ where
 		if status.is_success() {
 			serde_json::from_slice(&response_body).map_err(|error| {
 				let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
-				HandleError::Parse(eyre::eyre!("Failed to parse response: {}\nResponse body: {}", error, response_str))
+				HandleError::Parse(eyre::eyre!("Failed to parse response: {error}\nResponse body: {response_str}"))
 			})
 		} else {
 			let error = match serde_json::from_slice::<serde_json::Value>(&response_body) {
-				Ok(parsed_error) => HandleError::Api(ApiError::Other(eyre::eyre!("Coincheck API error (status {}): {}", status, parsed_error))),
+				Ok(parsed_error) => HandleError::Api(ApiError::Other(eyre::eyre!("Coincheck API error (status {status}): {parsed_error}"))),
 				Err(error) => {
 					let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
-					HandleError::Parse(eyre::eyre!("Failed to parse error response: {}\nResponse body: {}", error, response_str))
+					HandleError::Parse(eyre::eyre!("Failed to parse error response: {error}\nResponse body: {response_str}"))
 				}
 			};
 			Err(error)
@@ -181,26 +199,6 @@ where
 
 // TODO: Implement WsHandler for CoincheckWebSocketHandler
 // The WebSocket implementation needs to be updated to match the new WsHandler trait
-
-impl CoincheckHttpUrl {
-	/// The base URL that this variant represents.
-	fn as_str(&self) -> &'static str {
-		match self {
-			Self::Main => "https://coincheck.com",
-			Self::None => "",
-		}
-	}
-}
-
-impl CoincheckWebSocketUrl {
-	/// The base URL that this variant represents.
-	fn as_str(&self) -> &'static str {
-		match self {
-			Self::Default => "wss://ws-api.coincheck.com/",
-			Self::None => "",
-		}
-	}
-}
 
 impl HandlerOptions for CoincheckOptions {
 	type OptionItem = CoincheckOption;

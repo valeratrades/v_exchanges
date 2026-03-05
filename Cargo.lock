@@ -1910,6 +1910,9 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "rustls-platform-verifier",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
  "sync_wrapper",
  "tokio",
  "tokio-rustls",
@@ -2976,6 +2979,7 @@ version = "1.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b672338555252d43fd2240c714dc444b8c6fb0a5c5335e65a07bba7742735ddb"
 dependencies = [
+ "getrandom 0.4.2",
  "js-sys",
  "wasm-bindgen",
 ]
@@ -2984,6 +2988,7 @@ dependencies = [
 name = "v_exchanges"
 version = "0.17.0"
 dependencies = [
+ "arrayvec",
  "async-trait",
  "cfg-if",
  "color-eyre",
@@ -3003,6 +3008,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "uuid",
  "v_exchanges_adapters",
  "v_utils",
 ]

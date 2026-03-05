@@ -80,6 +80,15 @@ pub enum BitFlyerHttpUrl {
 	#[default]
 	None,
 }
+impl BitFlyerHttpUrl {
+	/// The base URL that this variant represents.
+	fn as_str(&self) -> &'static str {
+		match self {
+			Self::Main => "https://api.bitflyer.com",
+			Self::None => "",
+		}
+	}
+}
 
 /// A `enum` that represents the base url of the BitFlyer Realtime API
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -89,6 +98,15 @@ pub enum BitFlyerWebSocketUrl {
 	Default,
 	/// The url will not be modified by [BitFlyerWebSocketHandler]
 	None,
+}
+impl BitFlyerWebSocketUrl {
+	/// The base URL that this variant represents.
+	fn as_str(&self) -> &'static str {
+		match self {
+			Self::Default => "wss://ws.lightstream.bitflyer.com",
+			Self::None => "",
+		}
+	}
 }
 
 #[derive(Debug, Deserialize)]
@@ -137,7 +155,7 @@ where
 			builder = builder.header(header::CONTENT_TYPE, "application/json").body(json);
 		}
 
-		let mut request = builder.build().map_err(|e| BuildError::Other(eyre::eyre!("failed to build request: {}", e)))?;
+		let mut request = builder.build().map_err(|e| BuildError::Other(eyre::eyre!("failed to build request: {e}")))?;
 
 		if self.options.http_auth {
 			// https://lightning.bitflyer.com/docs?lang=en#authentication
@@ -151,7 +169,7 @@ where
 			}
 			let body = request.body().and_then(|body| body.as_bytes()).map(String::from_utf8_lossy).unwrap_or_default();
 
-			let sign_contents = format!("{}{}{}{}", timestamp, request.method(), path, body);
+			let sign_contents = format!("{timestamp}{}{path}{body}", request.method());
 
 			let secret = self
 				.options
@@ -180,14 +198,14 @@ where
 		if status.is_success() {
 			serde_json::from_slice(&response_body).map_err(|error| {
 				let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
-				HandleError::Parse(eyre::eyre!("Failed to parse response: {}\nResponse body: {}", error, response_str))
+				HandleError::Parse(eyre::eyre!("Failed to parse response: {error}\nResponse body: {response_str}"))
 			})
 		} else {
 			let error = match serde_json::from_slice::<serde_json::Value>(&response_body) {
-				Ok(parsed_error) => HandleError::Api(ApiError::Other(eyre::eyre!("BitFlyer API error (status {}): {}", status, parsed_error))),
+				Ok(parsed_error) => HandleError::Api(ApiError::Other(eyre::eyre!("BitFlyer API error (status {status}): {parsed_error}"))),
 				Err(error) => {
 					let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
-					HandleError::Parse(eyre::eyre!("Failed to parse error response: {}\nResponse body: {}", error, response_str))
+					HandleError::Parse(eyre::eyre!("Failed to parse error response: {error}\nResponse body: {response_str}"))
 				}
 			};
 			Err(error)
@@ -197,26 +215,6 @@ where
 
 // TODO: Implement WsHandler for BitFlyerWebSocketHandler
 // The WebSocket implementation needs to be updated to match the new WsHandler trait
-
-impl BitFlyerHttpUrl {
-	/// The base URL that this variant represents.
-	fn as_str(&self) -> &'static str {
-		match self {
-			Self::Main => "https://api.bitflyer.com",
-			Self::None => "",
-		}
-	}
-}
-
-impl BitFlyerWebSocketUrl {
-	/// The base URL that this variant represents.
-	fn as_str(&self) -> &'static str {
-		match self {
-			Self::Default => "wss://ws.lightstream.bitflyer.com",
-			Self::None => "",
-		}
-	}
-}
 
 impl HandlerOptions for BitFlyerOptions {
 	type OptionItem = BitFlyerOption;

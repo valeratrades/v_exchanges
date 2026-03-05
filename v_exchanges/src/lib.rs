@@ -1,4 +1,5 @@
 #![feature(array_try_map)]
+#![feature(default_field_values)]
 #![feature(formatting_options)]
 #![feature(try_blocks)]
 #![cfg_attr(docsrs, feature(doc_cfg))]

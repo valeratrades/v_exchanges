@@ -63,9 +63,9 @@ where
 			let method = request.method().as_str().to_string();
 			let endpoint = request.url().path().to_string();
 			let query = request.url().query().unwrap_or("").to_string();
-			let endpoint_with_query = if query.is_empty() { endpoint.clone() } else { format!("{}?{}", endpoint, query) };
+			let endpoint_with_query = if query.is_empty() { endpoint.clone() } else { format!("{endpoint}?{query}") };
 
-			let prehash = format!("{}{}{}{}", timestamp, method, endpoint_with_query, body_str);
+			let prehash = format!("{timestamp}{method}{endpoint_with_query}{body_str}");
 
 			// Sign the prehash string
 			let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap(); // hmac accepts key of any length
@@ -86,15 +86,15 @@ where
 			);
 			headers.insert(
 				"KC-API-SIGN",
-				header::HeaderValue::from_str(&signature).map_err(|e| ConstructAuthError::Other(eyre!("Invalid signature: {}", e)))?,
+				header::HeaderValue::from_str(&signature).map_err(|e| ConstructAuthError::Other(eyre!("Invalid signature: {e}")))?,
 			);
 			headers.insert(
 				"KC-API-TIMESTAMP",
-				header::HeaderValue::from_str(&timestamp.to_string()).map_err(|e| ConstructAuthError::Other(eyre!("Invalid timestamp: {}", e)))?,
+				header::HeaderValue::from_str(&timestamp.to_string()).map_err(|e| ConstructAuthError::Other(eyre!("Invalid timestamp: {e}")))?,
 			);
 			headers.insert(
 				"KC-API-PASSPHRASE",
-				header::HeaderValue::from_str(&encrypted_passphrase).map_err(|e| ConstructAuthError::Other(eyre!("Invalid passphrase: {}", e)))?,
+				header::HeaderValue::from_str(&encrypted_passphrase).map_err(|e| ConstructAuthError::Other(eyre!("Invalid passphrase: {e}")))?,
 			);
 			headers.insert("KC-API-KEY-VERSION", header::HeaderValue::from_static("2"));
 			headers.insert("Content-Type", header::HeaderValue::from_static("application/json"));
