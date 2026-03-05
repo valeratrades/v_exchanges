@@ -44,7 +44,7 @@ derive-new.workspace = true
 derive_more.workspace = true
 enum_dispatch = "0.3.13"
 eyre.workspace = true
-reqwest = { version = "^0.12.24", optional = true }
+reqwest = { version = "^0.13.2", optional = true }
 v_exchanges_adapters = { version = "^0.17.0", path = "../v_exchanges_adapters/", optional = true }
 
 jiff.workspace = true
@@ -53,7 +53,7 @@ secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
-strum = { version = "0.26", features = ["derive"] }
+strum = { version = "0.28", features = ["derive"] }
 #dynosaur.workspace = true
 thiserror.workspace = true
 tokio.workspace = true

@@ -321,9 +321,9 @@ pub enum ApiError {
 		code(v_exchanges::http::api::ip_timeout),
 		help("Your IP has been rate-limited. Wait until the specified time or reduce request frequency.")
 	)]
+	#[allow(unused_assignments)] // false positive: field used in #[error] format string, but thiserror codegen triggers this
 	IpTimeout {
 		/// Time of unban
-		#[allow(unused_assignments)] //erroneous detection, - we use it in the description
 		until: Option<Timestamp>,
 	},
 	/// Authentication/authorization errors shared across all exchanges
@@ -338,23 +338,18 @@ pub enum ApiError {
 
 /// Authentication errors that map uniformly across exchanges
 #[non_exhaustive]
+#[allow(unused_assignments)] // false positive: fields used in #[error] format strings, but thiserror codegen triggers this
 #[derive(Debug, miette::Diagnostic, thiserror::Error)]
 pub enum AuthError {
 	#[error("API key has expired: {msg}")]
 	#[diagnostic(code(v_exchanges::http::api::auth::key_expired), help("Generate a new API key from the exchange dashboard."))]
-	KeyExpired {
-		#[allow(unused_assignments)]
-		msg: String,
-	},
+	KeyExpired { msg: String },
 	#[error("Unauthorized: {msg}")]
 	#[diagnostic(
 		code(v_exchanges::http::api::auth::unauthorized),
 		help("Check that your API key and secret are correct and have the required permissions.")
 	)]
-	Unauthorized {
-		#[allow(unused_assignments)]
-		msg: String,
-	},
+	Unauthorized { msg: String },
 }
 
 /// An `enum` that represents errors that could be returned by [Client::request()]

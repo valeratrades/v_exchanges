@@ -30,7 +30,7 @@ pub mod prelude {
 	pub use crate::mexc::Mexc;
 	#[cfg(feature = "data")]
 	pub use crate::yahoo::*;
-	pub use crate::{core::*, error::*, other_types::*};
+	pub use crate::{core::*, error::*, orders::*, other_types::*};
 }
 #[cfg(feature = "binance")]
 #[cfg_attr(docsrs, doc(cfg(feature = "binance")))]
@@ -44,6 +44,7 @@ pub mod kucoin;
 #[cfg(feature = "mexc")]
 #[cfg_attr(docsrs, doc(cfg(feature = "mexc")))]
 pub mod mexc;
+pub mod orders;
 pub(crate) mod other_types;
 
 pub use prelude::*;
