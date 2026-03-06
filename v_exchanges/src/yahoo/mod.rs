@@ -60,7 +60,11 @@ pub async fn vix_change(tf: YahooTimeframe, n: u8) -> Result<NowThen> {
 	}
 	let now = vix_history.last().unwrap();
 	let then = vix_history.first().unwrap();
-	Ok(NowThen::new(now.close, then.close).add_duration((now.timestamp - then.timestamp).try_into().unwrap()))
+	Ok(NowThen::builder()
+		.now(now.close)
+		.then(then.close)
+		.duration((now.timestamp - then.timestamp).try_into().unwrap())
+		.build())
 }
 
 crate::define_provider_timeframe!(YahooTimeframe, ["1m", "2m", "5m", "15m", "30m", "60m", "1h", "1d", "5d", "1wk", "1mo"]);

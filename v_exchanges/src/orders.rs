@@ -1,13 +1,14 @@
 use arrayvec::ArrayString;
 use jiff::Timestamp;
+use smart_default::SmartDefault;
 use uuid::Uuid;
 use v_utils::trades::{Pair, Side};
 
 use crate::Instrument;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, SmartDefault)]
 pub struct OrderId {
-	#[default = Uuid::now_v7()]
+	#[default(Uuid::now_v7())]
 	pub id: Uuid,
 	pub parent: Option<Uuid>,
 	pub exchange_id: Option<ArrayString<32>>,
