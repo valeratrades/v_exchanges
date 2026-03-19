@@ -253,16 +253,16 @@ pub struct Trade {
 	pub qty_asset: f64,
 	pub price: f64,
 }
-pub struct BookSnapshot {
+
+#[derive(Clone, Debug, Default)]
+pub struct Book {
 	pub time: Timestamp,
 	pub asks: Vec<(f64, f64)>,
 	pub bids: Vec<(f64, f64)>,
 }
-pub struct BookDelta {
-	pub time: Timestamp,
-	pub asks: Vec<(f64, f64)>,
-	pub bids: Vec<(f64, f64)>,
-}
+pub type BookDelta = Book;
+pub type BookSnapshot = Book;
+
 /// Internal trait for exchange implementations.
 /// Exchange implementations should implement this trait, not `Exchange` directly.
 ///

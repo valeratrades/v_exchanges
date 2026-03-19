@@ -2,9 +2,20 @@ use arrayvec::ArrayString;
 use jiff::Timestamp;
 use smart_default::SmartDefault;
 use uuid::Uuid;
-use v_utils::trades::{Pair, Side};
+use v_utils::trades::Side;
 
-use crate::Instrument;
+use crate::Ticker;
+
+/// An order bound to a specific exchange and ticker, ready to be placed.
+#[derive(Clone, Debug, derive_more::Deref, derive_more::DerefMut, derive_new::new)]
+pub struct ExchangeOrder<O> {
+	#[deref]
+	#[deref_mut]
+	pub order: O,
+	pub ticker: Ticker,
+	#[new(default)]
+	pub expected_fee_usd: Option<f64>,
+}
 
 #[derive(Clone, Debug, SmartDefault)]
 pub struct OrderId {
@@ -16,12 +27,10 @@ pub struct OrderId {
 
 /// Exchange-agnostic limit order.
 ///
-/// All fields beyond the core (pair, instrument, side, price, qty) default to sensible values.
+/// All fields beyond the core (side, price, qty) default to sensible values.
 /// Each exchange adapter is responsible for validating and translating these into exchange-specific parameters.
 #[derive(Clone, Debug, derive_new::new)]
 pub struct LimitOrder {
-	pub pair: Pair,
-	pub instrument: Instrument,
 	pub side: Side,
 	pub price: f64,
 	pub qty: f64,
@@ -53,8 +62,6 @@ pub struct LimitOrder {
 /// Exchange-agnostic market order.
 #[derive(Clone, Debug, derive_new::new)]
 pub struct MarketOrder {
-	pub pair: Pair,
-	pub instrument: Instrument,
 	pub side: Side,
 	pub qty: f64,
 	#[new(default)]
@@ -68,8 +75,6 @@ pub struct MarketOrder {
 /// Stop-limit order: a limit order that activates when the trigger price is hit.
 #[derive(Clone, Debug, derive_new::new)]
 pub struct StopLimitOrder {
-	pub pair: Pair,
-	pub instrument: Instrument,
 	pub side: Side,
 	pub price: f64,
 	pub qty: f64,
@@ -89,8 +94,6 @@ pub struct StopLimitOrder {
 /// Stop-market order: a market order that activates when the trigger price is hit.
 #[derive(Clone, Debug, derive_new::new)]
 pub struct StopMarketOrder {
-	pub pair: Pair,
-	pub instrument: Instrument,
 	pub side: Side,
 	pub qty: f64,
 	pub trigger: Trigger,
@@ -107,8 +110,6 @@ pub struct StopMarketOrder {
 /// Trailing stop-market order.
 #[derive(Clone, Debug, derive_new::new)]
 pub struct TrailingStopOrder {
-	pub pair: Pair,
-	pub instrument: Instrument,
 	pub side: Side,
 	pub qty: f64,
 	pub callback: TrailingCallback,

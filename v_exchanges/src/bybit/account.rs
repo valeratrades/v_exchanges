@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use adapters::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -99,6 +101,27 @@ pub struct CoinInfo {
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct RetExtInfo {}
+
+// Earn {{{
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EarnPositionResponse {
+	result: EarnPositionResult,
+}
+#[derive(Debug, Deserialize)]
+struct EarnPositionResult {
+	list: Vec<EarnPosition>,
+}
+#[serde_as]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EarnPosition {
+	coin: String,
+	#[serde_as(as = "DisplayFromStr")]
+	amount: f64,
+}
+//,}}}
+
 pub(super) async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
 	assert!(client.is_authenticated::<BybitOption>());
 	let balances: Balances = balances(client, recv_window).await?;
@@ -113,22 +136,83 @@ pub(super) async fn asset_balance(client: &v_exchanges_adapters::Client, asset: 
 pub(super) async fn balances(client: &Client, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
 	assert!(client.is_authenticated::<BybitOption>());
 
-	let mut options = vec![BybitOption::HttpAuth(BybitHttpAuth::V3AndAbove)];
-	if let Some(rw) = recv_window {
-		options.push(BybitOption::RecvWindow(rw));
-	}
-	let account_response: AccountResponse = client.get("/v5/account/wallet-balance", &[("accountType", "UNIFIED")], options).await?;
+	let auth_options = |recv_window: Option<std::time::Duration>| {
+		let mut options = vec![BybitOption::HttpAuth(BybitHttpAuth::V3AndAbove)];
+		if let Some(rw) = recv_window {
+			options.push(BybitOption::RecvWindow(rw));
+		}
+		options
+	};
+
+	let account_response: AccountResponse = client.get("/v5/account/wallet-balance", &[("accountType", "UNIFIED")], auth_options(recv_window)).await?;
 	assert_eq!(account_response.result.list.len(), 1);
 	let account_info = account_response.result.list.first().unwrap();
 
+	// Build coin→usd_rate map from UNIFIED account data for converting earn positions
+	let mut usd_rates: HashMap<String, f64> = HashMap::new();
 	let mut vec_balance = Vec::new();
 	for r in &account_info.coin {
+		if r.wallet_balance > 0.0 {
+			usd_rates.insert(r.coin.clone(), r.usd_value / r.wallet_balance);
+		}
 		vec_balance.push(AssetBalance {
 			asset: (&*r.coin).into(),
 			underlying: r.wallet_balance,
 			usd: Some(r.usd_value.into()),
 		});
 	}
-	let balances = Balances::new(vec_balance, account_info.total_equity.into());
+
+	let mut total_equity = account_info.total_equity;
+
+	// Fetch Earn positions (FlexibleSaving and OnChain) and add to total
+	for category in ["FlexibleSaving", "OnChain"] {
+		let r: Result<EarnPositionResponse, _> = client.get("/v5/earn/position", &[("category", category)], auth_options(recv_window)).await;
+		match r {
+			Ok(earn_response) => {
+				for pos in &earn_response.result.list {
+					if pos.amount == 0.0 {
+						continue;
+					}
+					let usd_rate = match usd_rates.get(&pos.coin) {
+						Some(&rate) => rate,
+						None => {
+							// Stablecoins pegged to USD
+							match pos.coin.as_str() {
+								"USDT" | "USDC" | "DAI" | "BUSD" => 1.0,
+								_ => {
+									warn!("No USD rate for earn coin {}, skipping", pos.coin);
+									continue;
+								}
+							}
+						}
+					};
+					let usd_value = pos.amount * usd_rate;
+					total_equity += usd_value;
+
+					// Merge into existing balance or add new entry
+					if let Some(existing) = vec_balance.iter_mut().find(|b| {
+						let asset: Asset = (&*pos.coin).into();
+						b.asset == asset
+					}) {
+						existing.underlying += pos.amount;
+						if let Some(ref mut usd) = existing.usd {
+							*usd = v_utils::trades::Usd(**usd + usd_value);
+						}
+					} else {
+						vec_balance.push(AssetBalance {
+							asset: (&*pos.coin).into(),
+							underlying: pos.amount,
+							usd: Some(v_utils::trades::Usd(usd_value)),
+						});
+					}
+				}
+			}
+			Err(e) => {
+				warn!("Failed to fetch {category} earn positions: {e}");
+			}
+		}
+	}
+
+	let balances = Balances::new(vec_balance, total_equity.into());
 	Ok(balances)
 }

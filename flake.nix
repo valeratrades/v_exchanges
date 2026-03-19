@@ -4,10 +4,10 @@
     rust-overlay.url = "github:oxalica/rust-overlay";
     flake-utils.url = "github:numtide/flake-utils";
     pre-commit-hooks.url = "github:cachix/git-hooks.nix";
-    v-utils.url = "github:valeratrades/.github?ref=v1.4";
+    v-flakes.url = "github:valeratrades/v_flakes?ref=v1.4";
   };
 
-  outputs = { self, nixpkgs, rust-overlay, flake-utils, pre-commit-hooks, v-utils }:
+  outputs = { self, nixpkgs, rust-overlay, flake-utils, pre-commit-hooks, v-flakes }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         overlays = builtins.trace "flake.nix sourced" [ (import rust-overlay) ];
@@ -19,25 +19,12 @@
           extensions = [ "rust-src" "rust-analyzer" "rust-docs" "rustc-codegen-cranelift-preview" ];
         });
 
-        pre-commit-check = pre-commit-hooks.lib.${system}.run (v-utils.files.preCommit { inherit pkgs; });
+        pre-commit-check = pre-commit-hooks.lib.${system}.run (v-flakes.files.preCommit { inherit pkgs; });
         manifest = (pkgs.lib.importTOML ./v_exchanges/Cargo.toml).package;
         pname = manifest.name;
         stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv;
 
-        github = v-utils.github {
-          inherit pkgs pname;
-          lastSupportedVersion = "nightly-2025-10-12";
-          langs = [ "rs" ];
-          jobs = {
-            default = true;
-            # not sure I like the `default`s option on the interface after this now {{{1
-            warnings.exclude = [ "rust-doc" ];
-            warnings.augment = [{ name = "rust-doc"; args = { package = "v_exchanges"; }; }];
-            #,}}}1
-          };
-        };
-        readme = v-utils.readme-fw { inherit pkgs pname; defaults = true; lastSupportedVersion = "nightly-1.92"; rootDir = ./.; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; };
-        rs = v-utils.rs {
+        rs = v-flakes.rs {
           inherit pkgs rust;
           build = {
             deny = true;
@@ -48,6 +35,20 @@
             };
           };
         };
+        github = v-flakes.github {
+          inherit pkgs pname rs;
+          enable = true;
+          lastSupportedVersion = "nightly-2025-10-12";
+          langs = [ "rs" ];
+          jobs = {
+            default = true;
+            # not sure I like the `default`s option on the interface after this now {{{1
+            warnings.exclude = [ "rust-doc" ];
+            warnings.augment = [{ name = "rust-doc"; args = { package = "v_exchanges"; }; }];
+            #,}}}1
+          };
+        };
+        readme = v-flakes.readme-fw { inherit pkgs pname; defaults = true; lastSupportedVersion = "nightly-1.92"; rootDir = ./.; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; };
       in
       {
         packages =
@@ -84,7 +85,7 @@
             readme.shellHook +
             rs.shellHook +
             ''
-              cp -f ${(v-utils.files.treefmt) {inherit pkgs;}} ./.treefmt.toml
+              cp -f ${(v-flakes.files.treefmt) {inherit pkgs;}} ./.treefmt.toml
             '';
           buildInputs = with pkgs; [
             mold-wrapped
