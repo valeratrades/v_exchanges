@@ -12,7 +12,7 @@ use secrecy::SecretString;
 use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::{
-	AssetBalance, Balances, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Klines, MethodError, RequestRange, Trade,
+	AssetBalance, Balances, BookUpdate, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Klines, MethodError, RequestRange, Trade,
 	core::{ExchangeImpl, Instrument, Symbol},
 };
 
@@ -106,6 +106,16 @@ impl ExchangeImpl for Binance {
 		match instrument {
 			Instrument::Perp | Instrument::Spot | Instrument::Margin => {
 				let connection = ws::TradesConnection::new(self, pairs, instrument)?;
+				Ok(Box::new(connection))
+			}
+			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument })),
+		}
+	}
+
+	fn ws_book(&self, pairs: Vec<Pair>, instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = BookUpdate>>, ExchangeError> {
+		match instrument {
+			Instrument::Perp | Instrument::Spot | Instrument::Margin => {
+				let connection = ws::BookConnection::new(self, pairs, instrument)?;
 				Ok(Box::new(connection))
 			}
 			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument })),

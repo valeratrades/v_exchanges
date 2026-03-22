@@ -1,13 +1,14 @@
 mod account;
 mod market;
+mod ws;
 
 use adapters::bybit::{BybitOption, BybitOptions};
 use secrecy::SecretString;
 use v_exchanges_adapters::{Client, GetOptions};
-use v_utils::trades::{Asset, Timeframe};
+use v_utils::trades::{Asset, Pair, Timeframe};
 
 use crate::{
-	Balances, ExchangeName, ExchangeResult, Instrument, OpenInterest, Symbol,
+	Balances, BookUpdate, ExchangeError, ExchangeName, ExchangeResult, ExchangeStream, Instrument, MethodError, OpenInterest, Symbol,
 	core::{AssetBalance, ExchangeImpl, Klines, RequestRange},
 };
 
@@ -64,6 +65,16 @@ impl ExchangeImpl for Bybit {
 
 	async fn balances(&self, _instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
 		account::balances(self, recv_window).await
+	}
+
+	fn ws_book(&self, pairs: Vec<Pair>, instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = BookUpdate>>, ExchangeError> {
+		match instrument {
+			Instrument::Perp | Instrument::Spot => {
+				let connection = ws::BookConnection::new(self, pairs, instrument)?;
+				Ok(Box::new(connection))
+			}
+			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument })),
+		}
 	}
 }
 

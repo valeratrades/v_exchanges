@@ -43,6 +43,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance>;
 	async fn balances(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances>;
 	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>>;
+	fn ws_book(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>>;
 }
 /// Concerns itself with exact types.
 #[async_trait::async_trait]
@@ -254,14 +255,22 @@ pub struct Trade {
 	pub price: f64,
 }
 
+/// (price, qty) levels for one side of an orderbook.
+/// Asks are sorted ascending, bids descending.
 #[derive(Clone, Debug, Default)]
-pub struct Book {
+pub struct BookShape {
 	pub time: Timestamp,
 	pub asks: Vec<(f64, f64)>,
 	pub bids: Vec<(f64, f64)>,
 }
-pub type BookDelta = Book;
-pub type BookSnapshot = Book;
+
+/// Distinguishes full snapshots from incremental deltas.
+/// For deltas: qty=0 means remove that price level.
+#[derive(Clone, Debug)]
+pub enum BookUpdate {
+	Snapshot(BookShape),
+	Delta(BookShape),
+}
 
 /// Internal trait for exchange implementations.
 /// Exchange implementations should implement this trait, not `Exchange` directly.
@@ -348,6 +357,12 @@ pub(crate) trait ExchangeImpl: std::fmt::Debug + Send + Sync + std::ops::Deref<T
 	// Start a websocket connection for individual trades
 	#[allow(unused_variables)]
 	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>> {
+		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
+	}
+
+	/// Start a websocket connection for orderbook depth updates (max depth only).
+	#[allow(unused_variables)]
+	fn ws_book(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 	//,}}}
@@ -456,6 +471,10 @@ impl<T: ExchangeImpl> Exchange for T {
 	// Websocket connections are NOT rate-limited by the semaphore
 	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>> {
 		ExchangeImpl::ws_trades(self, pairs, instrument)
+	}
+
+	fn ws_book(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>> {
+		ExchangeImpl::ws_book(self, pairs, instrument)
 	}
 }
 

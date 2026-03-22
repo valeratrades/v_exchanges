@@ -84,6 +84,11 @@ name = "ws"
 path = "../examples/ws.rs"
 
 [[example]]
+name = "ws_book"
+required-features = ["binance", "bybit"]
+path = "../examples/ws/book.rs"
+
+[[example]]
 name = "cli"
 path = "../examples/cli.rs"
 
