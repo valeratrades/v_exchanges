@@ -66,3 +66,6 @@ v_utils.workspace = true
 rust_decimal = { version = "1.39.0", features = ["serde-with-str", "serde-with-float"] }
 
 tokio.workspace = true
+
+[lints]
+workspace = true

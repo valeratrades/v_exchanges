@@ -63,6 +63,9 @@ tracing.workspace = true
 uuid.workspace = true
 v_utils.workspace = true
 
+[lints]
+workspace = true
+
 [dev-dependencies]
 color-eyre = "^0.6.5"
 

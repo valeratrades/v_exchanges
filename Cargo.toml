@@ -4,6 +4,9 @@ cargo-features = ["codegen-backend"]
 members = ["v_exchanges", "v_exchanges_*"]
 resolver = "3"
 
+[workspace.lints.rust]
+unused_features = "allow"
+
 [workspace.lints.clippy]
 float_cmp = "allow" # is bad for `==` direct comparisons, but `<` and `>` should be allowed
 len_zero = "allow" # `.empty()` is O(1) but on &str only
