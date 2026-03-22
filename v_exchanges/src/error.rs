@@ -13,6 +13,18 @@ use crate::{ExchangeName, Instrument};
 // Exchange Error {{{
 pub type ExchangeResult<T> = Result<T, Error>;
 
+impl From<RequestError> for Error {
+	fn from(e: RequestError) -> Self {
+		match e {
+			RequestError::HandleResponse(HandleError::Api(ApiError::Auth(auth))) => Self::Auth(auth),
+			other => Self::Request(other),
+		}
+	}
+}
+
+/// Re-export as ExchangeError for internal use to avoid rewrites
+pub use Error as ExchangeError;
+
 #[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error, derive_more::From)]
 pub enum Error {
 	/// exchange-specific or method-specific stuff
@@ -37,18 +49,6 @@ pub enum Error {
 	#[diagnostic(code(v_exchanges::other))]
 	Other(Report),
 }
-
-impl From<RequestError> for Error {
-	fn from(e: RequestError) -> Self {
-		match e {
-			RequestError::HandleResponse(HandleError::Api(ApiError::Auth(auth))) => Self::Auth(auth),
-			other => Self::Request(other),
-		}
-	}
-}
-
-/// Re-export as ExchangeError for internal use to avoid rewrites
-pub use Error as ExchangeError;
 
 impl SysexitCode for Error {
 	fn sysexit(&self) -> Sysexit {
