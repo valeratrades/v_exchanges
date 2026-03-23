@@ -1,21 +1,22 @@
 //! A module for communicating with the [Bybit API](https://bybit-exchange.github.io/docs/spot/v3/#t-introduction).
 //! For example usages, see files in the examples/ directory.
 
-use std::{borrow::Cow, marker::PhantomData, time::SystemTime, vec};
+use std::{borrow::Cow, collections::HashSet, marker::PhantomData, time::SystemTime, vec};
 
+use eyre::{WrapErr as _, eyre};
 use generics::{ConstructAuthError, UrlError, tokio_tungstenite::tungstenite};
 use hmac::{Hmac, Mac};
 use jiff::Timestamp;
 use secrecy::{ExposeSecret as _, SecretString};
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::json;
 use sha2::Sha256;
+use tracing::instrument;
 use url::Url;
 use v_exchanges_api_generics::{
 	http::{header::HeaderValue, *},
 	ws::*,
 };
-use v_utils::prelude::*;
 
 use crate::traits::*;
 
@@ -380,6 +381,8 @@ impl From<BybitError> for ApiError {
 			BybitErrorCode::InvalidApiKey(_) | BybitErrorCode::ErrorSign(_) | BybitErrorCode::AuthenticationFailed(_) | BybitErrorCode::UnmatchedIp(_) =>
 				AuthError::Unauthorized { msg: e.msg }.into(),
 			BybitErrorCode::PermissionDenied(_) => AuthError::Unauthorized { msg: e.msg }.into(),
+			BybitErrorCode::TooManyVisits(_) | BybitErrorCode::IpBanned(_) | BybitErrorCode::IpRateLimit(_) => IpError::Timeout { until: None }.into(),
+			BybitErrorCode::ComplianceRules(_) => IpError::GeoBlocked { msg: e.msg }.into(),
 			_ => ApiError::Other(eyre!("Bybit error {}: {}", e.code.as_i32(), e.msg)),
 		}
 	}
@@ -487,7 +490,8 @@ where
 			})
 		} else {
 			if status == 403 {
-				return Err(ApiError::IpTimeout { until: None }.into());
+				let msg = std::str::from_utf8(&response_body).unwrap_or("<non-utf8 body>").to_string();
+				return Err(ApiError::from(IpError::Waf { msg }).into());
 			}
 			if status == 401 {
 				use v_exchanges_api_generics::http::AuthError;

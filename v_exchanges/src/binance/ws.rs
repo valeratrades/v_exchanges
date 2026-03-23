@@ -148,31 +148,32 @@ impl ExchangeStream for BookConnection {
 	async fn next(&mut self) -> Result<Self::Item, WsError> {
 		let content_event = self.connection.next().await?;
 		let parsed: DepthEvent = serde_json::from_value(content_event.data.clone()).expect("Exchange responded with invalid depth event");
-		Ok(BookUpdate::Delta(BookShape::from(parsed)))
+		let time = parsed
+			.transaction_time
+			.map(|ts| Timestamp::from_millisecond(ts).expect("Exchange responded with invalid timestamp"))
+			.unwrap_or(content_event.time);
+		let shape = BookShape {
+			time,
+			bids: parsed.bids.into_iter().map(|(p, q)| (p.parse().unwrap(), q.parse().unwrap())).collect(),
+			asks: parsed.asks.into_iter().map(|(p, q)| (p.parse().unwrap(), q.parse().unwrap())).collect(),
+		};
+		Ok(BookUpdate::Delta(shape))
 	}
 }
 
 /// Binance diff depth stream event.
-/// Docs: https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams#diff-depth-stream
-#[serde_as]
+/// Spot: https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams#diff-depth-stream
+/// Futures: https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-market-streams/Diff-Book-Depth-Streams
 #[derive(Clone, Debug, serde::Deserialize)]
 struct DepthEvent {
+	/// Transaction time. Present on futures, absent on spot.
 	#[serde(rename = "T")]
-	timestamp: i64,
+	transaction_time: Option<i64>,
 	/// Bids: [[price, qty], ...]
 	#[serde(rename = "b")]
 	bids: Vec<(String, String)>,
 	/// Asks: [[price, qty], ...]
 	#[serde(rename = "a")]
 	asks: Vec<(String, String)>,
-}
-impl From<DepthEvent> for BookShape {
-	fn from(e: DepthEvent) -> Self {
-		Self {
-			time: Timestamp::from_millisecond(e.timestamp).expect("Exchange responded with invalid timestamp"),
-			bids: e.bids.iter().map(|(p, q)| (p.parse().unwrap(), q.parse().unwrap())).collect(),
-			asks: e.asks.iter().map(|(p, q)| (p.parse().unwrap(), q.parse().unwrap())).collect(),
-		}
-	}
 }
 //,}}}

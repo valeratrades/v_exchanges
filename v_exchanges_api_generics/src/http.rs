@@ -315,17 +315,10 @@ pub enum HandleError {
 #[non_exhaustive]
 #[derive(Debug, miette::Diagnostic, thiserror::Error, derive_more::From)]
 pub enum ApiError {
-	/// Ip has been timed out or banned
-	#[error("IP has been timed out or banned until {until:?}")]
-	#[diagnostic(
-		code(v_exchanges::http::api::ip_timeout),
-		help("Your IP has been rate-limited. Wait until the specified time or reduce request frequency.")
-	)]
-	#[allow(unused_assignments)] // false positive: field used in #[error] format string, but thiserror codegen triggers this
-	IpTimeout {
-		/// Time of unban
-		until: Option<Timestamp>,
-	},
+	/// IP-level errors (rate-limiting, WAF blocks, geo-blocking)
+	#[error("{0}")]
+	#[diagnostic(transparent)]
+	Ip(IpError),
 	/// Authentication/authorization errors shared across all exchanges
 	#[error("{0}")]
 	#[diagnostic(transparent)]
@@ -334,6 +327,36 @@ pub enum ApiError {
 	#[error("{0}")]
 	#[diagnostic(code(v_exchanges::http::api::other))]
 	Other(Report),
+}
+
+/// IP-level errors that map uniformly across exchanges
+#[non_exhaustive]
+#[derive(Debug, miette::Diagnostic, thiserror::Error)]
+pub enum IpError {
+	/// Ip has been timed out or banned by the exchange application layer
+	#[error("IP timed out or banned until {until:?}")]
+	#[diagnostic(code(v_exchanges::ip::timeout), help("Your IP has been rate-limited. Wait until the specified time or reduce request frequency."))]
+	#[allow(unused_assignments)] // false positive: field used in #[error] format string, but thiserror codegen triggers this
+	Timeout {
+		/// Time of unban
+		until: Option<Timestamp>,
+	},
+	/// Request blocked by CDN/WAF (CloudFront, Cloudflare, etc.) - could be rate-limiting, geo-block, or malformed request.
+	/// Distinct from Timeout in that the response is HTML from the CDN, not JSON from the exchange.
+	#[error("blocked by WAF: {msg}")]
+	#[diagnostic(
+		code(v_exchanges::ip::waf),
+		help("Your request was blocked by the exchange's CDN/WAF. This could be geo-blocking, rate-limiting, or a malformed request.")
+	)]
+	Waf { msg: String },
+	/// Geo-blocked: the exchange has determined the request originates from a restricted region.
+	/// Only emitted when the exchange explicitly communicates geo-blocking (e.g. Binance HTTP 451, Bybit retCode 10024).
+	#[error("geo-blocked: {msg}")]
+	#[diagnostic(
+		code(v_exchanges::ip::geo_blocked),
+		help("Your IP is in a region restricted by the exchange. Use a VPN or contact the exchange for more information.")
+	)]
+	GeoBlocked { msg: String },
 }
 
 /// Authentication errors that map uniformly across exchanges

@@ -1,7 +1,8 @@
 // A module for communicating with the MEXC API (https://mexcdevelop.github.io/apidocs/spot/en/)
 
-use std::{marker::PhantomData, str::FromStr, time::SystemTime};
+use std::{collections::HashSet, marker::PhantomData, str::FromStr, time::SystemTime};
 
+use eyre::eyre;
 use generics::{ConstructAuthError, UrlError};
 use hmac::{Hmac, Mac};
 use jiff::{SignedDuration, Timestamp};
@@ -10,7 +11,6 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::Sha256;
 use url::Url;
 use v_exchanges_api_generics::{http::*, ws::*};
-use v_utils::prelude::*;
 
 use crate::traits::*;
 
@@ -304,7 +304,7 @@ where
 				let e = match retry_after_sec {
 					Some(s) => {
 						let until = Some(Timestamp::now() + SignedDuration::from_secs(s as i64));
-						ApiError::IpTimeout { until }.into()
+						ApiError::from(IpError::Timeout { until }).into()
 					}
 					None => eyre!("Could't interpret Retry-After header").into(),
 				};

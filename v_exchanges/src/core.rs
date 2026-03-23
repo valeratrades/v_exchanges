@@ -181,7 +181,7 @@ impl ExchangeInfo {
 pub struct PairInfo {
 	pub price_precision: u8,
 }
-#[derive(Clone, Debug, strum::Display, strum::EnumString, Eq, PartialEq)]
+#[derive(Clone, Debug, Hash, strum::Display, strum::EnumString, Eq, PartialEq)]
 #[strum(serialize_all = "lowercase")]
 #[non_exhaustive]
 pub enum ExchangeName {
@@ -292,6 +292,16 @@ pub(crate) trait ExchangeImpl: std::fmt::Debug + Send + Sync + std::ops::Deref<T
 	/// Get the default recv_window configured for this exchange, if any.
 	fn default_recv_window(&self) -> Option<std::time::Duration>;
 	//,}}}
+	// Miscellaneous {{{1
+	/// practically everything is quoted against USDT, so useful to have a standard way to init [Pair](v_utils::trades::Pair] with default quote.
+	fn usd_pair(asset: Asset, is_inverse: bool) -> Pair {
+		// careful, - not all exchanges use USDT, or same structure. Eg Bybit quotes against USD
+		match is_inverse {
+			false => Pair::new(asset, "USDT".into()),
+			true => Pair::new("USDT".into(), asset),
+		}
+	}
+	//,}}}1
 
 	//Q: do we actually want to return a `MethodNotSupported` error, or should we just `unimplemented!()`?
 

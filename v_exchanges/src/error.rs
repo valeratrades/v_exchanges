@@ -1,5 +1,5 @@
 use adapters::generics::{
-	http::{ApiError, AuthError, HandleError, RequestError},
+	http::{ApiError, AuthError, HandleError, IpError, RequestError},
 	ws::WsError,
 };
 use v_utils::{
@@ -17,6 +17,7 @@ impl From<RequestError> for Error {
 	fn from(e: RequestError) -> Self {
 		match e {
 			RequestError::HandleResponse(HandleError::Api(ApiError::Auth(auth))) => Self::Auth(auth),
+			RequestError::HandleResponse(HandleError::Api(ApiError::Ip(ip))) => Self::Ip(ip),
 			other => Self::Request(other),
 		}
 	}
@@ -42,6 +43,8 @@ pub enum Error {
 	Range(RequestRangeError),
 	#[diagnostic(transparent)]
 	Auth(AuthError),
+	#[diagnostic(transparent)]
+	Ip(IpError),
 	//,}}}1
 	/// our internal markings
 	#[diagnostic(transparent)]
@@ -53,7 +56,7 @@ pub enum Error {
 impl SysexitCode for Error {
 	fn sysexit(&self) -> Sysexit {
 		match self {
-			Self::Auth(_) => Sysexit::NoPerm,
+			Self::Auth(_) | Self::Ip(_) => Sysexit::NoPerm,
 			_ => Sysexit::None,
 		}
 	}

@@ -82,7 +82,20 @@ where
 		} else {
 			// https://binance-docs.github.io/apidocs/spot/en/#limits
 
-			//TODO; act on error-codes
+			// 403: WAF block (CloudFront) - HTML body, not JSON
+			if status == 403 {
+				let msg = std::str::from_utf8(&response_body).unwrap_or("<non-utf8 body>").to_string();
+				return Err(ApiError::from(IpError::Waf { msg }).into());
+			}
+			// 451: Geo-restriction - JSON body with code:0 and eligibility message
+			if status == 451 {
+				let msg = serde_json::from_slice::<serde_json::Value>(&response_body)
+					.ok()
+					.and_then(|v| v.get("msg").and_then(|m| m.as_str()).map(String::from))
+					.unwrap_or_else(|| String::from_utf8_lossy(&response_body).into_owned());
+				return Err(ApiError::from(IpError::GeoBlocked { msg }).into());
+			}
+
 			if status == 429 || status == 418 {
 				let retry_after_sec = if let Some(value) = headers.get("Retry-After") {
 					if let Ok(string) = value.to_str() {
@@ -102,7 +115,7 @@ where
 				let e = match retry_after_sec {
 					Some(s) => {
 						let until = Some(Timestamp::now() + SignedDuration::from_secs(s as i64));
-						ApiError::IpTimeout { until }.into()
+						ApiError::from(IpError::Timeout { until }).into()
 					}
 					_ => eyre!("Could't interpret Retry-After header").into(),
 				};
