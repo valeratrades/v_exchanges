@@ -2,12 +2,15 @@ use arrayvec::ArrayString;
 use jiff::Timestamp;
 use smart_default::SmartDefault;
 use uuid::Uuid;
-use v_utils::trades::Side;
+use v_utils::{
+	arch::{Component, ComponentId, ComponentState, ComponentTrigger},
+	trades::Side,
+};
 
 use crate::Ticker;
 
 /// An order bound to a specific exchange and ticker, ready to be placed.
-#[derive(Clone, Debug, derive_more::Deref, derive_more::DerefMut, derive_new::new)]
+#[derive(Clone, Debug, derive_more::Deref, derive_more::DerefMut, PartialEq, derive_new::new)]
 pub struct ExchangeOrder<O> {
 	#[deref]
 	#[deref_mut]
@@ -15,9 +18,57 @@ pub struct ExchangeOrder<O> {
 	pub ticker: Ticker,
 	#[new(default)]
 	pub expected_fee_usd: Option<f64>,
+	// PartialEq only covers the **pre-compiled** part of the def
+	#[new(default)]
+	__filled: f64, // type mirrors O::qty
+	#[new(default)]
+	state: ComponentState,
+}
+impl<O: Eq> Eq for ExchangeOrder<O> {}
+impl<O: std::hash::Hash> std::hash::Hash for ExchangeOrder<O> {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.order.hash(state);
+		self.ticker.hash(state);
+		self.expected_fee_usd.map(f64::to_bits).hash(state);
+		self.__filled.to_bits().hash(state);
+	}
 }
 
-#[derive(Clone, Debug, SmartDefault)]
+impl<O: std::fmt::Debug> Component for ExchangeOrder<O> {
+	fn component_id(&self) -> ComponentId {
+		todo!()
+	}
+
+	fn state(&self) -> ComponentState {
+		self.state
+	}
+
+	fn transition_state(&mut self, trigger: ComponentTrigger) {
+		self.state.transition(trigger);
+	}
+
+	fn on_start(&mut self) -> eyre::Result<()> {
+		todo!()
+	}
+
+	fn on_stop(&mut self) -> eyre::Result<()> {
+		todo!()
+	}
+
+	fn on_resume(&mut self) -> eyre::Result<()> {
+		todo!()
+	}
+
+	fn on_reset(&mut self) -> eyre::Result<()> {
+		todo!()
+	}
+
+	fn on_dispose(&mut self) -> eyre::Result<()> {
+		todo!()
+	}
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, SmartDefault)]
 pub struct OrderId {
 	#[default(Uuid::now_v7())]
 	pub id: Uuid,
@@ -29,11 +80,11 @@ pub struct OrderId {
 ///
 /// All fields beyond the core (side, price, qty) default to sensible values.
 /// Each exchange adapter is responsible for validating and translating these into exchange-specific parameters.
-#[derive(Clone, Debug, derive_new::new)]
+#[derive(Clone, Debug, PartialEq, derive_new::new)]
 pub struct LimitOrder {
 	pub side: Side,
 	pub price: f64,
-	pub qty: f64,
+	pub qty: f64, //Q: should I make order be generic over the qty? Or maybe just Decimal?
 	#[new(value = "TimeInForce::Gtc")]
 	pub time_in_force: TimeInForce,
 	#[new(default)]
@@ -57,6 +108,23 @@ pub struct LimitOrder {
 	//Q: how do I make it not only id itself, but also allow for including info of its parent strategy
 
 	//Q: nautilus has `quote_quantity: bool`. Do I want it? Or should I on the contrary avoid it as plague, for fear of overcomplicating the logic?
+}
+impl Eq for LimitOrder {}
+impl std::hash::Hash for LimitOrder {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.side.hash(state);
+		self.price.to_bits().hash(state);
+		self.qty.to_bits().hash(state);
+		self.time_in_force.hash(state);
+		self.post_only.hash(state);
+		self.reduce_only.hash(state);
+		self.display_qty.map(f64::to_bits).hash(state);
+		self.trigger.hash(state);
+		self.stp.hash(state);
+		self.order_id.hash(state);
+		self.contingency.hash(state);
+		self.tags.hash(state);
+	}
 }
 
 /// Exchange-agnostic market order.
@@ -127,7 +195,7 @@ pub struct TrailingStopOrder {
 }
 
 /// Trigger configuration for conditional orders (stop-limit, stop-market, take-profit, etc.)
-#[derive(Clone, Debug, derive_new::new)]
+#[derive(Clone, Debug, PartialEq, derive_new::new)]
 pub struct Trigger {
 	pub price: f64,
 	#[new(default)]
@@ -156,8 +224,16 @@ impl Trigger {
 	}
 }
 
+impl Eq for Trigger {}
+impl std::hash::Hash for Trigger {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.price.to_bits().hash(state);
+		self.price_type.hash(state);
+	}
+}
+
 /// What price feed triggers the conditional order.
-#[derive(Clone, Copy, Debug, Default, strum::Display, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, strum::Display, Eq, Hash, PartialEq)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum TriggerPriceType {
 	/// Last traded price (Binance: CONTRACT_PRICE)
@@ -177,7 +253,7 @@ pub enum TrailingCallback {
 }
 
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, Default, derive_more::Display, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, derive_more::Display, Eq, Hash, PartialEq)]
 pub enum TimeInForce {
 	/// Good-Til-Canceled: remains active until filled or canceled.
 	#[default]
@@ -198,7 +274,7 @@ pub enum TimeInForce {
 }
 
 /// Contingency linkage between orders.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Contingency {
 	/// One-Cancels-the-Other: when one order fills or cancels, the linked order is canceled.
 	Oco(Vec<Uuid>),
@@ -207,7 +283,7 @@ pub enum Contingency {
 }
 
 /// Binance: EXPIRE_MAKER/EXPIRE_TAKER/EXPIRE_BOTH; OKX: cancel_maker/cancel_taker/cancel_both
-#[derive(Clone, Copy, Debug, strum::Display, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, strum::Display, Eq, Hash, PartialEq)]
 pub enum SelfTradePreventionMode {
 	#[strum(serialize = "EXPIRE_MAKER")]
 	CancelMaker,

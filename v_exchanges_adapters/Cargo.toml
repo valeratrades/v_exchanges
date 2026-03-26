@@ -20,7 +20,7 @@ ignored = ["derive-new", "thiserror"]
 
 [package.metadata.docs.rs]
 all-features = false
-features = ["binance", "bybit", "mexc"] #HACK: bitflyer and coincheck are broken
+features = ["binance", "bybit", "mexc"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]

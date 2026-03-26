@@ -17,7 +17,7 @@ repository = "https://github.com/valeratrades/v_exchanges/tree/master/v_exchange
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 all-features = false
-features = ["major", "data"] #HACK: bitflyer and coincheck are broken
+features = ["major", "data"]
 rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 
 [package.metadata.cargo-machete]
