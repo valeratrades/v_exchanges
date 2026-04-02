@@ -142,6 +142,6 @@ required-features = ["binance", "bybit", "kucoin", "mexc"]
 path = "../examples/healthcheck.rs"
 
 [[example]]
-name = "info_time_to_expiration"
+name = "time_to_expiration_coins"
 required-features = ["binance", "bybit"]
-path = "../examples/info/time_to_expiration.rs"
+path = "../examples/info/time_to_expiration_coins.rs"
