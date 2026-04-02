@@ -3179,7 +3179,7 @@ dependencies = [
 
 [[package]]
 name = "v_utils"
-version = "2.15.32"
+version = "2.15.37"
 dependencies = [
  "bon",
  "const_format",
@@ -3209,7 +3209,7 @@ dependencies = [
 
 [[package]]
 name = "v_utils_macros"
-version = "2.11.32"
+version = "2.11.37"
 dependencies = [
  "eyre",
  "heck",

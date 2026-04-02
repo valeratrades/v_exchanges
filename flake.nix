@@ -4,7 +4,7 @@
     rust-overlay.url = "github:oxalica/rust-overlay";
     flake-utils.url = "github:numtide/flake-utils";
     pre-commit-hooks.url = "github:cachix/git-hooks.nix";
-    v-flakes.url = "github:valeratrades/v_flakes?ref=v1.4";
+    v-flakes.url = "github:valeratrades/v_flakes?ref=v1.5";
   };
 
   outputs = { self, nixpkgs, rust-overlay, flake-utils, pre-commit-hooks, v-flakes }:

@@ -32,8 +32,7 @@ async fn main() {
 			Err(e) => eprintln!("Error querying income: {}", e),
 		}
 
-		// Example 2: Place a limit order (COMMENTED OUT FOR SAFETY)
-		// Uncomment and modify the parameters below to actually place an order
+		//TODO: switch to being executed, - just on test net
 		/*
 		println!("\n=== Placing Limit Order ===");
 		let order_req = OrderRequest {
