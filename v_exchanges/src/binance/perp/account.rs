@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use eyre::{Result, eyre};
+use jiff::Timestamp;
 use serde::Deserialize;
 use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::binance::{BinanceAuth, BinanceHttpUrl, BinanceOption};
@@ -11,11 +12,10 @@ use v_utils::{
 
 use crate::{
 	ExchangeResult,
-	core::{AssetBalance, Balances},
+	core::{ApiKeyInfo, AssetBalance, Balances, PersonalInfo},
 };
 
 // balance {{{
-//DUP: difficult to escape duplicating half the [balances] method due to a) not requiring usd value b) binance not having individual asset balance endpoint
 /// Place a new order on Binance Futures
 pub async fn place_order(client: &v_exchanges_adapters::Client, request: OrderRequest, recv_window: Option<std::time::Duration>) -> ExchangeResult<OrderResponse> {
 	assert!(client.is_authenticated::<BinanceOption>());
@@ -238,32 +238,22 @@ pub enum IncomeType {
 	CoinSwapWithdraw,
 	PositionLimitIncreaseFee,
 }
-pub(in crate::binance) async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
+pub(in crate::binance) async fn personal_info(client: &v_exchanges_adapters::Client, recv_window: Option<std::time::Duration>, prices: &BTreeMap<Pair, f64>) -> ExchangeResult<PersonalInfo> {
 	assert!(client.is_authenticated::<BinanceOption>());
-	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM), BinanceOption::HttpAuth(BinanceAuth::Sign)];
-	if let Some(rw) = recv_window {
-		options.push(BinanceOption::RecvWindow(rw));
-	}
-	let r: Vec<AssetBalanceResponse> = client.get_no_query("/fapi/v3/balance", options).await?;
-	let vec_balance: Vec<AssetBalance> = r
-		.into_iter()
-		.map(|r| AssetBalance {
-			asset: r.asset.into(),
-			underlying: r.balance,
-			usd: None,
-		})
-		.collect();
-	let balance = vec_balance.into_iter().find(|b| b.asset == asset).ok_or_else(|| eyre!("No balance returned for {asset}"))?;
-	Ok(balance)
-}
 
-pub(in crate::binance) async fn balances(client: &v_exchanges_adapters::Client, recv_window: Option<std::time::Duration>, prices: &BTreeMap<Pair, f64>) -> ExchangeResult<Balances> {
-	assert!(client.is_authenticated::<BinanceOption>());
-	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM), BinanceOption::HttpAuth(BinanceAuth::Sign)];
+	let mut balance_options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM), BinanceOption::HttpAuth(BinanceAuth::Sign)];
+	let mut api_options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::Spot), BinanceOption::HttpAuth(BinanceAuth::Sign)];
 	if let Some(rw) = recv_window {
-		options.push(BinanceOption::RecvWindow(rw));
+		balance_options.push(BinanceOption::RecvWindow(rw));
+		api_options.push(BinanceOption::RecvWindow(rw));
 	}
-	let rs: Vec<AssetBalanceResponse> = client.get_no_query("/fapi/v3/balance", options).await?;
+
+	let (balance_result, api_result) = tokio::join!(
+		client.get_no_query::<Vec<AssetBalanceResponse>, _>("/fapi/v3/balance", balance_options),
+		client.get_no_query::<ApiRestrictionsResponse, _>("/sapi/v1/account/apiRestrictions", api_options),
+	);
+	let rs = balance_result?;
+	let api_response = api_result?;
 
 	fn usd_value(underlying: f64, asset: Asset, prices: &BTreeMap<Pair, f64>) -> Result<Usd> {
 		if underlying == 0. {
@@ -277,28 +267,28 @@ pub(in crate::binance) async fn balances(client: &v_exchanges_adapters::Client, 
 		Ok((underlying * usdt_price).into())
 	}
 
-	let mut balances: Vec<AssetBalance> = Vec::with_capacity(rs.len());
+	let mut asset_balances: Vec<AssetBalance> = Vec::with_capacity(rs.len());
 	for r in rs {
 		let asset = r.asset.into();
 		let underlying = r.balance;
-		balances.push(AssetBalance {
+		asset_balances.push(AssetBalance {
 			asset,
 			underlying,
 			usd: Some(usd_value(underlying, asset, prices)?),
 		});
 	}
+	let non_zero: Vec<AssetBalance> = asset_balances.iter().filter(|b| b.underlying != 0.).cloned().collect();
+	let total = non_zero.iter().fold(Usd(0.), |acc, b| acc + b.usd.unwrap_or(Usd(0.)));
 
-	let non_zero: Vec<AssetBalance> = balances.iter().filter(|b| b.underlying != 0.).cloned().collect();
-	let total = non_zero.iter().fold(Usd(0.), |acc, b| {
-		acc + {
-			match b.usd {
-				Some(b) => b,
-				None => Usd(0.),
-			}
-		}
-	});
+	let expire_time = match api_response.expire_time {
+		0 => None,
+		ms => Some(Timestamp::from_millisecond(ms).expect("Binance expireTime is valid ms timestamp")),
+	};
 
-	Ok(Balances::new(non_zero, total))
+	Ok(PersonalInfo {
+		api: ApiKeyInfo { expire_time },
+		balances: Balances::new(non_zero, total),
+	})
 }
 
 // Order Placement {{{
@@ -333,7 +323,23 @@ struct AssetBalanceResponse {
 //,}}}
 
 // Response Types {{{
-
+#[allow(unused)]
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ApiRestrictionsResponse {
+	/// Millisecond timestamp; 0 means no expiry
+	expire_time: i64,
+	ip_restrict: bool,
+	enable_reading: bool,
+	enable_futures: bool,
+	enable_spot_and_margin_trading: bool,
+	enable_withdrawals: bool,
+	enable_internal_transfer: bool,
+	enable_margin_loan: bool,
+	enable_vanilla_options: bool,
+	permits_universal_transfer: bool,
+	enable_portfolio_margin_trading: bool,
+}
 //,}}}
 
 // Request/Enum Types {{{

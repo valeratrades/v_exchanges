@@ -40,8 +40,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>>;
 	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64>;
 	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>>;
-	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance>;
-	async fn balances(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances>;
+	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo>;
 	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>>;
 	fn ws_book(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>>;
 }
@@ -165,6 +164,16 @@ pub struct Balances {
 	v: Vec<AssetBalance>,
 	/// breaks zero-cost of the abstraction, but I assume that most calls to this actually want usd, so it's warranted.
 	pub total: Usd,
+}
+#[derive(Clone, Debug, Default)]
+pub struct ApiKeyInfo {
+	/// `None` means no expiry set (key is permanent)
+	pub expire_time: Option<Timestamp>,
+}
+#[derive(Clone, Debug)]
+pub struct PersonalInfo {
+	pub api: ApiKeyInfo,
+	pub balances: Balances,
 }
 #[derive(Clone, Debug, Default)]
 pub struct ExchangeInfo {
@@ -334,15 +343,8 @@ pub(crate) trait ExchangeImpl: std::fmt::Debug + Send + Sync + std::ops::Deref<T
 	}
 
 	// Authenticated {{{
-	/// balance of a specific asset. Does not guarantee provision of USD values.
 	#[allow(unused_variables)]
-	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
-		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
-	}
-
-	/// vec of _non-zero_ balances exclusively. Provides USD values.
-	#[allow(unused_variables)]
-	async fn balances(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
+	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
 		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
 	}
 	//,}}}
@@ -456,16 +458,10 @@ impl<T: ExchangeImpl> Exchange for T {
 		ExchangeImpl::open_interest(self, symbol, tf, range).await
 	}
 
-	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
+	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
 		validate_recv_window(recv_window, ExchangeImpl::default_recv_window(self))?;
 		let _permit = self.request_semaphore().acquire().await.expect("semaphore closed");
-		ExchangeImpl::asset_balance(self, asset, instrument, recv_window).await
-	}
-
-	async fn balances(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
-		validate_recv_window(recv_window, ExchangeImpl::default_recv_window(self))?;
-		let _permit = self.request_semaphore().acquire().await.expect("semaphore closed");
-		ExchangeImpl::balances(self, instrument, recv_window).await
+		ExchangeImpl::personal_info(self, instrument, recv_window).await
 	}
 
 	// Websocket connections are NOT rate-limited by the semaphore

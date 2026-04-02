@@ -5,11 +5,11 @@ mod ws;
 use adapters::bybit::{BybitOption, BybitOptions};
 use secrecy::SecretString;
 use v_exchanges_adapters::{Client, GetOptions};
-use v_utils::trades::{Asset, Pair, Timeframe};
+use v_utils::trades::{Pair, Timeframe};
 
 use crate::{
-	Balances, BookUpdate, ExchangeError, ExchangeName, ExchangeResult, ExchangeStream, Instrument, MethodError, OpenInterest, Symbol,
-	core::{AssetBalance, ExchangeImpl, Klines, RequestRange},
+	BookUpdate, ExchangeError, ExchangeName, ExchangeResult, ExchangeStream, Instrument, MethodError, OpenInterest, Symbol,
+	core::{ExchangeImpl, Klines, PersonalInfo, RequestRange},
 };
 
 #[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
@@ -59,12 +59,8 @@ impl ExchangeImpl for Bybit {
 		}
 	}
 
-	async fn asset_balance(&self, asset: Asset, _instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
-		account::asset_balance(self, asset, recv_window).await
-	}
-
-	async fn balances(&self, _instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
-		account::balances(self, recv_window).await
+	async fn personal_info(&self, _instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
+		account::personal_info(self, recv_window).await
 	}
 
 	fn ws_book(&self, pairs: Vec<Pair>, instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = BookUpdate>>, ExchangeError> {

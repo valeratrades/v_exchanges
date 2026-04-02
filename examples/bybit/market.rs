@@ -1,4 +1,4 @@
-use std::{env, str::FromStr as _, time::Duration};
+use std::{env, str::FromStr as _};
 
 use v_exchanges::{Bybit, prelude::*};
 
@@ -28,15 +28,9 @@ async fn main() {
 }
 
 async fn private(c: &dyn Exchange, symbol: Symbol) {
-	//let key_permissions: serde_json::Value = bb.get_no_query("/v5/user/query-api", [BybitOption::HttpAuth(BybitHttpAuth::V3AndAbove)])
-	//	.await
-	//	.unwrap();
-
-	let balances = c.balances(symbol.instrument, None).await.unwrap();
-	println!("{balances:?}");
-
-	let balance_usdc = c.asset_balance("USDC".into(), symbol.instrument, Some(Duration::from_millis(5000))).await.unwrap();
-	println!("{balance_usdc:?}");
+	let personal_info = c.personal_info(symbol.instrument, None).await.unwrap();
+	println!("{:?}", personal_info.balances);
+	println!("key expires: {:?}", personal_info.api.expire_time);
 }
 
 #[cfg(test)]

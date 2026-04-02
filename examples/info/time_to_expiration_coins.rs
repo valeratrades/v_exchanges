@@ -1,3 +1,4 @@
+//TODO: extend `ExchangeInfo` to call this through the lib, wtf is this
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};

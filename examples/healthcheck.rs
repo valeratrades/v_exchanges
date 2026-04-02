@@ -27,7 +27,7 @@ async fn check_binance() {
 			let mut binance = ExchangeName::Binance.init_client();
 			binance.auth(key, secret.into());
 
-			match binance.balances(Instrument::Perp, Some(Duration::from_millis(5000))).await {
+			match binance.personal_info(Instrument::Perp, Some(Duration::from_millis(5000))).await {
 				Ok(_) => println!("✅ Binance: API key is valid and active"),
 				Err(e) => println!("❌ Binance: API key error - {}", e),
 			}
@@ -47,7 +47,7 @@ async fn check_bybit() {
 			let mut bybit = ExchangeName::Bybit.init_client();
 			bybit.auth(key, secret.into());
 
-			match bybit.balances(Instrument::Perp, Some(Duration::from_millis(5000))).await {
+			match bybit.personal_info(Instrument::Perp, Some(Duration::from_millis(5000))).await {
 				Ok(_) => println!("✅ Bybit: API key is valid and active"),
 				Err(e) => println!("❌ Bybit: API key error - {}", e),
 			}
@@ -73,7 +73,7 @@ async fn check_kucoin() {
 				kucoin.update_default_option(KucoinOption::Secret(secret.into()));
 				kucoin.update_default_option(KucoinOption::Passphrase(passphrase.into()));
 
-				match kucoin.balances(Instrument::Spot, None).await {
+				match kucoin.personal_info(Instrument::Spot, None).await {
 					Ok(_) => println!("✅ Kucoin: API key is valid and active"),
 					Err(e) => {
 						let err_str = e.to_string();
@@ -113,7 +113,7 @@ async fn check_mexc() {
 			let mut mexc = ExchangeName::Mexc.init_client();
 			mexc.auth(key, secret.into());
 
-			match mexc.balances(Instrument::Perp, Some(Duration::from_millis(5000))).await {
+			match mexc.personal_info(Instrument::Perp, Some(Duration::from_millis(5000))).await {
 				Ok(_) => println!("✅ MEXC: API key is valid and active"),
 				Err(e) => {
 					let err_str = e.to_string();

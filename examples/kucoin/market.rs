@@ -103,9 +103,8 @@ async fn main() {
 async fn private(c: &dyn Exchange, symbol: Symbol) {
 	println!("=== Testing Private Endpoints ===\n");
 
-	// Test balances
-	println!("Testing balances()...");
-	let balances = c.balances(symbol.instrument, None).await.unwrap();
+	let personal_info = c.personal_info(symbol.instrument, None).await.unwrap();
+	let balances = &personal_info.balances;
 	println!("Total balances: {} assets", balances.len());
 	println!("Total USD value: ${:.2}", balances.total.0);
 	println!("Assets:");
@@ -113,13 +112,6 @@ async fn private(c: &dyn Exchange, symbol: Symbol) {
 		let usd_str = balance.usd.map(|u| format!("${:.2}", u.0)).unwrap_or_else(|| "N/A".to_string());
 		println!("  {}: {} (USD: {})", balance.asset, balance.underlying, usd_str);
 	}
-	println!();
-
-	// Test asset_balance
-	println!("Testing asset_balance()...");
-	let usdt_balance = c.asset_balance("USDT".into(), symbol.instrument, None).await.unwrap();
-	let usd_str = usdt_balance.usd.map(|u| format!("${:.2}", u.0)).unwrap_or_else(|| "N/A".to_string());
-	println!("USDT balance: {} (USD: {})", usdt_balance.underlying, usd_str);
 }
 
 #[cfg(test)]

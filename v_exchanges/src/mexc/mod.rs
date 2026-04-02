@@ -7,11 +7,11 @@ use adapters::mexc::{MexcOption, MexcOptions};
 use derive_more::derive::{Deref, DerefMut};
 use secrecy::SecretString;
 use v_exchanges_adapters::{Client, GetOptions};
-use v_utils::trades::{Asset, Pair, Timeframe};
+use v_utils::trades::{Pair, Timeframe};
 
 use crate::{
-	Balances, ExchangeName, ExchangeResult, Instrument, Symbol,
-	core::{AssetBalance, ExchangeImpl, Klines, RequestRange},
+	ExchangeName, ExchangeResult, Instrument, Symbol,
+	core::{ExchangeImpl, Klines, PersonalInfo, RequestRange},
 };
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
@@ -58,16 +58,9 @@ impl ExchangeImpl for Mexc {
 		}
 	}
 
-	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
+	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
 		match instrument {
-			Instrument::Perp => account::asset_balance(self, asset, recv_window).await,
-			_ => unimplemented!(),
-		}
-	}
-
-	async fn balances(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
-		match instrument {
-			Instrument::Perp => account::balances(self, recv_window).await,
+			Instrument::Perp => account::personal_info(self, recv_window).await,
 			_ => unimplemented!(),
 		}
 	}

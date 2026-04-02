@@ -9,11 +9,11 @@ use adapters::{
 	binance::{BinanceOption, BinanceOptions},
 };
 use secrecy::SecretString;
-use v_utils::trades::{Asset, Pair, Timeframe};
+use v_utils::trades::{Pair, Timeframe};
 
 use crate::{
-	AssetBalance, Balances, BookUpdate, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Klines, MethodError, RequestRange, Trade,
-	core::{ExchangeImpl, Instrument, Symbol},
+	BookUpdate, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Klines, MethodError, RequestRange, Trade,
+	core::{ExchangeImpl, Instrument, PersonalInfo, Symbol},
 };
 
 #[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
@@ -85,18 +85,11 @@ impl ExchangeImpl for Binance {
 		}
 	}
 
-	async fn asset_balance(&self, asset: Asset, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
-		match instrument {
-			Instrument::Perp => perp::account::asset_balance(self, asset, recv_window).await,
-			_ => unimplemented!(),
-		}
-	}
-
-	async fn balances(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
+	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
 		match instrument {
 			Instrument::Perp => {
 				let prices = self.prices(None, instrument).await?;
-				perp::account::balances(self, recv_window, &prices).await
+				perp::account::personal_info(self, recv_window, &prices).await
 			}
 			_ => unimplemented!(),
 		}

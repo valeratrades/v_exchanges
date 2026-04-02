@@ -4,18 +4,17 @@ use adapters::{
 };
 use v_utils::prelude::*;
 
-use crate::{AssetBalance, Balances, ExchangeResult};
+use crate::{
+	AssetBalance, Balances, ExchangeResult,
+	core::{ApiKeyInfo, PersonalInfo},
+};
 
-pub(super) async fn asset_balance(client: &Client, asset: Asset, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
-	assert!(client.is_authenticated::<MexcOption>());
-	let mut options = vec![MexcOption::HttpUrl(MexcHttpUrl::Futures), MexcOption::HttpAuth(MexcAuth::Sign)];
-	if let Some(rw) = recv_window {
-		options.push(MexcOption::RecvWindow(rw));
-	}
-	let endpoint = format!("/api/v1/private/account/asset/{asset}");
-	let r: AssetBalanceResponse = client.get_no_query(&endpoint, options).await?;
-
-	Ok(r.data.into())
+pub(super) async fn personal_info(client: &Client, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
+	let balances = balances(client, recv_window).await?;
+	Ok(PersonalInfo {
+		api: ApiKeyInfo { expire_time: None },
+		balances,
+	})
 }
 
 pub(super) async fn balances(client: &Client, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {

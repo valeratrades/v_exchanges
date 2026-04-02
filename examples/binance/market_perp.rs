@@ -21,10 +21,8 @@ async fn main() {
 
 	if let (Ok(key), Ok(secret)) = (env::var("BINANCE_TIGER_READ_PUBKEY"), env::var("BINANCE_TIGER_READ_SECRET")) {
 		binance.auth(key, secret.into());
-		let balance_usdt = binance.asset_balance("USDT".into(), symbol.instrument, Some(Duration::from_millis(10_000))).await.unwrap();
-		dbg!(&balance_usdt);
-		let balances = binance.balances(symbol.instrument, Some(Duration::from_millis(10_000))).await.unwrap();
-		dbg!(&balances);
+		let personal_info = binance.personal_info(symbol.instrument, Some(Duration::from_millis(10_000))).await.unwrap();
+		dbg!(&personal_info.balances, &personal_info.api.expire_time);
 	} else {
 		eprintln!("BINANCE_TIGER_READ_PUBKEY or BINANCE_TIGER_READ_SECRET is missing, skipping private API methods.");
 	}

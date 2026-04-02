@@ -145,3 +145,8 @@ path = "../examples/healthcheck.rs"
 name = "time_to_expiration_coins"
 required-features = ["binance", "bybit"]
 path = "../examples/info/time_to_expiration_coins.rs"
+
+[[example]]
+name = "time_to_expiration_keys"
+required-features = ["binance", "bybit"]
+path = "../examples/info/time_to_expiration_keys.rs"

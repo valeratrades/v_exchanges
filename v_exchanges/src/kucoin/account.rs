@@ -2,13 +2,12 @@ use adapters::Client;
 use eyre::{Result, eyre};
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
-use tracing::warn;
 use v_exchanges_adapters::kucoin::{KucoinAuth, KucoinHttpUrl, KucoinOption};
 use v_utils::trades::{Asset, Pair, Usd};
 
 use crate::{
 	ExchangeResult,
-	core::{AssetBalance, Balances},
+	core::{ApiKeyInfo, AssetBalance, Balances, PersonalInfo},
 	kucoin::market,
 };
 
@@ -33,14 +32,12 @@ pub struct AccountData {
 	#[serde_as(as = "DisplayFromStr")]
 	pub holds: f64,
 }
-pub(super) async fn asset_balance(client: &v_exchanges_adapters::Client, asset: Asset, _recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
-	assert!(client.is_authenticated::<KucoinOption>());
-	let balances: Balances = balances(client, None).await?;
-	let balance: AssetBalance = balances.iter().find(|b| b.asset == asset).copied().unwrap_or_else(|| {
-		warn!("No balance found for asset: {asset:?}");
-		AssetBalance { asset, ..Default::default() }
-	});
-	Ok(balance)
+pub(super) async fn personal_info(client: &Client, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
+	let balances = balances(client, recv_window).await?;
+	Ok(PersonalInfo {
+		api: ApiKeyInfo { expire_time: None },
+		balances,
+	})
 }
 
 pub(super) async fn balances(client: &Client, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {

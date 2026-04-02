@@ -13,8 +13,8 @@ async fn main() {
 	let price = mexc.price(symbol).await.unwrap();
 	println!("{price:?}");
 
-	let balances = mexc.balances(symbol.instrument, None).await.unwrap();
-	println!("{balances:?}");
+	let personal_info = mexc.personal_info(symbol.instrument, None).await.unwrap();
+	println!("{:?}", personal_info.balances);
 }
 
 #[cfg(test)]

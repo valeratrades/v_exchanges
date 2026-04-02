@@ -8,11 +8,11 @@ use std::collections::BTreeMap;
 
 use secrecy::SecretString;
 use v_exchanges_adapters::Client;
-use v_utils::trades::{Asset, Pair, Timeframe};
+use v_utils::trades::{Pair, Timeframe};
 
 use crate::{
-	Balances, ExchangeName, ExchangeResult, Instrument, RequestRange, Symbol,
-	core::{AssetBalance, ExchangeImpl, ExchangeInfo, Klines},
+	ExchangeName, ExchangeResult, Instrument, RequestRange, Symbol,
+	core::{ExchangeImpl, ExchangeInfo, Klines, PersonalInfo},
 };
 
 #[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
@@ -70,11 +70,7 @@ impl ExchangeImpl for Kucoin {
 		}
 	}
 
-	async fn asset_balance(&self, asset: Asset, _instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<AssetBalance> {
-		account::asset_balance(self, asset, recv_window).await
-	}
-
-	async fn balances(&self, _instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
-		account::balances(self, recv_window).await
+	async fn personal_info(&self, _instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
+		account::personal_info(self, recv_window).await
 	}
 }
