@@ -29,6 +29,8 @@ pub struct BinanceExchangeFutures {
 	pub timezone: String,
 }
 
+const PERPETUAL_DELIVERY_DATE: i64 = 4133404800000;
+
 impl From<BinanceExchangeFutures> for ExchangeInfo {
 	fn from(v: BinanceExchangeFutures) -> Self {
 		Self {
@@ -37,9 +39,8 @@ impl From<BinanceExchangeFutures> for ExchangeInfo {
 				.symbols
 				.into_iter()
 				.map(|s| {
-					let pair_info: PairInfo = s.clone().into(); // Convert FuturesSymbol to PairInfo
-					let pair: Pair = s.symbol.try_into().expect("We assume v_utils is able to handle translating all Binance symbols");
-					(pair, pair_info)
+					let pair: Pair = s.symbol.clone().try_into().expect("We assume v_utils is able to handle translating all Binance symbols");
+					(pair, PairInfo::from(s))
 				})
 				.collect(),
 		}
@@ -47,7 +48,14 @@ impl From<BinanceExchangeFutures> for ExchangeInfo {
 }
 impl From<FuturesSymbol> for PairInfo {
 	fn from(v: FuturesSymbol) -> Self {
-		Self { price_precision: v.price_precision }
+		let delivery_date = match v.delivery_date {
+			PERPETUAL_DELIVERY_DATE => None,
+			ms => Some(Timestamp::from_millisecond(ms).expect("Binance deliveryDate is valid ms timestamp")),
+		};
+		Self {
+			price_precision: v.price_precision,
+			delivery_date,
+		}
 	}
 }
 

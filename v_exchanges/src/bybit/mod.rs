@@ -8,7 +8,7 @@ use v_exchanges_adapters::{Client, GetOptions};
 use v_utils::trades::{Pair, Timeframe};
 
 use crate::{
-	BookUpdate, ExchangeError, ExchangeName, ExchangeResult, ExchangeStream, Instrument, MethodError, OpenInterest, Symbol,
+	BookUpdate, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Instrument, MethodError, OpenInterest, Symbol,
 	core::{ExchangeImpl, Klines, PersonalInfo, RequestRange},
 };
 
@@ -33,6 +33,13 @@ impl ExchangeImpl for Bybit {
 
 	fn default_recv_window(&self) -> Option<std::time::Duration> {
 		GetOptions::<BybitOptions>::default_options(&**self).recv_window
+	}
+
+	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
+		match instrument {
+			Instrument::Perp | Instrument::PerpInverse => market::exchange_info(self, instrument).await,
+			_ => unimplemented!(),
+		}
 	}
 
 	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {

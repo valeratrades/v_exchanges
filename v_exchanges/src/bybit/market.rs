@@ -13,7 +13,7 @@ use v_utils::{
 use super::{BybitInterval, BybitIntervalTime};
 use crate::{
 	ExchangeName, ExchangeResult, Instrument, Symbol,
-	core::{Klines, OpenInterest, RequestRange},
+	core::{ExchangeInfo, Klines, OpenInterest, PairInfo, RequestRange},
 };
 
 // klines {{{
@@ -242,4 +242,54 @@ pub(super) async fn open_interest(client: &v_exchanges_adapters::Client, symbol:
 	Ok(result)
 }
 
+//,}}}
+
+// exchange_info {{{
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InstrumentsInfoResponse {
+	result: InstrumentsInfoResult,
+	time: i64,
+}
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InstrumentsInfoResult {
+	list: Vec<InstrumentInfo>,
+}
+#[serde_as]
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InstrumentInfo {
+	symbol: String,
+	price_scale: String,
+	/// Millisecond timestamp; 0 for perpetuals
+	#[serde_as(as = "DisplayFromStr")]
+	delivery_time: i64,
+}
+pub(super) async fn exchange_info(client: &v_exchanges_adapters::Client, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
+	let category = match instrument {
+		Instrument::Perp => "linear",
+		Instrument::PerpInverse => "inverse",
+		_ => unimplemented!(),
+	};
+	let response: InstrumentsInfoResponse = client
+		.get("/v5/market/instruments-info", &[("category", category), ("limit", "1000")], vec![BybitOption::None])
+		.await?;
+	let server_time = Timestamp::from_millisecond(response.time).expect("Bybit time is valid ms");
+	let pairs = response
+		.result
+		.list
+		.into_iter()
+		.filter_map(|i| {
+			let pair: Pair = i.symbol.try_into().ok()?;
+			let price_precision = i.price_scale.parse::<u8>().unwrap_or(0);
+			let delivery_date = match i.delivery_time {
+				0 => None,
+				ms => Some(Timestamp::from_millisecond(ms).expect("Bybit deliveryTime is valid ms")),
+			};
+			Some((pair, PairInfo { price_precision, delivery_date }))
+		})
+		.collect();
+	Ok(ExchangeInfo { server_time, pairs })
+}
 //,}}}
