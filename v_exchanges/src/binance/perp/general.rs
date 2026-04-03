@@ -12,6 +12,7 @@ use crate::{
 };
 //TODO: general endpoints, like ping and exchange info
 
+const PERPETUAL_DELIVERY_DATE: i64 = 4133404800000;
 pub async fn exchange_info(client: &v_exchanges_adapters::Client) -> Result<ExchangeInfo, ExchangeError> {
 	let options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)];
 	let r: BinanceExchangeFutures = client.get_no_query("/fapi/v1/exchangeInfo", options).await?;
@@ -28,8 +29,6 @@ pub struct BinanceExchangeFutures {
 	pub symbols: Vec<FuturesSymbol>,
 	pub timezone: String,
 }
-
-const PERPETUAL_DELIVERY_DATE: i64 = 4133404800000;
 
 impl From<BinanceExchangeFutures> for ExchangeInfo {
 	fn from(v: BinanceExchangeFutures) -> Self {

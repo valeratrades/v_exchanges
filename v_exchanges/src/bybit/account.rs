@@ -143,7 +143,10 @@ pub(super) async fn personal_info(client: &Client, recv_window: Option<std::time
 
 	let expire_time = match api_response.result.expired_at.as_str() {
 		"" | "0" => None,
-		s => Some(Timestamp::from_millisecond(s.parse::<i64>().unwrap_or_else(|e| panic!("Bybit expiredAt={s:?} failed to parse as ms timestamp: {e}"))).expect("valid ms")),
+		s => Some(
+			s.parse::<Timestamp>()
+				.unwrap_or_else(|e| panic!("Bybit expiredAt={s:?} failed to parse as ISO 8601 timestamp: {e}")),
+		),
 	};
 
 	Ok(PersonalInfo {
@@ -247,6 +250,6 @@ struct QueryApiResponse {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct QueryApiResult {
-	/// Expiry; empty string or "0" means no expiry. Format unclear - observed to not always be a ms timestamp.
+	/// Expiry as ISO 8601 datetime string (e.g. `"2023-12-22T07:20:25Z"`); empty string or "0" means no expiry.
 	expired_at: String,
 }
