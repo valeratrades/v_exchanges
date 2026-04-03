@@ -1,55 +1,81 @@
 use std::{collections::BTreeMap, env};
 
 use jiff::Timestamp;
-use v_exchanges::prelude::*;
+use v_exchanges::{kucoin::KucoinOption, prelude::*};
 
 #[tokio::main]
 async fn main() {
 	v_utils::clientside!();
 
-	// (label, exchange, instrument)
-	let configs: &[(&str, &str, Instrument)] = &[("BINANCE_TIGER_READ", "binance", Instrument::Perp), ("QUANTM_BYBIT_SUB", "bybit", Instrument::Perp)];
+	// (label, exchange, instrument, expire_time)
+	let mut by_exchange: BTreeMap<&str, Vec<(String, Option<Timestamp>)>> = BTreeMap::new();
 
-	// group expire_time per exchange name
-	let mut by_exchange: BTreeMap<&str, Vec<(&str, Option<Timestamp>)>> = BTreeMap::new();
-
-	for (prefix, exchange_label, instrument) in configs {
-		let pubkey_var = format!("{prefix}_PUBKEY");
-		let secret_var = format!("{prefix}_SECRET");
-
-		let (Ok(pubkey), Ok(secret)) = (env::var(&pubkey_var), env::var(&secret_var)) else {
-			eprintln!("{pubkey_var} or {secret_var} not set, skipping.");
-			continue;
-		};
-
-		let mut client = match *exchange_label {
-			"binance" => ExchangeName::Binance.init_client(),
-			"bybit" => ExchangeName::Bybit.init_client(),
-			other => panic!("unknown exchange: {other}"),
-		};
-		client.auth(pubkey, secret.into());
-
-		match client.personal_info(*instrument, None).await {
-			Ok(info) => {
-				by_exchange.entry(exchange_label).or_default().push((prefix, info.api.expire_time));
+	macro_rules! fetch {
+		($exchange:expr, $label:expr, $instrument:expr, $client:expr) => {{
+			let label = format!("{} ({:?})", $label, $instrument);
+			match $client.personal_info($instrument, None).await {
+				Ok(info) => by_exchange.entry($exchange).or_default().push((label, info.api.expire_time)),
+				Err(e) => eprintln!("{label}: failed - {e}"),
 			}
-			Err(e) => eprintln!("{prefix}: failed to fetch personal info - {e}"),
-		}
+		}};
+	}
+
+	// Binance
+	if let (Ok(pub_), Ok(sec)) = (env::var("BINANCE_TIGER_FULL_PUBKEY"), env::var("BINANCE_TIGER_FULL_SECRET")) {
+		let mut c = ExchangeName::Binance.init_client();
+		c.auth(pub_.clone(), sec.clone().into());
+		fetch!("binance", "BINANCE_TIGER_FULL", Instrument::Perp, c);
+		let mut c = ExchangeName::Binance.init_client();
+		c.auth(pub_, sec.into());
+		fetch!("binance", "BINANCE_TIGER_FULL", Instrument::Spot, c);
+	} else {
+		eprintln!("BINANCE_TIGER_FULL_PUBKEY or BINANCE_TIGER_FULL_SECRET not set, skipping.");
+	}
+
+	// Bybit
+	if let (Ok(pub_), Ok(sec)) = (env::var("QUANTM_BYBIT_SUB_PUBKEY"), env::var("QUANTM_BYBIT_SUB_SECRET")) {
+		let mut c = ExchangeName::Bybit.init_client();
+		c.auth(pub_, sec.into());
+		fetch!("bybit", "QUANTM_BYBIT_SUB", Instrument::Perp, c);
+	} else {
+		eprintln!("QUANTM_BYBIT_SUB_PUBKEY or QUANTM_BYBIT_SUB_SECRET not set, skipping.");
+	}
+
+	// Mexc
+	if let (Ok(pub_), Ok(sec)) = (env::var("MEXC_READ_PUBKEY"), env::var("MEXC_READ_SECRET")) {
+		let mut c = ExchangeName::Mexc.init_client();
+		c.auth(pub_.clone(), sec.clone().into());
+		fetch!("mexc", "MEXC_READ", Instrument::Perp, c);
+		let mut c = ExchangeName::Mexc.init_client();
+		c.auth(pub_, sec.into());
+		fetch!("mexc", "MEXC_READ", Instrument::Spot, c);
+	} else {
+		eprintln!("MEXC_READ_PUBKEY or MEXC_READ_SECRET not set, skipping.");
+	}
+
+	// Kucoin (requires passphrase — can't go through dyn Exchange)
+	if let (Ok(pub_), Ok(sec), Ok(pass)) = (env::var("KUCOIN_API_PUBKEY"), env::var("KUCOIN_API_SECRET"), env::var("KUCOIN_API_PASSPHRASE")) {
+		let mut c = Kucoin::default();
+		c.auth(pub_, sec.into());
+		c.update_default_option(KucoinOption::Passphrase(pass.into()));
+		fetch!("kucoin", "KUCOIN_API", Instrument::Spot, c);
+	} else {
+		eprintln!("KUCOIN_API_PUBKEY, KUCOIN_API_SECRET, or KUCOIN_API_PASSPHRASE not set, skipping.");
 	}
 
 	let now = Timestamp::now();
 
 	for (exchange, keys) in &by_exchange {
 		println!("{exchange}:");
-		for (prefix, expire_time) in keys {
+		for (label, expire_time) in keys {
 			match expire_time {
-				None => println!("  {prefix}: never expires"),
+				None => println!("  {label}: never expires"),
 				Some(t) => {
 					let remaining = *t - now;
 					let total_secs = remaining.get_seconds();
 					let days = total_secs / 86400;
 					let hours = (total_secs % 86400) / 3600;
-					println!("  {prefix}: expires in {days}d {hours}h  (at {t})");
+					println!("  {label}: expires in {days}d {hours}h  (at {t})");
 				}
 			}
 		}

@@ -91,7 +91,8 @@ impl ExchangeImpl for Binance {
 				let prices = self.prices(None, instrument).await?;
 				perp::account::personal_info(self, recv_window, &prices).await
 			}
-			_ => unimplemented!(),
+			Instrument::Spot | Instrument::Margin => spot::account::personal_info(self, recv_window).await,
+			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument })),
 		}
 	}
 
