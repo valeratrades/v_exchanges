@@ -2,7 +2,7 @@ cargo-features = ["codegen-backend"]
 
 [package]
 name = "v_exchanges"
-version = "0.17.0"
+version = "0.17.1"
 edition = "2024"
 authors = ["negi-grass", "valeratrades"]
 categories = ["api-bindings", "asynchronous"]
@@ -38,7 +38,7 @@ mexc = ["v_exchanges_adapters/mexc"]
 data = ["dep:reqwest"]
 
 [dependencies]
-v_exchanges_adapters = { version = "^0.17.0", path = "../v_exchanges_adapters/", optional = true }
+v_exchanges_adapters = { version = "^0.17.1", path = "../v_exchanges_adapters/", optional = true }
 
 enum_dispatch = "0.3.13"
 reqwest = { version = "^0.13.2", optional = true, features = ["json", "query"] }

@@ -3101,7 +3101,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "arrayvec",
  "async-trait",
@@ -3131,7 +3131,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_adapters"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "base64",
  "derive-new",
@@ -3157,7 +3157,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_api_generics"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "bytes",
  "derive-new",
