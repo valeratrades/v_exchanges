@@ -41,18 +41,6 @@ async fn main() {
 		eprintln!("QUANTM_BYBIT_SUB_PUBKEY or QUANTM_BYBIT_SUB_SECRET not set, skipping.");
 	}
 
-	// Mexc
-	if let (Ok(pub_), Ok(sec)) = (env::var("MEXC_READ_PUBKEY"), env::var("MEXC_READ_SECRET")) {
-		let mut c = ExchangeName::Mexc.init_client();
-		c.auth(pub_.clone(), sec.clone().into());
-		fetch!("mexc", "MEXC_READ", Instrument::Perp, c);
-		let mut c = ExchangeName::Mexc.init_client();
-		c.auth(pub_, sec.into());
-		fetch!("mexc", "MEXC_READ", Instrument::Spot, c);
-	} else {
-		eprintln!("MEXC_READ_PUBKEY or MEXC_READ_SECRET not set, skipping.");
-	}
-
 	// Kucoin (requires passphrase — can't go through dyn Exchange)
 	if let (Ok(pub_), Ok(sec), Ok(pass)) = (env::var("KUCOIN_API_PUBKEY"), env::var("KUCOIN_API_SECRET"), env::var("KUCOIN_API_PASSPHRASE")) {
 		let mut c = Kucoin::default();

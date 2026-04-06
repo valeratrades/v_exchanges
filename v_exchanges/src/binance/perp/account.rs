@@ -280,10 +280,9 @@ pub(in crate::binance) async fn personal_info(client: &v_exchanges_adapters::Cli
 	let non_zero: Vec<AssetBalance> = asset_balances.iter().filter(|b| b.underlying != 0.).cloned().collect();
 	let total = non_zero.iter().fold(Usd(0.), |acc, b| acc + b.usd.unwrap_or(Usd(0.)));
 
-	let expire_time = match api_response.expire_time {
-		0 => None,
-		ms => Some(Timestamp::from_millisecond(ms).expect("Binance expireTime is valid ms timestamp")),
-	};
+	let expire_time = api_response
+		.expire_time
+		.map(|ms| Timestamp::from_millisecond(ms).expect("Binance expireTime is valid ms timestamp"));
 
 	Ok(PersonalInfo {
 		api: ApiKeyInfo { expire_time },
@@ -327,18 +326,23 @@ struct AssetBalanceResponse {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ApiRestrictionsResponse {
-	/// Millisecond timestamp; 0 means no expiry
-	expire_time: i64,
+	/// Millisecond timestamp; absent when no expiry is set
+	expire_time: Option<i64>,
+	create_time: i64,
 	ip_restrict: bool,
 	enable_reading: bool,
 	enable_futures: bool,
 	enable_spot_and_margin_trading: bool,
 	enable_withdrawals: bool,
 	enable_internal_transfer: bool,
-	enable_margin_loan: bool,
+	/// Absent for keys that don't have margin lending permissions configured
+	enable_margin_loan: Option<bool>,
 	enable_vanilla_options: bool,
 	permits_universal_transfer: bool,
 	enable_portfolio_margin_trading: bool,
+	enable_fix_api_trade: bool,
+	enable_fix_read_only: bool,
+	enable_margin: bool,
 }
 //,}}}
 
