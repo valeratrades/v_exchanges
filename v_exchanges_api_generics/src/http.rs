@@ -315,7 +315,7 @@ pub enum ApiError {
 	#[diagnostic(transparent)]
 	Auth(AuthError),
 	/// Errors that are a) specific to a particular exchange or b) should be handled by this crate, but are here for dev convenience
-	#[diagnostic(code(v_exchanges::http::api::other))]
+	#[error(transparent)]
 	Other(Report),
 }
 
@@ -388,8 +388,7 @@ pub enum RequestError {
 	Url(#[from] UrlError),
 	/// errors meant to be propagated to the user or the developer, thus having no defined type.
 	#[allow(missing_docs)]
-	#[error("{0}")]
-	#[diagnostic(code(v_exchanges::http::request::other))]
+	#[error(transparent)]
 	Other(#[from] Report),
 }
 
@@ -409,7 +408,7 @@ pub enum BuildError {
 	///// Error when calling reqwest::RequestBuilder::build()
 	//Reqwest(reqwest::Error),
 	#[allow(missing_docs)]
-	#[diagnostic(code(v_exchanges::http::build::other))]
+	#[error(transparent)]
 	Other(Report),
 }
 

@@ -51,8 +51,7 @@ pub enum ConstructAuthError {
 		#[new(value = "Backtrace::capture()")]
 		backtrace: Backtrace,
 	},
-	#[error("{0}")]
-	#[diagnostic(code(v_exchanges::auth::other))]
+	#[error(transparent)]
 	Other(eyre::Report),
 }
 

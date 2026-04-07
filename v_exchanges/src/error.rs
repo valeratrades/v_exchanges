@@ -51,7 +51,7 @@ pub enum Error {
 	/// our internal markings
 	#[diagnostic(transparent)]
 	Method(MethodError),
-	#[diagnostic(code(v_exchanges::other))]
+	#[error(transparent)]
 	Other(Report),
 }
 
@@ -102,7 +102,7 @@ pub enum MethodError {
 pub enum RequestRangeError {
 	#[diagnostic(transparent)]
 	OutOfRange(OutOfRangeError),
-	#[diagnostic(code(v_exchanges::range::other))]
+	#[error(transparent)]
 	Others(Report),
 }
 

@@ -439,7 +439,7 @@ pub enum WsError {
 	Url(UrlError),
 	#[diagnostic(code(v_exchanges::ws::unexpected_event), help("Received an unexpected event from the WebSocket. This may indicate an API change."))]
 	UnexpectedEvent(serde_json::Value),
-	#[diagnostic(code(v_exchanges::ws::other))]
+	#[error(transparent)]
 	Other(eyre::Report),
 }
 #[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error)]
