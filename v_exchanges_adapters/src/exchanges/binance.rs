@@ -139,7 +139,7 @@ where
 pub struct BinanceWsHandler {
 	options: BinanceOptions,
 	/// Binance has a retarded `listen-key` system. This is needed only for that.
-	_last_keep_alive: SystemTime,
+	_last_keep_alive: SystemTime = SystemTime::UNIX_EPOCH,
 }
 impl BinanceWsHandler {
 	pub fn new(options: BinanceOptions) -> Self {

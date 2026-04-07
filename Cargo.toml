@@ -30,6 +30,7 @@ hex = "^0.4.3"
 hmac = "^0.12.1"
 jiff = "^0.2.23"
 miette = { version = "^7.6.0", features = ["fancy"] }
+rand = "^0.9"
 reqwest = { version = "^0.12.24", features = ["blocking", "json"] }
 secrecy = "^0.10.3"
 serde = { version = "^1.0.228", features = ["derive"] }

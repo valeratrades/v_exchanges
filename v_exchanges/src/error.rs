@@ -93,19 +93,12 @@ pub enum RequestRangeError {
 }
 
 #[derive(derive_more::Debug, miette::Diagnostic, thiserror::Error, derive_new::new)]
+#[error("Effective provided limit is out of range (could be translated from Start:End / tf). Allowed: {allowed:?}, provided: {provided}")]
 #[diagnostic(code(v_exchanges::range::out_of_range), help("Adjust the request parameters to fall within the allowed range."))]
 pub struct OutOfRangeError {
 	allowed: std::ops::RangeInclusive<u32>,
 	provided: u32,
-}
-
-impl std::fmt::Display for OutOfRangeError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(
-			f,
-			"Effective provided limit is out of range (could be translated from Start:End / tf). Allowed: {:?}, provided: {}",
-			self.allowed, self.provided
-		)
-	}
+	#[new(value = "std::backtrace::Backtrace::capture()")]
+	backtrace: std::backtrace::Backtrace,
 }
 //,}}}

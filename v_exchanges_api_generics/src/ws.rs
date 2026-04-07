@@ -15,7 +15,7 @@ use tokio_tungstenite::{
 };
 use tracing::instrument;
 
-use crate::{ConstructAuthError, UrlError};
+use crate::{ConstructAuthError, RetryConfig, UrlError, retry::ExponentialBackoff};
 
 type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -115,7 +115,7 @@ pub struct WsConnection<H: WsHandler> {
 	config: WsConfig,
 	handler: H,
 	stream: Option<WsConnectionStream>,
-	last_reconnect_attempt: SystemTime, // not Tz-aware, as it will not escape the application boundary
+	backoff: ExponentialBackoff,
 }
 #[derive(Debug, derive_more::Deref, derive_more::DerefMut)]
 struct WsConnectionStream {
@@ -136,19 +136,27 @@ impl WsConnectionStream {
 }
 impl<H: WsHandler> WsConnection<H> {
 	#[allow(missing_docs)]
-	pub fn try_new(url_suffix: &str, handler: H) -> Result<Self, UrlError> {
+	pub fn try_new(url_suffix: &str, handler: H) -> Result<Self, WsError> {
 		let config = handler.config()?;
 		let url = match &config.base_url {
-			Some(base_url) => base_url.join(url_suffix)?,
-			None => Url::parse(url_suffix)?,
+			Some(base_url) => base_url.join(url_suffix).map_err(UrlError::Parse)?,
+			None => Url::parse(url_suffix).map_err(UrlError::Parse)?,
 		};
+		let backoff = ExponentialBackoff::new(
+			Duration::from_millis(config.reconnect.initial_delay_ms),
+			Duration::from_millis(config.reconnect.max_delay_ms),
+			config.reconnect.backoff_factor,
+			config.reconnect.jitter_ms,
+			config.reconnect.immediate_first,
+		)
+		.map_err(|e| WsError::Other(eyre::eyre!("Invalid reconnect backoff configuration: {e}")))?;
 
 		Ok(Self {
 			url,
 			config,
 			handler,
 			stream: None,
-			last_reconnect_attempt: SystemTime::UNIX_EPOCH,
+			backoff,
 		})
 	}
 
@@ -192,8 +200,8 @@ impl<H: WsHandler> WsConnection<H> {
 							Possible causes: (1) system hibernation/sleep caused stale state, \
 							(2) memory corruption, (3) logic bug in reconnection flow, \
 							(4) async cancellation. \
-							Last reconnect attempt: {:?} ago. Attempting to reconnect...",
-							SystemTime::now().duration_since(self.last_reconnect_attempt).unwrap_or_default()
+							Backoff current delay: {:?}. Attempting to reconnect...",
+							self.backoff.current_delay()
 						);
 						self.connect().await?;
 						continue;
@@ -349,16 +357,11 @@ impl<H: WsHandler> WsConnection<H> {
 
 	async fn connect(&mut self) -> Result<(), WsError> {
 		tracing::info!("Connecting to {}...", self.url);
-		{
-			let now = SystemTime::now();
-			let timeout = self.config.reconnect_cooldown;
-			if self.last_reconnect_attempt + timeout > now {
-				tracing::warn!("Reconnect cooldown is triggered. Likely indicative of a bad connection.");
-				let duration = (self.last_reconnect_attempt + timeout).duration_since(now).unwrap();
-				tokio::time::sleep(duration).await;
-			}
+		let delay = self.backoff.next_duration();
+		if !delay.is_zero() {
+			tracing::warn!(delay_ms = delay.as_millis(), "Reconnect backoff active. Likely indicative of a bad connection.");
+			tokio::time::sleep(delay).await;
 		}
-		self.last_reconnect_attempt = SystemTime::now();
 
 		let (stream, http_resp) = tokio_tungstenite::connect_async(self.url.as_str()).await?;
 		tracing::debug!("Ws handshake with server: {http_resp:#?}");
@@ -367,7 +370,9 @@ impl<H: WsHandler> WsConnection<H> {
 		self.stream = Some(WsConnectionStream::new(stream, now));
 
 		let auth_messages = self.handler.handle_auth()?;
-		Ok(self.send_all(auth_messages).await?)
+		self.send_all(auth_messages).await?;
+		self.backoff.reset();
+		Ok(())
 	}
 
 	/// Sends the existing connection (if any) a `Close` message, and then simply drops it, opening a new one.
@@ -389,7 +394,7 @@ impl<H: WsHandler> WsConnection<H> {
 /// Configuration for [WsHandler].
 ///
 /// Should be returned by [WsHandler::ws_config()].
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct WsConfig {
 	/// Whether the connection should be authenticated. Normally implemented through a "listen key"
 	pub auth: bool,
@@ -397,30 +402,45 @@ pub struct WsConfig {
 	///
 	/// Ex: `"wss://example.com"`
 	pub base_url: Option<Url>,
-	/// Duration that should elapse between each attempt to start a new connection.
-	///
-	/// This matters because the [WebSocketConnection] reconnects on error. If the error
-	/// continues to happen, it could spam the server if `connect_cooldown` is too short.
-	reconnect_cooldown: Duration = Duration::from_secs(3),
+	/// Backoff configuration for reconnect attempts.
+	pub reconnect: RetryConfig,
 	/// The [WebSocketConnection] will automatically reconnect when `refresh_after` has elapsed since the last connection started.
-	refresh_after: Duration = Duration::from_hours(12),
+	refresh_after: Duration,
 	/// A reconnection will be triggered if no messages are received within this amount of time.
-	message_timeout: Duration = Duration::from_mins(16), // assume all exchanges ping more frequently than this
+	message_timeout: Duration,
 	/// Timeout for the response to a message sent to the server.
 	///
 	/// Difference from the [message_timeout](Self::message_timeout) is that here we directly request communication. Eg: sending a Ping or attempting to auth.
-	response_timeout: Duration = Duration::from_mins(2),
+	response_timeout: Duration,
 	/// The topics that will be subscribed to on creation of the connection. Note that we don't allow for passing anything that changes state here like [Trade](Topic::Trade) payloads, thus submissions are limited to [String]s
 	pub topics: HashSet<String>,
 }
 
-impl WsConfig {
-	pub fn set_reconnect_cooldown(&mut self, reconnect_cooldown: Duration) -> Result<()> {
-		if reconnect_cooldown.is_zero() {
-			bail!("connect_cooldown must be greater than 0");
+impl Default for WsConfig {
+	fn default() -> Self {
+		Self {
+			auth: false,
+			base_url: None,
+			reconnect: RetryConfig {
+				max_retries: u32::MAX,
+				initial_delay_ms: 1_000,
+				max_delay_ms: 30_000,
+				backoff_factor: 2.0,
+				jitter_ms: 500,
+				immediate_first: false,
+				max_elapsed_ms: None,
+			},
+			refresh_after: Duration::from_hours(12),
+			message_timeout: Duration::from_mins(16),
+			response_timeout: Duration::from_mins(2),
+			topics: HashSet::new(),
 		}
-		self.reconnect_cooldown = reconnect_cooldown;
-		Ok(())
+	}
+}
+
+impl WsConfig {
+	pub fn set_reconnect(&mut self, reconnect: RetryConfig) {
+		self.reconnect = reconnect;
 	}
 
 	pub fn set_refresh_after(&mut self, refresh_after: Duration) -> Result<()> {

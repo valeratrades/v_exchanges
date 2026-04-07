@@ -1,6 +1,9 @@
 use std::collections::{BTreeMap, VecDeque};
 
-use adapters::{Client, HttpClient, generics::ws::WsError};
+use adapters::{
+	Client, HttpClient,
+	generics::{RetryConfig, ws::WsError},
+};
 use derive_more::{Deref, DerefMut};
 use jiff::Timestamp;
 use secrecy::SecretString;
@@ -28,8 +31,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	fn auth(&mut self, pubkey: String, secret: SecretString);
 	fn set_recv_window(&mut self, recv_window: std::time::Duration);
 	fn set_timeout(&mut self, timeout: std::time::Duration);
-	fn set_retry_cooldown(&mut self, cooldown: std::time::Duration);
-	fn set_max_tries(&mut self, max: u8);
+	fn set_retry_config(&mut self, config: RetryConfig);
 	fn set_use_testnet(&mut self, b: bool);
 	fn set_cache_testnet_calls(&mut self, duration: Option<std::time::Duration>);
 	/// Set the maximum number of simultaneous requests allowed.
@@ -415,12 +417,8 @@ impl<T: ExchangeImpl> Exchange for T {
 		self.http_client_mut().config.timeout = timeout;
 	}
 
-	fn set_retry_cooldown(&mut self, cooldown: std::time::Duration) {
-		self.http_client_mut().config.retry_cooldown = cooldown;
-	}
-
-	fn set_max_tries(&mut self, max: u8) {
-		self.http_client_mut().config.max_tries = max;
+	fn set_retry_config(&mut self, config: RetryConfig) {
+		self.http_client_mut().config.retry = config;
 	}
 
 	fn set_use_testnet(&mut self, b: bool) {

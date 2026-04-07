@@ -19,7 +19,10 @@
 //! For a more detailed documentation, see the links above.
 
 pub mod http;
+pub mod retry;
 pub mod ws;
+
+pub use retry::{ExponentialBackoff, RetryConfig, RetryManager};
 pub extern crate reqwest;
 pub extern crate tokio_tungstenite;
 

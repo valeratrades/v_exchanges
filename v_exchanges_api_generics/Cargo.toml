@@ -37,6 +37,7 @@ tokio-tungstenite = "^0.28.0"
 derive-new.workspace = true
 derive_more.workspace = true
 eyre.workspace = true
+rand.workspace = true
 futures-util.workspace = true
 jiff.workspace = true
 miette.workspace = true

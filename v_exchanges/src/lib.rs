@@ -1,5 +1,6 @@
 #![feature(array_try_map)]
 #![feature(default_field_values)]
+#![feature(error_generic_member_access)]
 #![feature(formatting_options)]
 #![feature(try_blocks)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -12,6 +13,8 @@ pub mod core;
 pub mod error;
 pub mod prelude {
 	pub use std::str::FromStr as _; // it's very annoying to have to manually bring it into the scope every single time. Putting this into preludes of all libraries with any exposed `FromStr` impls at this point.
+
+	pub use adapters::generics::RetryConfig;
 
 	#[cfg(feature = "binance")]
 	pub use crate::binance::Binance;

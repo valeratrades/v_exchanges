@@ -348,7 +348,10 @@ pub mod futures {
 				(-contract.tick_size.log10()).max(0.0).round() as u8
 			};
 
-			let pair_info = PairInfo { price_precision, delivery_date: None };
+			let pair_info = PairInfo {
+				price_precision,
+				delivery_date: None,
+			};
 			pairs.insert(pair, pair_info);
 		}
 
@@ -486,7 +489,10 @@ pub(super) async fn exchange_info(client: &v_exchanges_adapters::Client, _recv_w
 			} else {
 				(-symbol.price_increment.log10()).max(0.0).round() as u8
 			};
-			let pair_info = PairInfo { price_precision, delivery_date: None };
+			let pair_info = PairInfo {
+				price_precision,
+				delivery_date: None,
+			};
 			pairs.insert(pair, pair_info);
 		}
 	}

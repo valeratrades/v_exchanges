@@ -6,7 +6,6 @@ pub extern crate v_exchanges_api_generics as generics;
 use std::sync::Arc;
 
 pub use exchanges::*;
-use generics::UrlError;
 use serde::Serialize;
 use tokio::sync::Semaphore;
 use traits::*;
@@ -191,7 +190,7 @@ impl Client {
 		self.http_client().delete_no_query(url, &O::request_handler(self.merged_options(options))).await
 	}
 
-	pub fn ws_connection<O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> Result<WsConnection<O::WsHandler>, UrlError>
+	pub fn ws_connection<O>(&self, url: &str, options: impl IntoIterator<Item = O>) -> Result<WsConnection<O::WsHandler>, WsError>
 	where
 		O: WsOption,
 		O::WsHandler: WsHandler,

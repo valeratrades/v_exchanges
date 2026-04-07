@@ -11,7 +11,7 @@ pub use reqwest::{
 use serde::Serialize;
 use tracing::{Span, debug, error, field::Empty, info, instrument, warn};
 
-use crate::{ConstructAuthError, UrlError};
+use crate::{ConstructAuthError, RetryConfig, UrlError, retry::ExponentialBackoff};
 
 /// The User Agent string
 pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_PKG_VERSION"));
@@ -39,7 +39,6 @@ impl Client {
 		Q: Serialize + ?Sized + std::fmt::Debug,
 		H: RequestHandler<B>, {
 		let config = &self.config;
-		config.verify();
 		let base_url = handler.base_url(config.use_testnet)?;
 		let url = base_url.join(url).map_err(|_| RequestError::Other(eyre!("Failed to parse provided URL")))?;
 		debug!(?config);
@@ -63,7 +62,18 @@ impl Client {
 			}
 		}
 
-		for i in 1..=config.max_tries {
+		let mut backoff = ExponentialBackoff::new(
+			Duration::from_millis(config.retry.initial_delay_ms),
+			Duration::from_millis(config.retry.max_delay_ms),
+			config.retry.backoff_factor,
+			config.retry.jitter_ms,
+			config.retry.immediate_first,
+		)
+		.map_err(|e| RequestError::Other(eyre!("Invalid retry configuration: {e}")))?;
+
+		let mut attempt: u32 = 0;
+		loop {
+			let attempt_num = attempt + 1;
 			//HACK: hate to create a new request every time, but I haven't yet figured out how to provide by reference
 			let mut request_builder = self.client.request(method.clone(), url.clone()).timeout(config.timeout);
 			if let Some(query) = query {
@@ -90,8 +100,7 @@ impl Client {
 				}
 			}
 
-			//let (status, headers, truncated_body): (StatusCode, HeaderMap, String) = {
-			let request = handler.build_request(request_builder, &body, i).map_err(RequestError::BuildRequest)?;
+			let request = handler.build_request(request_builder, &body, attempt_num as u8).map_err(RequestError::BuildRequest)?;
 			match self.client.execute(request).await {
 				Ok(mut response) => {
 					let status = response.status();
@@ -136,19 +145,21 @@ impl Client {
 					}
 				}
 				Err(e) =>
-				//TODO!!!: we are only retrying when response is not received. Although there is a list of errors we would also like to retry on.
-					if i < config.max_tries && e.is_timeout() {
-						info!("Retrying sending request; made so far: {i}");
-						tokio::time::sleep(config.retry_cooldown).await;
+					if attempt < config.retry.max_retries && is_retryable_request_error(&e) {
+						let delay = backoff.next_duration();
+						info!(attempt = attempt_num, delay_ms = delay.as_millis(), "Retrying after network error");
+						if delay.is_zero() {
+							tokio::task::yield_now().await;
+						} else {
+							tokio::time::sleep(delay).await;
+						}
+						attempt += 1;
 					} else {
 						warn!(?e);
-						debug!("{:?}\nAnd then trying the .is_timeout(): {}", e.status(), e.is_timeout());
 						return Err(RequestError::SendRequest(e));
 					},
 			}
 		}
-
-		unreachable!()
 	}
 
 	/// Makes an GET request with the given [RequestHandler].
@@ -272,13 +283,8 @@ pub trait RequestHandler<B> {
 /// Modified in-place later if necessary.
 #[derive(Clone, Debug, Default)]
 pub struct RequestConfig {
-	/// [Client] will retry sending a request if it failed to send. `max_try` can be used limit the number of attempts.
-	///
-	/// Do not set this to `0` or [Client::request()] will **panic**. [Default]s to `1` (which means no retry).
-	//TODO: change to `num_retries`, so there is no special case.
-	pub max_tries: u8 = 1,
-	/// Duration that should elapse after retrying sending a request.
-	pub retry_cooldown: Duration = Duration::from_millis(500),
+	/// Retry configuration for failed requests.
+	pub retry: RetryConfig,
 	/// The timeout set when sending a request. [Default]s to 3s.
 	///
 	/// It is possible for the [RequestHandler] to override this in [RequestHandler::build_request()].
@@ -295,12 +301,6 @@ pub struct RequestConfig {
 	pub mock_cache_dir: Option<PathBuf>,
 }
 
-impl RequestConfig {
-	fn verify(&self) {
-		assert_ne!(self.max_tries, 0, "RequestConfig.max_tries must not be equal to 0");
-	}
-}
-
 /// Error type encompassing all the failure modes of [RequestHandler::handle_response()].
 #[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error, derive_more::From)]
 pub enum HandleError {
@@ -313,18 +313,15 @@ pub enum HandleError {
 }
 /// Errors that exchanges purposefully transmit.
 #[non_exhaustive]
-#[derive(Debug, miette::Diagnostic, thiserror::Error, derive_more::From)]
+#[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error, derive_more::From)]
 pub enum ApiError {
 	/// IP-level errors (rate-limiting, WAF blocks, geo-blocking)
-	#[error("{0}")]
 	#[diagnostic(transparent)]
 	Ip(IpError),
 	/// Authentication/authorization errors shared across all exchanges
-	#[error("{0}")]
 	#[diagnostic(transparent)]
 	Auth(AuthError),
 	/// Errors that are a) specific to a particular exchange or b) should be handled by this crate, but are here for dev convenience
-	#[error("{0}")]
 	#[diagnostic(code(v_exchanges::http::api::other))]
 	Other(Report),
 }
@@ -421,6 +418,14 @@ pub enum BuildError {
 	#[allow(missing_docs)]
 	#[diagnostic(code(v_exchanges::http::build::other))]
 	Other(Report),
+}
+
+/// Returns true if the reqwest error is a transport-level failure worth retrying.
+///
+/// Retryable: timeout, connection failure, or a request error without a status (never got a response).
+/// Non-retryable: anything with a status code (handler has full context to decide).
+fn is_retryable_request_error(e: &reqwest::Error) -> bool {
+	e.is_timeout() || e.is_connect() || (e.is_request() && e.status().is_none())
 }
 
 static TEST_CALLS_PATH: OnceLock<PathBuf> = OnceLock::new();
