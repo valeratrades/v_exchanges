@@ -10,7 +10,7 @@ pub async fn bvol(duration: std::time::Duration) -> Result<Vec<BvolPoint>> {
 		bail!("Provided duration is less than 5m");
 	}
 
-	let client = Client::new();
+	let client = Client::default();
 	let r = client
 		.get(format!("https://www.bitmex.com/api/v1/trade?symbol=.BVOL24H&count={n_5m}&reverse=true"))
 		.send()

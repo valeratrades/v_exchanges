@@ -2,10 +2,7 @@ use arrayvec::ArrayString;
 use jiff::Timestamp;
 use smart_default::SmartDefault;
 use uuid::Uuid;
-use v_utils::{
-	arch::{Component, ComponentId, ComponentState, ComponentTrigger},
-	trades::Side,
-};
+use v_utils::{arch::ComponentState, trades::Side};
 
 use crate::Ticker;
 
@@ -18,54 +15,6 @@ pub struct ExchangeOrder<O> {
 	pub ticker: Ticker,
 	#[new(default)]
 	pub expected_fee_usd: Option<f64>,
-	// PartialEq only covers the **pre-compiled** part of the def
-	#[new(default)]
-	__filled: f64, // type mirrors O::qty
-	#[new(default)]
-	state: ComponentState,
-}
-impl<O: Eq> Eq for ExchangeOrder<O> {}
-impl<O: std::hash::Hash> std::hash::Hash for ExchangeOrder<O> {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		self.order.hash(state);
-		self.ticker.hash(state);
-		self.expected_fee_usd.map(f64::to_bits).hash(state);
-		self.__filled.to_bits().hash(state);
-	}
-}
-
-impl<O: std::fmt::Debug> Component for ExchangeOrder<O> {
-	fn component_id(&self) -> ComponentId {
-		todo!()
-	}
-
-	fn state(&self) -> ComponentState {
-		self.state
-	}
-
-	fn transition_state(&mut self, trigger: ComponentTrigger) {
-		self.state.transition(trigger);
-	}
-
-	fn on_start(&mut self) -> eyre::Result<()> {
-		todo!()
-	}
-
-	fn on_stop(&mut self) -> eyre::Result<()> {
-		todo!()
-	}
-
-	fn on_resume(&mut self) -> eyre::Result<()> {
-		todo!()
-	}
-
-	fn on_reset(&mut self) -> eyre::Result<()> {
-		todo!()
-	}
-
-	fn on_dispose(&mut self) -> eyre::Result<()> {
-		todo!()
-	}
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, SmartDefault)]

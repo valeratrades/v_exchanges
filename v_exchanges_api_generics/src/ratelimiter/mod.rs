@@ -141,7 +141,7 @@ where
 		let gcra: DashMap<_, _> = keyed_quotas.into_iter().map(|(k, q)| (k, Gcra::new(q))).collect();
 		Self {
 			default_gcra: base_quota.map(Gcra::new),
-			state: DashMapStateStore::new(),
+			state: DashMapStateStore::default(),
 			gcra,
 			clock,
 			start,
@@ -274,11 +274,11 @@ mod tests {
 	fn initialize_mock_rate_limiter() -> RateLimiter<String, FakeRelativeClock> {
 		let clock = FakeRelativeClock::default();
 		let start = clock.now();
-		let gcra = DashMap::new();
+		let gcra = DashMap::default();
 		let base_quota = Quota::per_second(NonZeroU32::new(2).unwrap());
 		RateLimiter {
 			default_gcra: Some(Gcra::new(base_quota)),
-			state: DashMapStateStore::new(),
+			state: DashMapStateStore::default(),
 			gcra,
 			clock,
 			start,

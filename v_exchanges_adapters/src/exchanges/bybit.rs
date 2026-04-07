@@ -5,7 +5,7 @@ use std::{borrow::Cow, collections::HashSet, marker::PhantomData, time::SystemTi
 
 use eyre::{WrapErr as _, eyre};
 use generics::{ConstructAuthError, UrlError, tokio_tungstenite::tungstenite};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit as _, Mac};
 use jiff::Timestamp;
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -210,7 +210,7 @@ where
 			pairs.push((Cow::Borrowed("timestamp"), Cow::Owned(timestamp.to_string())));
 			pairs.sort_unstable();
 
-			let mut urlencoded = String::new();
+			let mut urlencoded = String::default();
 			for (key, value) in pairs {
 				urlencoded.push_str(&key);
 				if !value.is_empty() {
@@ -254,7 +254,11 @@ where
 				}
 			}
 		} else {
-			let mut body = if let Some(body) = request_body { serde_urlencoded::to_string(body)? } else { String::new() };
+			let mut body = if let Some(body) = request_body {
+				serde_urlencoded::to_string(body)?
+			} else {
+				String::default()
+			};
 			if let Some(window) = window {
 				let window_ms = window.as_millis() as u64;
 				if !body.is_empty() {

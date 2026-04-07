@@ -2,7 +2,7 @@ cargo-features = ["codegen-backend"]
 
 [package]
 name = "v_exchanges"
-version = "0.17.1"
+version = "0.17.2"
 edition = "2024"
 authors = ["negi-grass", "valeratrades"]
 categories = ["api-bindings", "asynchronous"]
@@ -38,35 +38,32 @@ mexc = ["v_exchanges_adapters/mexc"]
 data = ["dep:reqwest"]
 
 [dependencies]
-v_exchanges_adapters = { version = "^0.17.1", path = "../v_exchanges_adapters/", optional = true }
-
-enum_dispatch = "0.3.13"
-reqwest = { version = "^0.13.2", optional = true, features = ["json", "query"] }
-strum = { version = "0.28", features = ["derive"] }
-
 ahash.workspace = true
 arrayvec.workspace = true
 async-trait.workspace = true
 cfg-if.workspace = true
 derive-new.workspace = true
 derive_more.workspace = true
+enum_dispatch.workspace = true
 eyre.workspace = true
 jiff.workspace = true
 miette.workspace = true
+reqwest = { workspace = true, optional = true }
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
 smart-default.workspace = true
+strum.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 uuid.workspace = true
+v_exchanges_adapters = { workspace = true, optional = true }
 v_utils.workspace = true
 
 [dev-dependencies]
-color-eyre = "^0.6.5"
-
+color-eyre.workspace = true
 insta.workspace = true
 
 [lints]

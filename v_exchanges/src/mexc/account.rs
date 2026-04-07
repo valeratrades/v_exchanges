@@ -42,7 +42,7 @@ pub(super) async fn balances(client: &Client, recv_window: Option<std::time::Dur
 
 	let balances: Vec<AssetBalance> = non_zero
 		.into_iter()
-		.zip(prices.into_iter())
+		.zip(prices)
 		.map(|(mut b, p)| {
 			b.usd = Some((p * b.underlying).into());
 			b

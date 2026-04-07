@@ -56,21 +56,20 @@ impl Client {
 
 		// Mock cache: check before making any requests
 		let mock_path = config.mock_cache_dir.as_ref().map(|dir| mock_cache_path(dir, &url));
-		if let Some(ref path) = mock_path {
-			if let Ok(file) = std::fs::read_to_string(path)
-				&& path
-					.metadata()
-					.expect("already read the file, guaranteed to exist")
-					.modified()
-					.expect("switch OSes, you're on something stupid")
-					.elapsed()
-					.unwrap() < MOCK_CACHE_DURATION
-			{
-				debug!("Mock cache hit: {}", path.display());
-				let body = Bytes::from(file);
-				let (status, headers) = (StatusCode::OK, header::HeaderMap::new());
-				return handler.handle_response(status, headers, body).map_err(RequestError::HandleResponse);
-			}
+		if let Some(ref path) = mock_path
+			&& let Ok(file) = std::fs::read_to_string(path)
+			&& path
+				.metadata()
+				.expect("already read the file, guaranteed to exist")
+				.modified()
+				.expect("switch OSes, you're on something stupid")
+				.elapsed()
+				.unwrap() < MOCK_CACHE_DURATION
+		{
+			debug!("Mock cache hit: {}", path.display());
+			let body = Bytes::from(file);
+			let (status, headers) = (StatusCode::OK, header::HeaderMap::new());
+			return handler.handle_response(status, headers, body).map_err(RequestError::HandleResponse);
 		}
 
 		if let Some(rl) = &self.rate_limiter {
@@ -144,14 +143,14 @@ impl Client {
 					}
 
 					// Persist to mock cache on successful response
-					if status.is_success() {
-						if let Some(ref path) = mock_path {
-							if let Some(parent) = path.parent() {
-								std::fs::create_dir_all(parent).ok();
-							}
-							std::fs::write(path, &body).ok();
-							debug!("Mock cache write: {}", path.display());
+					if status.is_success()
+						&& let Some(ref path) = mock_path
+					{
+						if let Some(parent) = path.parent() {
+							std::fs::create_dir_all(parent).ok();
 						}
+						std::fs::write(path, &body).ok();
+						debug!("Mock cache write: {}", path.display());
 					}
 
 					match config.use_testnet {
@@ -362,12 +361,12 @@ pub enum ApiError {
 
 /// IP-level errors that map uniformly across exchanges
 #[non_exhaustive]
+#[allow(unused_assignments)] // false positive: fields used in #[error] format strings, but thiserror codegen triggers this
 #[derive(Debug, miette::Diagnostic, thiserror::Error)]
 pub enum IpError {
 	/// Ip has been timed out or banned by the exchange application layer
 	#[error("IP timed out or banned until {until:?}")]
 	#[diagnostic(code(v_exchanges::ip::timeout), help("Your IP has been rate-limited. Wait until the specified time or reduce request frequency."))]
-	#[allow(unused_assignments)] // false positive: field used in #[error] format string, but thiserror codegen triggers this
 	Timeout {
 		/// Time of unban
 		until: Option<Timestamp>,

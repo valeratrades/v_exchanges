@@ -48,7 +48,7 @@ pub(super) async fn balances(client: &Client, recv_window: Option<std::time::Dur
 	let account_response: AccountResponse = client.get("/api/v1/accounts", empty_params, options).await?;
 
 	// Helper function to calculate USD value for an asset
-	async fn usd_value(client: &Client, underlying: f64, asset: Asset, recv_window: Option<std::time::Duration>) -> Result<Usd> {
+	async fn usd_value(client: &Client, underlying: f64, asset: Asset, _recv_window: Option<std::time::Duration>) -> Result<Usd> {
 		if underlying == 0. {
 			return Ok(Usd(0.));
 		}
@@ -64,7 +64,7 @@ pub(super) async fn balances(client: &Client, recv_window: Option<std::time::Dur
 		Ok((underlying * usdt_price).into())
 	}
 
-	let mut balances: Vec<AssetBalance> = Vec::new();
+	let mut balances: Vec<AssetBalance> = Vec::default();
 	for account in &account_response.data {
 		// Only include accounts with non-zero balances
 		if account.balance > 0.0 {

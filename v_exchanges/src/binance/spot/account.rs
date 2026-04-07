@@ -28,7 +28,7 @@ pub async fn personal_info(client: &v_exchanges_adapters::Client, recv_window: O
 
 	let prices = super::market::prices(client, None).await?;
 
-	let mut asset_balances: Vec<AssetBalance> = Vec::new();
+	let mut asset_balances: Vec<AssetBalance> = Vec::default();
 	for b in account.balances {
 		let underlying = b.free + b.locked;
 		if underlying == 0. {

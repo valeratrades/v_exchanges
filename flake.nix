@@ -34,12 +34,17 @@
               "./v_exchanges_api_generics" = [{ deprecate = { by_version = deprecate_by; force = true; }; }];
             };
           };
+          style = {
+            format = true;
+            modules = {
+              prefer_ahash = true;
+            };
+          };
         };
         github = v-flakes.github {
           inherit pkgs pname rs;
           enable = true;
           lastSupportedVersion = "nightly-2025-10-12";
-          langs = [ "rs" ];
           jobs = {
             default = true;
             # not sure I like the `default`s option on the interface after this now {{{1
@@ -49,6 +54,7 @@
           };
         };
         readme = v-flakes.readme-fw { inherit pkgs pname; defaults = true; lastSupportedVersion = "nightly-1.92"; rootDir = ./.; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; };
+        combined = v-flakes.utils.combine [ rs github readme ];
       in
       {
         packages =
@@ -81,18 +87,16 @@
           inherit stdenv;
           shellHook =
             pre-commit-check.shellHook +
-            github.shellHook +
-            readme.shellHook +
-            rs.shellHook +
+            combined.shellHook +
             ''
               cp -f ${(v-flakes.files.treefmt) {inherit pkgs;}} ./.treefmt.toml
             '';
           buildInputs = with pkgs; [
-            mold-wrapped
+            mold
             openssl
             pkg-config
             rust
-          ] ++ pre-commit-check.enabledPackages ++ github.enabledPackages ++ rs.enabledPackages;
+          ] ++ pre-commit-check.enabledPackages ++ combined.enabledPackages;
 
           env.RUST_BACKTRACE = 1;
           env.RUST_LIB_BACKTRACE = 0;

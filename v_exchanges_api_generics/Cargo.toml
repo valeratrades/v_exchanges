@@ -2,7 +2,7 @@ cargo-features = ["codegen-backend"]
 
 [package]
 name = "v_exchanges_api_generics"
-version = "0.19.1"
+version = "0.19.2"
 edition = "2024"
 
 authors = ["negi_grass", "valeratrades"]
@@ -21,19 +21,11 @@ ignored = ["derive-new", "thiserror"]
 [features]
 native-tls = ["reqwest/native-tls", "tokio-tungstenite/native-tls"]
 native-tls-vendored = ["reqwest/native-tls-vendored", "tokio-tungstenite/native-tls-vendored"]
-rustls-tls-native-roots = [
-    "reqwest/rustls-tls-native-roots",
-    "tokio-tungstenite/rustls-tls-native-roots",
-]
-rustls-tls-webpki-roots = [
-    "reqwest/rustls-tls-webpki-roots",
-    "tokio-tungstenite/rustls-tls-webpki-roots",
-]
+rustls-tls-native-roots = ["reqwest/rustls", "tokio-tungstenite/rustls-tls-native-roots"]
+rustls-tls-webpki-roots = ["reqwest/rustls", "tokio-tungstenite/rustls-tls-webpki-roots"]
 
 [dependencies]
-bytes = "1.10.1"
-tokio-tungstenite = "^0.28.0"
-
+bytes.workspace = true
 dashmap.workspace = true
 derive-new.workspace = true
 derive_more.workspace = true
@@ -49,6 +41,7 @@ serde_json.workspace = true
 serde_urlencoded.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-tungstenite.workspace = true
 tracing.workspace = true
 url.workspace = true
 ustr.workspace = true

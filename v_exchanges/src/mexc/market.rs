@@ -68,7 +68,7 @@ pub(super) async fn klines(client: &Client, symbol: Symbol, tf: MexcTimeframe, r
 		}
 		RequestRange::Limit(n) => {
 			let end = Timestamp::now();
-			let start = end - tf.duration() * n as u32;
+			let start = end - tf.duration() * n;
 			(start.as_second(), end.as_second())
 		}
 	};
@@ -82,7 +82,7 @@ pub(super) async fn klines(client: &Client, symbol: Symbol, tf: MexcTimeframe, r
 	let options = vec![MexcOption::HttpUrl(MexcHttpUrl::Futures)];
 	let response: KlineResponse = client.get(&endpoint, &params, options).await?;
 
-	let mut klines_vec = VecDeque::new();
+	let mut klines_vec = VecDeque::default();
 	let data = response.data;
 
 	// Mexc returns separate arrays for each field
@@ -128,7 +128,7 @@ pub(super) async fn exchange_info(client: &Client) -> ExchangeResult<ExchangeInf
 	let options = vec![MexcOption::HttpUrl(MexcHttpUrl::Futures)];
 	let response: ContractDetailResponse = client.get_no_query("/api/v1/contract/detail", options).await?;
 
-	let mut pairs = BTreeMap::new();
+	let mut pairs = BTreeMap::default();
 
 	for contract in response.data {
 		// state 0 = active

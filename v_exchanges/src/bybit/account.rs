@@ -171,8 +171,8 @@ async fn balances_inner(client: &Client, recv_window: Option<std::time::Duration
 	let account_info = account_response.result.list.first().unwrap();
 
 	// Build coin→usd_rate map from UNIFIED account data for converting earn positions
-	let mut usd_rates: AHashMap<String, f64> = AHashMap::new();
-	let mut vec_balance = Vec::new();
+	let mut usd_rates: AHashMap<String, f64> = AHashMap::default();
+	let mut vec_balance = Vec::default();
 	for r in &account_info.coin {
 		if r.wallet_balance > 0.0 {
 			usd_rates.insert(r.coin.clone(), r.usd_value / r.wallet_balance);

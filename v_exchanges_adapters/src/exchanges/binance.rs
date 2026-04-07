@@ -9,7 +9,7 @@ use generics::{
 	tokio_tungstenite::tungstenite,
 	ws::{ContentEvent, ResponseOrContent, Topic, WsConfig, WsError, WsHandler},
 };
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit as _, Mac};
 use jiff::{SignedDuration, Timestamp};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};

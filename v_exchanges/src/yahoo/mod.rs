@@ -5,7 +5,7 @@ use serde_json::Value;
 use v_utils::{NowThen, trades::Close};
 
 pub async fn vix(tf: YahooTimeframe, n: u8) -> Result<Vec<Close>> {
-	let mut headers = HeaderMap::new();
+	let mut headers = HeaderMap::default();
 	headers.insert(
 		USER_AGENT,
 		HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"),

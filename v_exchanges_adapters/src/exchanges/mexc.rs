@@ -4,7 +4,7 @@ use std::{collections::HashSet, marker::PhantomData, str::FromStr, time::SystemT
 
 use eyre::eyre;
 use generics::{ConstructAuthError, UrlError};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit as _, Mac};
 use jiff::{SignedDuration, Timestamp};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -262,14 +262,14 @@ where
 	fn handle_response(&self, status: StatusCode, headers: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError> {
 		if status.is_success() {
 			// MEXC futures API returns errors with HTTP 200 but `"success": false` in the body
-			if let Ok(envelope) = serde_json::from_slice::<MexcEnvelope>(&response_body) {
-				if !envelope.success {
-					let api_error = MexcError {
-						code: envelope.code.into(),
-						msg: envelope.message,
-					};
-					return Err(ApiError::from(api_error).into());
-				}
+			if let Ok(envelope) = serde_json::from_slice::<MexcEnvelope>(&response_body)
+				&& !envelope.success
+			{
+				let api_error = MexcError {
+					code: envelope.code.into(),
+					msg: envelope.message,
+				};
+				return Err(ApiError::from(api_error).into());
 			}
 			serde_json::from_slice(&response_body).map_err(|error| {
 				let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));

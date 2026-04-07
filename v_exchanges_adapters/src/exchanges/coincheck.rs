@@ -7,7 +7,7 @@ use generics::{
 	http::{BuildError, HandleError, header::HeaderValue, *},
 	tokio_tungstenite::tungstenite::protocol::WebSocketConfig,
 };
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit as _, Mac};
 use secrecy::{ExposeSecret as _, SecretString};
 use serde::{Serialize, de::DeserializeOwned};
 use sha2::Sha256;

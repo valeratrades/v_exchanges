@@ -3,6 +3,7 @@
 #![feature(error_generic_member_access)]
 #![feature(formatting_options)]
 #![feature(try_blocks)]
+#![feature(const_default)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub extern crate v_exchanges_adapters as adapters;

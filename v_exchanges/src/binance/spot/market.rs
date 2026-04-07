@@ -26,7 +26,7 @@ pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pai
 	};
 
 	//let mut prices = Vec::with_capacity(r.0.len());
-	let mut prices = BTreeMap::new();
+	let mut prices = BTreeMap::default();
 	for p in r.0.into_iter() {
 		match Pair::from_str(&p.symbol) {
 			Ok(pair) => {

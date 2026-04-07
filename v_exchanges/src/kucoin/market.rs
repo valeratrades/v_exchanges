@@ -202,7 +202,7 @@ pub mod futures {
 		let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Futures)];
 		let response: ContractsActiveResponse = client.get("/api/v1/contracts/active", &json!({}), options).await?;
 
-		let mut price_map = BTreeMap::new();
+		let mut price_map = BTreeMap::default();
 
 		for contract in response.data {
 			// Parse symbol: XBTUSDTM -> BTC-USDT
@@ -290,7 +290,7 @@ pub mod futures {
 		let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Futures)];
 		let response: FuturesKlineResponse = client.get("/api/v1/kline/query", &params, options).await?;
 
-		let mut klines_vec = VecDeque::new();
+		let mut klines_vec = VecDeque::default();
 
 		// Futures klines: [timestamp_ms, open, high, low, close, volume, turnover]
 		for kline_data in response.data {
@@ -329,7 +329,7 @@ pub mod futures {
 		let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Futures)];
 		let response: ContractsActiveResponse = client.get("/api/v1/contracts/active", &json!({}), options).await?;
 
-		let mut pairs = BTreeMap::new();
+		let mut pairs = BTreeMap::default();
 
 		for contract in response.data {
 			// Only include active contracts
@@ -379,7 +379,7 @@ pub(super) async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<
 	let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Spot)];
 	let response: AllTickersResponse = client.get("/api/v1/market/allTickers", &json!({}), options).await?;
 
-	let mut price_map = BTreeMap::new();
+	let mut price_map = BTreeMap::default();
 
 	for ticker in response.data.ticker {
 		// Parse Kucoin symbol format (e.g., "BTC-USDT" -> Pair)
@@ -438,7 +438,7 @@ pub(super) async fn klines(
 	let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Spot)];
 	let response: KlineResponse = client.get("/api/v1/market/candles", &params, options).await?;
 
-	let mut klines_vec = VecDeque::new();
+	let mut klines_vec = VecDeque::default();
 
 	// Kucoin returns klines in descending order (newest first), so we need to reverse
 	for kline_data in response.data.iter().rev() {
@@ -474,7 +474,7 @@ pub(super) async fn exchange_info(client: &v_exchanges_adapters::Client, _recv_w
 	let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Spot)];
 	let response: SymbolsResponse = client.get("/api/v2/symbols", &json!({}), options).await?;
 
-	let mut pairs = BTreeMap::new();
+	let mut pairs = BTreeMap::default();
 
 	for symbol in response.data {
 		// Only include enabled trading pairs
