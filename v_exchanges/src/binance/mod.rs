@@ -90,7 +90,7 @@ impl ExchangeImpl for Binance {
 	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = Trade>>, ExchangeError> {
 		match instrument {
 			Instrument::Perp | Instrument::Spot | Instrument::Margin => {
-				let connection = ws::TradesConnection::new(self, pairs, instrument)?;
+				let connection = ws::TradesConnection::try_new(self, pairs, instrument)?;
 				Ok(Box::new(connection))
 			}
 			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), instrument))),
@@ -100,7 +100,7 @@ impl ExchangeImpl for Binance {
 	fn ws_book(&self, pairs: Vec<Pair>, instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = BookUpdate>>, ExchangeError> {
 		match instrument {
 			Instrument::Perp | Instrument::Spot | Instrument::Margin => {
-				let connection = ws::BookConnection::new(self, pairs, instrument)?;
+				let connection = ws::BookConnection::try_new(self, pairs, instrument)?;
 				Ok(Box::new(connection))
 			}
 			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), instrument))),

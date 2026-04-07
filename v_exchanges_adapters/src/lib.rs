@@ -215,24 +215,45 @@ impl Client {
 
 #[derive(Clone, Debug)]
 pub struct ClientInner {
-	pub client: http::Client = http::Client::default(),
+	pub client: http::Client,
 	/// Semaphore for limiting simultaneous requests.
 	/// Shared across clones of this client.
-	pub request_semaphore: Arc<Semaphore> = Arc::new(Semaphore::new(DEFAULT_MAX_SIMULTANEOUS_REQUESTS)),
+	pub request_semaphore: Arc<Semaphore>,
 	/// Rate limiter shared across clones (same exchange instance).
-	pub rate_limiter: Arc<RateLimiter<Ustr, MonotonicClock>> = Arc::new(RateLimiter::new_with_quota(None, vec![])),
+	pub rate_limiter: Arc<RateLimiter<Ustr, MonotonicClock>>,
 	#[cfg(feature = "binance")]
-	binance: binance::BinanceOptions = binance::BinanceOptions::default(),
+	binance: binance::BinanceOptions,
 	#[cfg(feature = "bitflyer")]
-	bitflyer: bitflyer::BitFlyerOptions = bitflyer::BitFlyerOptions::default(),
+	bitflyer: bitflyer::BitFlyerOptions,
 	#[cfg(feature = "bybit")]
-	bybit: bybit::BybitOptions = bybit::BybitOptions::default(),
+	bybit: bybit::BybitOptions,
 	#[cfg(feature = "coincheck")]
-	coincheck: coincheck::CoincheckOptions = coincheck::CoincheckOptions::default(),
+	coincheck: coincheck::CoincheckOptions,
 	#[cfg(feature = "kucoin")]
-	kucoin: kucoin::KucoinOptions = kucoin::KucoinOptions::default(),
+	kucoin: kucoin::KucoinOptions,
 	#[cfg(feature = "mexc")]
-	mexc: mexc::MexcOptions = mexc::MexcOptions::default(),
+	mexc: mexc::MexcOptions,
+}
+impl Default for ClientInner {
+	fn default() -> Self {
+		Self {
+			client: http::Client::default(),
+			request_semaphore: Arc::new(Semaphore::new(DEFAULT_MAX_SIMULTANEOUS_REQUESTS)),
+			rate_limiter: Arc::new(RateLimiter::new_with_quota(None, vec![])),
+			#[cfg(feature = "binance")]
+			binance: binance::BinanceOptions::default(),
+			#[cfg(feature = "bitflyer")]
+			bitflyer: bitflyer::BitFlyerOptions::default(),
+			#[cfg(feature = "bybit")]
+			bybit: bybit::BybitOptions::default(),
+			#[cfg(feature = "coincheck")]
+			coincheck: coincheck::CoincheckOptions::default(),
+			#[cfg(feature = "kucoin")]
+			kucoin: kucoin::KucoinOptions::default(),
+			#[cfg(feature = "mexc")]
+			mexc: mexc::MexcOptions::default(),
+		}
+	}
 }
 impl Default for Client {
 	fn default() -> Self {

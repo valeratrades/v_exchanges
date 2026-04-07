@@ -70,7 +70,7 @@ impl ExchangeImpl for Bybit {
 	fn ws_book(&self, pairs: Vec<Pair>, instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = BookUpdate>>, ExchangeError> {
 		match instrument {
 			Instrument::Perp | Instrument::Spot => {
-				let connection = ws::BookConnection::new(self, pairs, instrument)?;
+				let connection = ws::BookConnection::try_new(self, pairs, instrument)?;
 				Ok(Box::new(connection))
 			}
 			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), instrument))),
