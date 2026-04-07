@@ -310,46 +310,37 @@ pub(crate) trait ExchangeImpl: std::fmt::Debug + Send + Sync + std::ops::Deref<T
 
 	#[allow(unused_variables)]
 	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
-		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
+		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), instrument)))
 	}
 
 	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
 	#[allow(unused_variables)]
 	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
-		Err(ExchangeError::Method(MethodError::MethodNotSupported {
-			exchange: self.name(),
-			instrument: symbol.instrument,
-		}))
+		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), symbol.instrument)))
 	}
 
 	/// If no pairs are specified, returns for all;
 	#[allow(unused_variables)]
 	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
-		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
+		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), instrument)))
 	}
 
 	#[allow(unused_variables)]
 	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
-		Err(ExchangeError::Method(MethodError::MethodNotSupported {
-			exchange: self.name(),
-			instrument: symbol.instrument,
-		}))
+		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), symbol.instrument)))
 	}
 
 	/// Get Open Interest data
 	/// in output vec: greater the index, fresher the data
 	#[allow(unused_variables)]
 	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
-		Err(ExchangeError::Method(MethodError::MethodNotSupported {
-			exchange: self.name(),
-			instrument: symbol.instrument,
-		}))
+		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), symbol.instrument)))
 	}
 
 	// Authenticated {{{
 	#[allow(unused_variables)]
 	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
-		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
+		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), instrument)))
 	}
 	//,}}}
 
@@ -363,13 +354,13 @@ pub(crate) trait ExchangeImpl: std::fmt::Debug + Send + Sync + std::ops::Deref<T
 	// Start a websocket connection for individual trades
 	#[allow(unused_variables)]
 	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>> {
-		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
+		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), instrument)))
 	}
 
 	/// Start a websocket connection for orderbook depth updates (max depth only).
 	#[allow(unused_variables)]
 	fn ws_book(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>> {
-		Err(ExchangeError::Method(MethodError::MethodNotSupported { exchange: self.name(), instrument }))
+		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), instrument)))
 	}
 	//,}}}
 }

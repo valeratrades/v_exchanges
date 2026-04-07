@@ -225,7 +225,7 @@ where
 		}
 
 		if self.options.http_auth != MexcAuth::None {
-			let pubkey = self.options.pubkey.as_deref().ok_or(ConstructAuthError::MissingPubkey)?;
+			let pubkey = self.options.pubkey.as_deref().ok_or(ConstructAuthError::new_missing_pubkey())?;
 			builder = builder.header("ApiKey", pubkey);
 
 			let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
@@ -237,7 +237,7 @@ where
 			}
 
 			if self.options.http_auth == MexcAuth::Sign {
-				let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(ConstructAuthError::MissingSecret)?;
+				let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(ConstructAuthError::new_missing_secret())?;
 				let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
 
 				let mut request = builder.build().expect("My understanding is that this doesn't fail on client, so fail fast for dev");

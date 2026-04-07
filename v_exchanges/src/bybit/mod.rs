@@ -59,10 +59,7 @@ impl ExchangeImpl for Bybit {
 	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
 		match symbol.instrument {
 			Instrument::Perp => market::open_interest(self, symbol, tf.try_into()?, range).await,
-			_ => Err(crate::ExchangeError::Method(crate::MethodError::MethodNotSupported {
-				exchange: self.name(),
-				instrument: symbol.instrument,
-			})),
+			_ => Err(crate::ExchangeError::Method(crate::MethodError::new_method_not_supported(self.name(), symbol.instrument))),
 		}
 	}
 
@@ -76,7 +73,7 @@ impl ExchangeImpl for Bybit {
 				let connection = ws::BookConnection::new(self, pairs, instrument)?;
 				Ok(Box::new(connection))
 			}
-			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument })),
+			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), instrument))),
 		}
 	}
 }

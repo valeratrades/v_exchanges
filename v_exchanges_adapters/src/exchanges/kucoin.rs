@@ -45,8 +45,8 @@ where
 		};
 
 		if self.options.http_auth != KucoinAuth::None {
-			let pubkey = self.options.pubkey.as_deref().ok_or(ConstructAuthError::MissingPubkey)?;
-			let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(ConstructAuthError::MissingSecret)?;
+			let pubkey = self.options.pubkey.as_deref().ok_or(ConstructAuthError::new_missing_pubkey())?;
+			let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(ConstructAuthError::new_missing_secret())?;
 			let passphrase = self
 				.options
 				.passphrase
@@ -82,7 +82,7 @@ where
 
 			headers.insert(
 				"KC-API-KEY",
-				header::HeaderValue::from_str(pubkey).map_err(|e| ConstructAuthError::InvalidCharacterInApiKey(e.to_string()))?,
+				header::HeaderValue::from_str(pubkey).map_err(|e| ConstructAuthError::new_invalid_character_in_api_key(e.to_string()))?,
 			);
 			headers.insert(
 				"KC-API-SIGN",
@@ -153,14 +153,9 @@ where
 }
 
 // Ws stuff {{{
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, derive_new::new)]
 pub struct KucoinWsHandler {
 	options: KucoinOptions,
-}
-impl KucoinWsHandler {
-	pub fn new(options: KucoinOptions) -> Self {
-		Self { options }
-	}
 }
 impl WsHandler for KucoinWsHandler {
 	fn config(&self) -> Result<WsConfig, UrlError> {
@@ -177,8 +172,8 @@ impl WsHandler for KucoinWsHandler {
 
 	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
 		if self.options.ws_config.auth {
-			let _pubkey = self.options.pubkey.as_ref().ok_or(ConstructAuthError::MissingPubkey)?;
-			let _secret = self.options.secret.as_ref().ok_or(ConstructAuthError::MissingSecret)?;
+			let _pubkey = self.options.pubkey.as_ref().ok_or(ConstructAuthError::new_missing_pubkey())?;
+			let _secret = self.options.secret.as_ref().ok_or(ConstructAuthError::new_missing_secret())?;
 			//TODO: implement ws auth for kucoin
 		}
 

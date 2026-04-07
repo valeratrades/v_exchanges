@@ -47,7 +47,7 @@ impl ExponentialBackoff {
 	/// - `delay_max` is less than `delay_initial`.
 	/// - `delay_max` exceeds `Duration::from_nanos(u64::MAX)` (≈584 years).
 	/// - `factor` is not in the range [1.0, 100.0] (to prevent reconnect spam).
-	pub fn new(delay_initial: Duration, delay_max: Duration, factor: f64, jitter_ms: u64, immediate_first: bool) -> Result<Self> {
+	pub fn try_new(delay_initial: Duration, delay_max: Duration, factor: f64, jitter_ms: u64, immediate_first: bool) -> Result<Self> {
 		ensure!(!delay_initial.is_zero(), "delay_initial must be non-zero");
 		ensure!(delay_max >= delay_initial, "delay_max must be >= delay_initial");
 		ensure!(delay_max.as_nanos() <= u128::from(u64::MAX), "delay_max exceeds maximum representable duration (≈584 years)");
@@ -121,7 +121,7 @@ impl TryFrom<&RetryConfig> for ExponentialBackoff {
 	type Error = eyre::Report;
 
 	fn try_from(c: &RetryConfig) -> Result<Self> {
-		Self::new(
+		Self::try_new(
 			Duration::from_millis(c.initial_delay_ms),
 			Duration::from_millis(c.max_delay_ms),
 			c.backoff_factor,
@@ -141,7 +141,7 @@ mod tests {
 	fn test_no_jitter_exponential_growth() {
 		let initial = Duration::from_millis(100);
 		let max = Duration::from_millis(1600);
-		let mut backoff = ExponentialBackoff::new(initial, max, 2.0, 0, false).unwrap();
+		let mut backoff = ExponentialBackoff::try_new(initial, max, 2.0, 0, false).unwrap();
 
 		let d1 = backoff.next_duration();
 		assert_eq!(d1, Duration::from_millis(100));
@@ -166,7 +166,7 @@ mod tests {
 	fn test_reset() {
 		let initial = Duration::from_millis(100);
 		let max = Duration::from_millis(1600);
-		let mut backoff = ExponentialBackoff::new(initial, max, 2.0, 0, false).unwrap();
+		let mut backoff = ExponentialBackoff::try_new(initial, max, 2.0, 0, false).unwrap();
 
 		let _ = backoff.next_duration();
 		backoff.reset();
@@ -180,7 +180,7 @@ mod tests {
 		let max = Duration::from_millis(1000);
 		let jitter = 50;
 		for _ in 0..10 {
-			let mut backoff = ExponentialBackoff::new(initial, max, 2.0, jitter, false).unwrap();
+			let mut backoff = ExponentialBackoff::try_new(initial, max, 2.0, jitter, false).unwrap();
 			let base = backoff.delay_current;
 			let delay = backoff.next_duration();
 			assert!(delay >= base, "Delay {delay:?} is less than expected minimum {base:?}");
@@ -192,7 +192,7 @@ mod tests {
 	fn test_immediate_first() {
 		let initial = Duration::from_millis(100);
 		let max = Duration::from_millis(1600);
-		let mut backoff = ExponentialBackoff::new(initial, max, 2.0, 0, true).unwrap();
+		let mut backoff = ExponentialBackoff::try_new(initial, max, 2.0, 0, true).unwrap();
 
 		let d1 = backoff.next_duration();
 		assert_eq!(d1, Duration::ZERO, "Expected immediate reconnect on first call");
@@ -208,7 +208,7 @@ mod tests {
 	fn test_reset_restores_immediate_first() {
 		let initial = Duration::from_millis(100);
 		let max = Duration::from_millis(1600);
-		let mut backoff = ExponentialBackoff::new(initial, max, 2.0, 0, true).unwrap();
+		let mut backoff = ExponentialBackoff::try_new(initial, max, 2.0, 0, true).unwrap();
 
 		let d1 = backoff.next_duration();
 		assert_eq!(d1, Duration::ZERO);
@@ -223,25 +223,25 @@ mod tests {
 
 	#[test]
 	fn test_validation_zero_initial_delay() {
-		let result = ExponentialBackoff::new(Duration::ZERO, Duration::from_millis(1000), 2.0, 0, false);
+		let result = ExponentialBackoff::try_new(Duration::ZERO, Duration::from_millis(1000), 2.0, 0, false);
 		assert!(result.is_err());
 		assert!(result.unwrap_err().to_string().contains("delay_initial must be non-zero"));
 	}
 
 	#[test]
 	fn test_validation_max_less_than_initial() {
-		let result = ExponentialBackoff::new(Duration::from_millis(1000), Duration::from_millis(500), 2.0, 0, false);
+		let result = ExponentialBackoff::try_new(Duration::from_millis(1000), Duration::from_millis(500), 2.0, 0, false);
 		assert!(result.is_err());
 		assert!(result.unwrap_err().to_string().contains("delay_max must be >= delay_initial"));
 	}
 
 	#[test]
 	fn test_validation_factor_out_of_range() {
-		let result = ExponentialBackoff::new(Duration::from_millis(100), Duration::from_millis(1000), 0.5, 0, false);
+		let result = ExponentialBackoff::try_new(Duration::from_millis(100), Duration::from_millis(1000), 0.5, 0, false);
 		assert!(result.is_err());
 		assert!(result.unwrap_err().to_string().contains("factor"));
 
-		let result2 = ExponentialBackoff::new(Duration::from_millis(100), Duration::from_millis(1000), 150.0, 0, false);
+		let result2 = ExponentialBackoff::try_new(Duration::from_millis(100), Duration::from_millis(1000), 150.0, 0, false);
 		assert!(result2.is_err());
 		assert!(result2.unwrap_err().to_string().contains("factor"));
 	}

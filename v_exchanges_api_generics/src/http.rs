@@ -62,14 +62,7 @@ impl Client {
 			}
 		}
 
-		let mut backoff = ExponentialBackoff::new(
-			Duration::from_millis(config.retry.initial_delay_ms),
-			Duration::from_millis(config.retry.max_delay_ms),
-			config.retry.backoff_factor,
-			config.retry.jitter_ms,
-			config.retry.immediate_first,
-		)
-		.map_err(|e| RequestError::Other(eyre!("Invalid retry configuration: {e}")))?;
+		let mut backoff = ExponentialBackoff::try_from(&config.retry).map_err(|e| RequestError::Other(eyre!("Invalid retry configuration: {e}")))?;
 
 		let mut attempt: u32 = 0;
 		loop {

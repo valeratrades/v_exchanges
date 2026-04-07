@@ -7,7 +7,7 @@ use std::{future::Future, marker::PhantomData, time::Duration};
 pub use backoff::ExponentialBackoff;
 
 /// Configuration for retry behavior.
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, Default)]
 pub struct RetryConfig {
 	/// Maximum number of retry attempts (total attempts = 1 initial + `max_retries`).
 	pub max_retries: u32 = 3,

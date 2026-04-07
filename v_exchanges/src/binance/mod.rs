@@ -49,10 +49,7 @@ impl ExchangeImpl for Binance {
 		match symbol.instrument {
 			Instrument::Spot | Instrument::Margin => market::klines(self, symbol, tf.try_into()?, range).await,
 			Instrument::Perp => market::klines(self, symbol, tf.try_into()?, range).await,
-			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented {
-				exchange: self.name(),
-				instrument: symbol.instrument,
-			})),
+			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), symbol.instrument))),
 		}
 	}
 
@@ -60,7 +57,7 @@ impl ExchangeImpl for Binance {
 		match instrument {
 			Instrument::Spot | Instrument::Margin => spot::market::prices(self, pairs).await,
 			Instrument::Perp => perp::market::prices(self, pairs).await,
-			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument })),
+			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), instrument))),
 		}
 	}
 
@@ -68,20 +65,14 @@ impl ExchangeImpl for Binance {
 		match symbol.instrument {
 			Instrument::Spot | Instrument::Margin => spot::market::price(self, symbol.pair).await,
 			Instrument::Perp => perp::market::price(self, symbol.pair).await,
-			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented {
-				exchange: self.name(),
-				instrument: symbol.instrument,
-			})),
+			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), symbol.instrument))),
 		}
 	}
 
 	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<crate::core::OpenInterest>> {
 		match symbol.instrument {
 			Instrument::Perp => market::open_interest(self, symbol, tf.try_into()?, range).await,
-			_ => Err(ExchangeError::Method(MethodError::MethodNotSupported {
-				exchange: self.name(),
-				instrument: symbol.instrument,
-			})),
+			_ => Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), symbol.instrument))),
 		}
 	}
 
@@ -92,7 +83,7 @@ impl ExchangeImpl for Binance {
 				perp::account::personal_info(self, recv_window, &prices).await
 			}
 			Instrument::Spot | Instrument::Margin => spot::account::personal_info(self, recv_window).await,
-			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument })),
+			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), instrument))),
 		}
 	}
 
@@ -102,7 +93,7 @@ impl ExchangeImpl for Binance {
 				let connection = ws::TradesConnection::new(self, pairs, instrument)?;
 				Ok(Box::new(connection))
 			}
-			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument })),
+			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), instrument))),
 		}
 	}
 
@@ -112,7 +103,7 @@ impl ExchangeImpl for Binance {
 				let connection = ws::BookConnection::new(self, pairs, instrument)?;
 				Ok(Box::new(connection))
 			}
-			_ => Err(ExchangeError::Method(MethodError::MethodNotImplemented { exchange: self.name(), instrument })),
+			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), instrument))),
 		}
 	}
 }

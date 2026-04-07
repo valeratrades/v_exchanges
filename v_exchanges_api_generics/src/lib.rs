@@ -1,6 +1,7 @@
 #![warn(future_incompatible, let_underscore, nonstandard_style)] //, missing_docs)]
 #![feature(slice_pattern)]
 #![feature(default_field_values)]
+#![feature(error_generic_member_access)]
 #![feature(try_blocks)]
 #![feature(duration_constructors)]
 #![allow(clippy::result_large_err)]
@@ -18,6 +19,8 @@
 //!
 //! For a more detailed documentation, see the links above.
 
+use std::backtrace::Backtrace;
+
 pub mod http;
 pub mod retry;
 pub mod ws;
@@ -26,15 +29,29 @@ pub use retry::{ExponentialBackoff, RetryConfig, RetryManager};
 pub extern crate reqwest;
 pub extern crate tokio_tungstenite;
 
-#[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error, derive_more::From)]
+#[derive(Debug, miette::Diagnostic, thiserror::Error, derive_new::new)]
 #[non_exhaustive]
 pub enum ConstructAuthError {
+	#[error("missing API public key")]
 	#[diagnostic(code(v_exchanges::auth::missing_pubkey), help("Provide API public key in your credentials"))]
-	MissingPubkey,
+	MissingPubkey {
+		#[new(value = "Backtrace::capture()")]
+		backtrace: Backtrace,
+	},
+	#[error("missing API secret key")]
 	#[diagnostic(code(v_exchanges::auth::missing_secret), help("Provide API secret key in your credentials"))]
-	MissingSecret,
+	MissingSecret {
+		#[new(value = "Backtrace::capture()")]
+		backtrace: Backtrace,
+	},
+	#[error("invalid character in API key: {key}")]
 	#[diagnostic(code(v_exchanges::auth::invalid_api_key))]
-	InvalidCharacterInApiKey(String),
+	InvalidCharacterInApiKey {
+		key: String,
+		#[new(value = "Backtrace::capture()")]
+		backtrace: Backtrace,
+	},
+	#[error("{0}")]
 	#[diagnostic(code(v_exchanges::auth::other))]
 	Other(eyre::Report),
 }

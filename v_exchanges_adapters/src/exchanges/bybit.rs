@@ -342,7 +342,7 @@ where
 		headers.insert("X-BAPI-SIGN", HeaderValue::from_str(&signature).unwrap()); // hex digits are valid
 		headers.insert(
 			"X-BAPI-API-KEY",
-			HeaderValue::from_str(key).or(Err(ConstructAuthError::InvalidCharacterInApiKey(key.to_owned())))?,
+			HeaderValue::from_str(key).or(Err(ConstructAuthError::new_invalid_character_in_api_key(key.to_owned())))?,
 		);
 		headers.insert("X-BAPI-TIMESTAMP", HeaderValue::from(timestamp as u64));
 		if let Some(window) = window {
@@ -444,8 +444,8 @@ where
 			return Ok(builder.build().expect("My understanding is client can't trigger this. So fail fast for dev"));
 		}
 
-		let pubkey = self.options.pubkey.as_deref().ok_or(ConstructAuthError::MissingPubkey)?;
-		let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(ConstructAuthError::MissingSecret)?;
+		let pubkey = self.options.pubkey.as_deref().ok_or(ConstructAuthError::new_missing_pubkey())?;
+		let secret = self.options.secret.as_ref().map(|s| s.expose_secret()).ok_or(ConstructAuthError::new_missing_secret())?;
 
 		let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(); // always after the epoch
 		let timestamp = time.as_millis();
@@ -532,8 +532,8 @@ impl WsHandler for BybitWsHandler {
 	fn handle_auth(&mut self) -> Result<Vec<tungstenite::Message>, WsError> {
 		match self.options.ws_auth {
 			true => {
-				let pubkey = self.options.pubkey.as_ref().ok_or(ConstructAuthError::MissingPubkey)?;
-				let secret = self.options.secret.as_ref().ok_or(ConstructAuthError::MissingSecret)?;
+				let pubkey = self.options.pubkey.as_ref().ok_or(ConstructAuthError::new_missing_pubkey())?;
+				let secret = self.options.secret.as_ref().ok_or(ConstructAuthError::new_missing_secret())?;
 				let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("always after the epoch");
 				//XXX: expiration time here is hardcoded to 1s, which would override any specifications of a longer recv_window on top.
 				let expires = time.as_millis() as u64 + 1000; //TODO: figure out how large can I make this

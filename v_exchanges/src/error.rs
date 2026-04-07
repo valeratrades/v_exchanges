@@ -1,3 +1,5 @@
+use std::backtrace::Backtrace;
+
 use adapters::generics::{
 	http::{ApiError, AuthError, HandleError, IpError, RequestError},
 	ws::WsError,
@@ -68,6 +70,8 @@ impl SysexitCode for Error {
 pub struct UnsupportedTimeframeError {
 	provided: Timeframe,
 	allowed: Vec<Timeframe>,
+	#[new(value = "Backtrace::capture()")]
+	backtrace: Backtrace,
 }
 
 #[derive(Debug, miette::Diagnostic, thiserror::Error, derive_new::new)]
@@ -78,10 +82,20 @@ pub enum MethodError {
 		code(v_exchanges::method::not_implemented),
 		help("This method is not expected to be implemented for this exchange/instrument combination.")
 	)]
-	MethodNotImplemented { exchange: ExchangeName, instrument: Instrument },
+	MethodNotImplemented {
+		exchange: ExchangeName,
+		instrument: Instrument,
+		#[new(value = "Backtrace::capture()")]
+		backtrace: Backtrace,
+	},
 	#[error("Requested exchange does not support the method for chosen instrument: ({exchange}, {instrument})")]
 	#[diagnostic(code(v_exchanges::method::not_supported), help("This exchange does not support this method for the specified instrument type."))]
-	MethodNotSupported { exchange: ExchangeName, instrument: Instrument },
+	MethodNotSupported {
+		exchange: ExchangeName,
+		instrument: Instrument,
+		#[new(value = "Backtrace::capture()")]
+		backtrace: Backtrace,
+	},
 }
 
 #[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error, derive_more::From)]
@@ -98,7 +112,7 @@ pub enum RequestRangeError {
 pub struct OutOfRangeError {
 	allowed: std::ops::RangeInclusive<u32>,
 	provided: u32,
-	#[new(value = "std::backtrace::Backtrace::capture()")]
-	backtrace: std::backtrace::Backtrace,
+	#[new(value = "Backtrace::capture()")]
+	backtrace: Backtrace,
 }
 //,}}}

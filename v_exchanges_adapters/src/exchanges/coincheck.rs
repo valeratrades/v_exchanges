@@ -161,14 +161,14 @@ where
 				.secret
 				.as_ref()
 				.map(|s| s.expose_secret())
-				.ok_or(BuildError::Auth(generics::ConstructAuthError::MissingSecret))?;
+				.ok_or(BuildError::Auth(generics::ConstructAuthError::new_missing_secret()))?;
 			let mut hmac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap(); // hmac accepts key of any length
 
 			hmac.update(sign_contents.as_bytes());
 			let signature = hex::encode(hmac.finalize().into_bytes());
 
-			let key = HeaderValue::from_str(self.options.key.as_deref().ok_or(BuildError::Auth(generics::ConstructAuthError::MissingPubkey))?)
-				.map_err(|e| BuildError::Auth(generics::ConstructAuthError::InvalidCharacterInApiKey(e.to_string())))?;
+			let key = HeaderValue::from_str(self.options.key.as_deref().ok_or(BuildError::Auth(generics::ConstructAuthError::new_missing_pubkey()))?)
+				.map_err(|e| BuildError::Auth(generics::ConstructAuthError::new_invalid_character_in_api_key(e.to_string())))?;
 			let headers = request.headers_mut();
 			headers.insert("ACCESS-KEY", key);
 			headers.insert("ACCESS-NONCE", HeaderValue::from(timestamp));

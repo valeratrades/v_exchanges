@@ -117,23 +117,6 @@ pub struct WsConnection<H: WsHandler> {
 	stream: Option<WsConnectionStream>,
 	backoff: ExponentialBackoff,
 }
-#[derive(Debug, derive_more::Deref, derive_more::DerefMut)]
-struct WsConnectionStream {
-	#[deref_mut]
-	#[deref]
-	stream: WsStream,
-	connected_since: SystemTime,
-	last_unanswered_communication: Option<SystemTime>,
-}
-impl WsConnectionStream {
-	fn new(stream: WsStream, connected_since: SystemTime) -> Self {
-		Self {
-			stream,
-			connected_since,
-			last_unanswered_communication: None,
-		}
-	}
-}
 impl<H: WsHandler> WsConnection<H> {
 	#[allow(missing_docs)]
 	pub fn try_new(url_suffix: &str, handler: H) -> Result<Self, WsError> {
@@ -142,14 +125,7 @@ impl<H: WsHandler> WsConnection<H> {
 			Some(base_url) => base_url.join(url_suffix).map_err(UrlError::Parse)?,
 			None => Url::parse(url_suffix).map_err(UrlError::Parse)?,
 		};
-		let backoff = ExponentialBackoff::new(
-			Duration::from_millis(config.reconnect.initial_delay_ms),
-			Duration::from_millis(config.reconnect.max_delay_ms),
-			config.reconnect.backoff_factor,
-			config.reconnect.jitter_ms,
-			config.reconnect.immediate_first,
-		)
-		.map_err(|e| WsError::Other(eyre::eyre!("Invalid reconnect backoff configuration: {e}")))?;
+		let backoff = ExponentialBackoff::try_from(&config.reconnect).map_err(|e| WsError::Other(eyre::eyre!("Invalid reconnect backoff configuration: {e}")))?;
 
 		Ok(Self {
 			url,
@@ -223,7 +199,7 @@ impl<H: WsHandler> WsConnection<H> {
 						continue;
 					}
 					Err(timeout_error) => {
-						tracing::warn!("Message reception timed out after {:?} seconds. // {timeout_error}", timeout);
+						tracing::warn!("Message reception timed out after {timeout:?} seconds. // {timeout_error}");
 						{
 							let stream = self.stream.as_mut().unwrap();
 							match stream.last_unanswered_communication.is_some() {
@@ -415,29 +391,6 @@ pub struct WsConfig {
 	/// The topics that will be subscribed to on creation of the connection. Note that we don't allow for passing anything that changes state here like [Trade](Topic::Trade) payloads, thus submissions are limited to [String]s
 	pub topics: HashSet<String>,
 }
-
-impl Default for WsConfig {
-	fn default() -> Self {
-		Self {
-			auth: false,
-			base_url: None,
-			reconnect: RetryConfig {
-				max_retries: u32::MAX,
-				initial_delay_ms: 1_000,
-				max_delay_ms: 30_000,
-				backoff_factor: 2.0,
-				jitter_ms: 500,
-				immediate_first: false,
-				max_elapsed_ms: None,
-			},
-			refresh_after: Duration::from_hours(12),
-			message_timeout: Duration::from_mins(16),
-			response_timeout: Duration::from_mins(2),
-			topics: HashSet::new(),
-		}
-	}
-}
-
 impl WsConfig {
 	pub fn set_reconnect(&mut self, reconnect: RetryConfig) {
 		self.reconnect = reconnect;
@@ -494,6 +447,42 @@ pub enum WsDefinitionError {
 	#[diagnostic(code(v_exchanges::ws::definition::missing_url), help("WebSocket base URL must be configured in WsConfig."))]
 	MissingUrl,
 }
+#[derive(Clone, Debug, derive_more::Display, Eq, Hash, PartialEq, serde::Serialize)]
+pub enum Topic {
+	String(String),
+	Order(serde_json::Value),
+}
+#[derive(Debug, derive_more::Deref, derive_more::DerefMut, derive_new::new)]
+struct WsConnectionStream {
+	#[deref_mut]
+	#[deref]
+	stream: WsStream,
+	connected_since: SystemTime,
+	#[new(default)]
+	last_unanswered_communication: Option<SystemTime>,
+}
+
+impl Default for WsConfig {
+	fn default() -> Self {
+		Self {
+			auth: false,
+			base_url: None,
+			reconnect: RetryConfig {
+				max_retries: u32::MAX,
+				initial_delay_ms: 1_000,
+				max_delay_ms: 30_000,
+				backoff_factor: 2.0,
+				jitter_ms: 500,
+				immediate_first: false,
+				max_elapsed_ms: None,
+			},
+			refresh_after: Duration::from_hours(12),
+			message_timeout: Duration::from_mins(16),
+			response_timeout: Duration::from_mins(2),
+			topics: HashSet::new(),
+		}
+	}
+}
 
 //DEPRECATE: or reinstate, - can't even remember what's this now
 //#[derive(Debug, derive_more::Display, thiserror::Error)]
@@ -508,9 +497,3 @@ pub enum WsDefinitionError {
 //	topic: Topic,
 //	base_url: Url,
 //}
-
-#[derive(Clone, Debug, derive_more::Display, Eq, Hash, PartialEq, serde::Serialize)]
-pub enum Topic {
-	String(String),
-	Order(serde_json::Value),
-}

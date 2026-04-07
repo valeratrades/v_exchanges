@@ -125,11 +125,7 @@ pub(super) async fn open_interest(client: &v_exchanges_adapters::Client, symbol:
 
 	let (endpoint, base_url) = match symbol.instrument {
 		Instrument::Perp => ("/futures/data/openInterestHist", BinanceHttpUrl::FuturesUsdM),
-		_ =>
-			return Err(ExchangeError::Method(crate::MethodError::MethodNotSupported {
-				exchange: ExchangeName::Binance,
-				instrument: symbol.instrument,
-			})),
+		_ => return Err(ExchangeError::Method(crate::MethodError::new_method_not_supported(ExchangeName::Binance, symbol.instrument))),
 	};
 
 	let options = vec![BinanceOption::HttpUrl(base_url)];
