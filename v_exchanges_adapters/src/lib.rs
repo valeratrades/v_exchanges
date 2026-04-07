@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 pub use exchanges::*;
 use serde::Serialize;
-use tokio::sync::Semaphore;
 use traits::*;
 use ustr::Ustr;
 use v_exchanges_api_generics::{
@@ -29,9 +28,6 @@ macro_rules! request_ret {
         >
     };
 }
-
-/// Default maximum number of simultaneous requests allowed
-pub const DEFAULT_MAX_SIMULTANEOUS_REQUESTS: usize = 100;
 
 /// Core HTTP transport interface.
 pub trait HttpClient {
@@ -69,10 +65,6 @@ impl Client {
 		Client::Mock(inner)
 	}
 
-	pub fn request_semaphore(&self) -> &Arc<Semaphore> {
-		&self.inner().request_semaphore
-	}
-
 	/// Sets the rate limiter for this client.
 	///
 	/// The rate limiter is shared across clones of this client (Arc). After calling this, the
@@ -82,15 +74,6 @@ impl Client {
 		let rl = Arc::new(rl);
 		self.inner_mut().client.rate_limiter = Some(Arc::clone(&rl));
 		self.inner_mut().rate_limiter = rl;
-	}
-
-	/// Set the maximum number of simultaneous requests allowed.
-	///
-	/// This creates a new semaphore with the specified number of permits.
-	/// Note: This will NOT affect existing clones of this client - they will keep using the old semaphore.
-	/// Call this before cloning if you need all instances to share the same limit.
-	pub fn set_max_simultaneous_requests(&mut self, max: usize) {
-		self.inner_mut().request_semaphore = Arc::new(Semaphore::new(max));
 	}
 
 	/// Update the default options for this [Client]
@@ -216,9 +199,6 @@ impl Client {
 #[derive(Clone, Debug)]
 pub struct ClientInner {
 	pub client: http::Client,
-	/// Semaphore for limiting simultaneous requests.
-	/// Shared across clones of this client.
-	pub request_semaphore: Arc<Semaphore>,
 	/// Rate limiter shared across clones (same exchange instance).
 	pub rate_limiter: Arc<RateLimiter<Ustr, MonotonicClock>>,
 	#[cfg(feature = "binance")]
@@ -238,7 +218,6 @@ impl Default for ClientInner {
 	fn default() -> Self {
 		Self {
 			client: http::Client::default(),
-			request_semaphore: Arc::new(Semaphore::new(DEFAULT_MAX_SIMULTANEOUS_REQUESTS)),
 			rate_limiter: Arc::new(RateLimiter::new_with_quota(None, vec![])),
 			#[cfg(feature = "binance")]
 			binance: binance::BinanceOptions::default(),

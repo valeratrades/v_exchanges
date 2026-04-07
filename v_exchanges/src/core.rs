@@ -22,9 +22,6 @@ const MAX_RECV_WINDOW: std::time::Duration = std::time::Duration::from_secs(10 *
 ///
 /// //NB: NEVER implement this trait manually. It is auto-implemented via blanket impl for all `ExchangeImpl` implementors.
 /// The blanket impl ensures that this trait can only be implemented within this crate.
-///
-/// All HTTP methods (except websocket) are rate-limited by a semaphore that limits the number of
-/// simultaneous outgoing requests. Use `set_max_simultaneous_requests` to configure the limit.
 #[async_trait::async_trait]
 pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Client> + std::ops::DerefMut {
 	fn name(&self) -> ExchangeName;
@@ -34,9 +31,6 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	fn set_retry_config(&mut self, config: RetryConfig);
 	fn set_use_testnet(&mut self, b: bool);
 	fn set_cache_testnet_calls(&mut self, duration: Option<std::time::Duration>);
-	/// Set the maximum number of simultaneous requests allowed.
-	/// Default is 100. The semaphore is shared across all clones of this exchange instance.
-	fn set_max_simultaneous_requests(&mut self, max: usize);
 	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo>;
 	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines>;
 	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>>;
@@ -420,38 +414,28 @@ impl<T: ExchangeImpl> Exchange for T {
 		self.http_client_mut().config.cache_testnet_calls = duration;
 	}
 
-	fn set_max_simultaneous_requests(&mut self, max: usize) {
-		(**self).set_max_simultaneous_requests(max);
-	}
-
 	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
-		let _permit = self.request_semaphore().acquire().await.expect("semaphore closed");
 		ExchangeImpl::exchange_info(self, instrument).await
 	}
 
 	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
-		let _permit = self.request_semaphore().acquire().await.expect("semaphore closed");
 		ExchangeImpl::klines(self, symbol, tf, range).await
 	}
 
 	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
-		let _permit = self.request_semaphore().acquire().await.expect("semaphore closed");
 		ExchangeImpl::prices(self, pairs, instrument).await
 	}
 
 	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
-		let _permit = self.request_semaphore().acquire().await.expect("semaphore closed");
 		ExchangeImpl::price(self, symbol).await
 	}
 
 	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
-		let _permit = self.request_semaphore().acquire().await.expect("semaphore closed");
 		ExchangeImpl::open_interest(self, symbol, tf, range).await
 	}
 
 	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
 		validate_recv_window(recv_window, ExchangeImpl::default_recv_window(self))?;
-		let _permit = self.request_semaphore().acquire().await.expect("semaphore closed");
 		ExchangeImpl::personal_info(self, instrument, recv_window).await
 	}
 
