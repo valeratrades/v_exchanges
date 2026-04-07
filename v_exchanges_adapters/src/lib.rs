@@ -9,8 +9,11 @@ pub use exchanges::*;
 use serde::Serialize;
 use tokio::sync::Semaphore;
 use traits::*;
+use ustr::Ustr;
 use v_exchanges_api_generics::{
+	RateLimiter,
 	http::{self, *},
+	ratelimiter::clock::MonotonicClock,
 	ws::*,
 };
 
@@ -68,6 +71,17 @@ impl Client {
 
 	pub fn request_semaphore(&self) -> &Arc<Semaphore> {
 		&self.inner().request_semaphore
+	}
+
+	/// Sets the rate limiter for this client.
+	///
+	/// The rate limiter is shared across clones of this client (Arc). After calling this, the
+	/// limiter is also wired into the underlying `http::Client` so that `request()` calls
+	/// automatically wait on it.
+	pub fn set_rate_limiter(&mut self, rl: RateLimiter<Ustr, MonotonicClock>) {
+		let rl = Arc::new(rl);
+		self.inner_mut().client.rate_limiter = Some(Arc::clone(&rl));
+		self.inner_mut().rate_limiter = rl;
 	}
 
 	/// Set the maximum number of simultaneous requests allowed.
@@ -201,45 +215,25 @@ impl Client {
 
 #[derive(Clone, Debug)]
 pub struct ClientInner {
-	pub client: http::Client,
+	pub client: http::Client = http::Client::default(),
 	/// Semaphore for limiting simultaneous requests.
 	/// Shared across clones of this client.
-	pub request_semaphore: Arc<Semaphore>,
+	pub request_semaphore: Arc<Semaphore> = Arc::new(Semaphore::new(DEFAULT_MAX_SIMULTANEOUS_REQUESTS)),
+	/// Rate limiter shared across clones (same exchange instance).
+	pub rate_limiter: Arc<RateLimiter<Ustr, MonotonicClock>> = Arc::new(RateLimiter::new_with_quota(None, vec![])),
 	#[cfg(feature = "binance")]
-	binance: binance::BinanceOptions,
+	binance: binance::BinanceOptions = binance::BinanceOptions::default(),
 	#[cfg(feature = "bitflyer")]
-	bitflyer: bitflyer::BitFlyerOptions,
+	bitflyer: bitflyer::BitFlyerOptions = bitflyer::BitFlyerOptions::default(),
 	#[cfg(feature = "bybit")]
-	bybit: bybit::BybitOptions,
+	bybit: bybit::BybitOptions = bybit::BybitOptions::default(),
 	#[cfg(feature = "coincheck")]
-	coincheck: coincheck::CoincheckOptions,
+	coincheck: coincheck::CoincheckOptions = coincheck::CoincheckOptions::default(),
 	#[cfg(feature = "kucoin")]
-	kucoin: kucoin::KucoinOptions,
+	kucoin: kucoin::KucoinOptions = kucoin::KucoinOptions::default(),
 	#[cfg(feature = "mexc")]
-	mexc: mexc::MexcOptions,
+	mexc: mexc::MexcOptions = mexc::MexcOptions::default(),
 }
-
-impl Default for ClientInner {
-	fn default() -> Self {
-		Self {
-			client: http::Client::default(),
-			request_semaphore: Arc::new(Semaphore::new(DEFAULT_MAX_SIMULTANEOUS_REQUESTS)),
-			#[cfg(feature = "binance")]
-			binance: binance::BinanceOptions::default(),
-			#[cfg(feature = "bitflyer")]
-			bitflyer: bitflyer::BitFlyerOptions::default(),
-			#[cfg(feature = "bybit")]
-			bybit: bybit::BybitOptions::default(),
-			#[cfg(feature = "coincheck")]
-			coincheck: coincheck::CoincheckOptions::default(),
-			#[cfg(feature = "kucoin")]
-			kucoin: kucoin::KucoinOptions::default(),
-			#[cfg(feature = "mexc")]
-			mexc: mexc::MexcOptions::default(),
-		}
-	}
-}
-
 impl Default for Client {
 	fn default() -> Self {
 		Client::True(ClientInner::default())

@@ -1,4 +1,9 @@
-use std::{fmt::Debug, path::PathBuf, sync::OnceLock, time::Duration};
+use std::{
+	fmt::Debug,
+	path::PathBuf,
+	sync::{Arc, OnceLock},
+	time::Duration,
+};
 
 pub use bytes::Bytes;
 use eyre::{Report, eyre};
@@ -10,8 +15,13 @@ pub use reqwest::{
 };
 use serde::Serialize;
 use tracing::{Span, debug, error, field::Empty, info, instrument, warn};
+pub use ustr::Ustr;
 
-use crate::{ConstructAuthError, RetryConfig, UrlError, retry::ExponentialBackoff};
+use crate::{
+	ConstructAuthError, RetryConfig, UrlError,
+	ratelimiter::{RateLimiter, clock::MonotonicClock},
+	retry::ExponentialBackoff,
+};
 
 /// The User Agent string
 pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_PKG_VERSION"));
@@ -24,6 +34,7 @@ pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_P
 pub struct Client {
 	client: reqwest::Client,
 	pub config: RequestConfig,
+	pub rate_limiter: Option<Arc<RateLimiter<Ustr, MonotonicClock>>>,
 }
 
 impl Client {
@@ -60,6 +71,27 @@ impl Client {
 				let (status, headers) = (StatusCode::OK, header::HeaderMap::new());
 				return handler.handle_response(status, headers, body).map_err(RequestError::HandleResponse);
 			}
+		}
+
+		if let Some(rl) = &self.rate_limiter {
+			let bucket = {
+				// Segment 1: always "ip"
+				// Segment 2: exchange name — second-level domain of the request host (e.g. "binance" from "api.binance.com")
+				// Segment 3: credential name — truncated hash of pubkey, present only if handler carries one
+				let exchange = url.host_str().and_then(|h| {
+					let parts: Vec<&str> = h.split('.').collect();
+					// SLD is second-from-last for normal domains, last for single-label (localhost etc.)
+					parts.len().checked_sub(2).map(|i| parts[i])
+				});
+				let key_name = handler.rate_limit_key_name();
+				let s = match (exchange, key_name.as_deref()) {
+					(Some(ex), Some(kn)) => format!("ip.{ex}.{kn}"),
+					(Some(ex), None) => format!("ip.{ex}"),
+					(None, _) => "ip".to_owned(),
+				};
+				Ustr::from(&s)
+			};
+			rl.until_key_ready_n(&bucket, 1).await;
 		}
 
 		let mut backoff = ExponentialBackoff::try_from(&config.retry).map_err(|e| RequestError::Other(eyre!("Invalid retry configuration: {e}")))?;
@@ -269,6 +301,15 @@ pub trait RequestHandler<B> {
 	/// # }
 	/// ```
 	fn handle_response(&self, status: StatusCode, headers: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError>;
+
+	/// Returns a short identifier for the credential pair used by this handler, if any.
+	///
+	/// Used as the third segment of the rate-limit bucket key: `"ip.{exchange}.{name}"`.
+	/// The default is `None` (anonymous / unauthenticated request — only the two-segment key is used).
+	/// Exchange impls return a truncated hash of their pubkey so each key pair gets its own bucket.
+	fn rate_limit_key_name(&self) -> Option<String> {
+		None
+	}
 }
 
 /// Configuration when sending a request using [Client].

@@ -22,8 +22,11 @@
 use std::backtrace::Backtrace;
 
 pub mod http;
+pub mod ratelimiter;
 pub mod retry;
 pub mod ws;
+
+pub use ratelimiter::{RateLimiter, quota::Quota};
 
 pub use retry::{ExponentialBackoff, RetryConfig, RetryManager};
 pub extern crate reqwest;

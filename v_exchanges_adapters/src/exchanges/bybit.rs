@@ -461,6 +461,11 @@ where
 		}
 	}
 
+	fn rate_limit_key_name(&self) -> Option<String> {
+		use sha2::{Digest as _, Sha256};
+		self.options.pubkey.as_deref().map(|k| hex::encode(&Sha256::digest(k.as_bytes())[..4]))
+	}
+
 	fn handle_response(&self, status: StatusCode, _: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError> {
 		if status.is_success() {
 			// Bybit returns HTTP 200 even for API errors, so we need to check retCode

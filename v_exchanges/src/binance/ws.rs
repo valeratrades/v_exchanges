@@ -18,7 +18,7 @@ pub struct TradesConnection {
 	instrument: Instrument,
 }
 impl TradesConnection {
-	pub fn new(client: &Client, pairs: Vec<Pair>, instrument: Instrument) -> Result<Self, WsError> {
+	pub fn try_new(client: &Client, pairs: Vec<Pair>, instrument: Instrument) -> Result<Self, WsError> {
 		let vec_topic_str = pairs.into_iter().map(|p| format!("{}@trade", p.fmt_binance().to_lowercase())).collect::<Vec<_>>();
 
 		let base_url = match instrument {
@@ -128,7 +128,7 @@ pub struct BookConnection {
 	connection: WsConnection<BinanceWsHandler>,
 }
 impl BookConnection {
-	pub fn new(client: &Client, pairs: Vec<Pair>, instrument: Instrument) -> Result<Self, WsError> {
+	pub fn try_new(client: &Client, pairs: Vec<Pair>, instrument: Instrument) -> Result<Self, WsError> {
 		let vec_topic_str = pairs.into_iter().map(|p| format!("{}@depth@100ms", p.fmt_binance().to_lowercase())).collect::<Vec<_>>();
 
 		let base_url = match instrument {

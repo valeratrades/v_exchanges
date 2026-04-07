@@ -22,6 +22,7 @@ arrayvec = "^0.7.6"
 async-trait = "^0.1.89"
 base64 = "^0.22.1"
 cfg-if = "^1.0.4"
+dashmap = "^6"
 derive-new = "^0.7.0"
 derive_more = { version = "^2.1.1", features = ["deref", "deref_mut"] }
 eyre = "^0.6.12"
@@ -30,8 +31,10 @@ hex = "^0.4.3"
 hmac = "^0.12.1"
 jiff = "^0.2.23"
 miette = { version = "^7.6.0", features = ["fancy"] }
+nonzero_ext = "^0.3"
 rand = "^0.9"
 reqwest = { version = "^0.12.24", features = ["blocking", "json"] }
+rstest = "^0.24"
 secrecy = "^0.10.3"
 serde = { version = "^1.0.228", features = ["derive"] }
 serde_json = "^1.0.149"
@@ -44,6 +47,7 @@ thiserror = "^2.0.18"
 tokio = { version = "^1.50.0", features = ["sync", "macros", "io-util", "rt", "rt-multi-thread", "time"] } # enable only features that play with wasm.
 tracing = "^0.1.44"
 url = "^2.5.8"
+ustr = "^1"
 uuid = { version = "^1.16", features = ["v7"] }
 v_utils = { version = "^2.9.9", path = "../v_utils/v_utils" } #ga: rm path
 #dynosaur = "^0.2.0"

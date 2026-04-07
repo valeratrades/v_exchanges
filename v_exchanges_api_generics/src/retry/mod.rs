@@ -60,6 +60,7 @@ where
 		let mut attempt = 0;
 		let start_time = tokio::time::Instant::now();
 
+		//LOOP: main loop of the method
 		loop {
 			if let Some(max_elapsed_ms) = self.config.max_elapsed_ms {
 				let elapsed = start_time.elapsed();

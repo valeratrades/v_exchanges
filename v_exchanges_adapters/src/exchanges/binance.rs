@@ -73,6 +73,11 @@ where
 		Ok(builder.build().expect("don't expect this to be reached by client, so fail fast for dev"))
 	}
 
+	fn rate_limit_key_name(&self) -> Option<String> {
+		use sha2::{Digest as _, Sha256};
+		self.options.pubkey.as_deref().map(|k| hex::encode(&Sha256::digest(k.as_bytes())[..4]))
+	}
+
 	fn handle_response(&self, status: StatusCode, headers: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError> {
 		if status.is_success() {
 			serde_json::from_slice(&response_body).map_err(|error| {

@@ -15,7 +15,7 @@ pub struct BookConnection {
 	connection: WsConnection<BybitWsHandler>,
 }
 impl BookConnection {
-	pub fn new(client: &Client, pairs: Vec<Pair>, instrument: Instrument) -> Result<Self, WsError> {
+	pub fn try_new(client: &Client, pairs: Vec<Pair>, instrument: Instrument) -> Result<Self, WsError> {
 		let vec_topic_str = pairs.into_iter().map(|p| format!("orderbook.1000.{}", p.fmt_bybit())).collect::<Vec<_>>();
 
 		let url_suffix = match instrument {
