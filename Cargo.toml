@@ -18,6 +18,7 @@ get_first = "allow" # const fn, so actually more performant
 get_last_with_len = "allow"
 
 [workspace.dependencies]
+ahash = { version = "^0.8", features = ["serde"] }
 arrayvec = "^0.7.6"
 async-trait = "^0.1.89"
 base64 = "^0.22.1"

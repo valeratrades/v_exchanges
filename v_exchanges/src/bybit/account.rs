@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use adapters::Client;
+use ahash::AHashMap;
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -172,7 +171,7 @@ async fn balances_inner(client: &Client, recv_window: Option<std::time::Duration
 	let account_info = account_response.result.list.first().unwrap();
 
 	// Build coin→usd_rate map from UNIFIED account data for converting earn positions
-	let mut usd_rates: HashMap<String, f64> = HashMap::new();
+	let mut usd_rates: AHashMap<String, f64> = AHashMap::new();
 	let mut vec_balance = Vec::new();
 	for r in &account_info.coin {
 		if r.wallet_balance > 0.0 {

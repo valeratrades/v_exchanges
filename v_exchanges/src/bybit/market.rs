@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 
+use ahash::AHashMap;
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -22,7 +23,7 @@ use crate::{
 pub struct KlineResponse {
 	pub result: ResponseResult,
 	pub ret_code: i32,
-	pub ret_ext_info: std::collections::HashMap<String, serde_json::Value>,
+	pub ret_ext_info: AHashMap<String, serde_json::Value>,
 	pub ret_msg: String,
 	pub time: i64,
 }
@@ -50,7 +51,7 @@ pub struct MarketTickerResponse {
 	pub ret_code: i32,
 	pub ret_msg: String,
 	pub result: MarketTickerResult,
-	pub ret_ext_info: std::collections::HashMap<String, Value>,
+	pub ret_ext_info: AHashMap<String, Value>,
 	pub time: i64,
 }
 #[derive(Debug, Deserialize, Serialize)]
@@ -106,7 +107,7 @@ pub struct OpenInterestResponse {
 	pub ret_code: i32,
 	pub ret_msg: String,
 	pub result: OpenInterestResult,
-	pub ret_ext_info: std::collections::HashMap<String, Value>,
+	pub ret_ext_info: AHashMap<String, Value>,
 	pub time: i64,
 }
 #[derive(Debug, Deserialize, Serialize)]
