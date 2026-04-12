@@ -25,6 +25,7 @@ rustls-tls-native-roots = ["reqwest/rustls", "tokio-tungstenite/rustls-tls-nativ
 rustls-tls-webpki-roots = ["reqwest/rustls", "tokio-tungstenite/rustls-tls-webpki-roots"]
 
 [dependencies]
+ahash = { workspace = true, features = ["serde"] }
 bytes.workspace = true
 dashmap.workspace = true
 derive-new.workspace = true
