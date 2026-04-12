@@ -7,7 +7,7 @@ use v_utils::trades::{Asset, Pair, Usd};
 
 use crate::{
 	ExchangeResult,
-	core::{ApiKeyInfo, AssetBalance, Balances, PersonalInfo},
+	core::{ApiKeyInfo, AssetBalance, Balances, KeyPermission, PersonalInfo},
 	kucoin::market,
 };
 
@@ -33,11 +33,24 @@ pub struct AccountData {
 	pub holds: f64,
 }
 pub(super) async fn personal_info(client: &Client, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
-	let balances = balances(client, recv_window).await?;
+	let options = vec![KucoinOption::HttpAuth(KucoinAuth::Sign), KucoinOption::HttpUrl(KucoinHttpUrl::Spot)];
+	let (balances, api_response) = tokio::join!(balances(client, recv_window), client.get_no_query::<KucoinApiKeyResponse, _>("/api/v1/user/api-key", options),);
+	let permissions: Vec<KeyPermission> = api_response
+		.map(|r| r.data.permission.split(',').map(|s| KeyPermission::from_kucoin(s.trim())).collect())
+		.unwrap_or_default();
 	Ok(PersonalInfo {
-		api: ApiKeyInfo { expire_time: None },
-		balances,
+		api: ApiKeyInfo { expire_time: None, permissions },
+		balances: balances?,
 	})
+}
+
+#[derive(Debug, Deserialize)]
+struct KucoinApiKeyResponse {
+	data: KucoinApiKeyData,
+}
+#[derive(Debug, Deserialize)]
+struct KucoinApiKeyData {
+	permission: String,
 }
 
 pub(super) async fn balances(client: &Client, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {

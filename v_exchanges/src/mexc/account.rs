@@ -12,7 +12,10 @@ use crate::{
 pub(super) async fn personal_info(client: &Client, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
 	let balances = balances(client, recv_window).await?;
 	Ok(PersonalInfo {
-		api: ApiKeyInfo { expire_time: None },
+		api: ApiKeyInfo {
+			expire_time: None,
+			permissions: Vec::new(),
+		},
 		balances,
 	})
 }

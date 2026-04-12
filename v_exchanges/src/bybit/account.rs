@@ -10,7 +10,7 @@ use v_utils::{macros::ScreamIt, trades::Asset};
 
 use crate::{
 	ExchangeResult,
-	core::{ApiKeyInfo, AssetBalance, Balances, PersonalInfo},
+	core::{ApiKeyInfo, AssetBalance, Balances, KeyPermission, PersonalInfo},
 };
 
 #[derive(Clone, Copy, Debug, ScreamIt)]
@@ -149,7 +149,10 @@ pub(super) async fn personal_info(client: &Client, recv_window: Option<std::time
 	};
 
 	Ok(PersonalInfo {
-		api: ApiKeyInfo { expire_time },
+		api: ApiKeyInfo {
+			expire_time,
+			permissions: api_response.result.permissions.into(),
+		},
 		balances,
 	})
 }
@@ -251,4 +254,53 @@ struct QueryApiResponse {
 struct QueryApiResult {
 	/// Expiry as ISO 8601 datetime string (e.g. `"2023-12-22T07:20:25Z"`); empty string or "0" means no expiry.
 	expired_at: String,
+	permissions: BybitPermissions,
+}
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "PascalCase", default)]
+struct BybitPermissions {
+	contract_trade: Vec<String>,
+	spot: Vec<String>,
+	wallet: Vec<String>,
+	options: Vec<String>,
+	derivatives: Vec<String>,
+	exchange: Vec<String>,
+	earn: Vec<String>,
+}
+impl From<BybitPermissions> for Vec<KeyPermission> {
+	fn from(p: BybitPermissions) -> Self {
+		let mut out = Vec::new();
+		// ContractTrade: "Order", "Position" → Futures
+		if p.contract_trade.iter().any(|s| s == "Order" || s == "Position") {
+			out.push(KeyPermission::Futures);
+		}
+		// Spot: "SpotTrade" → SpotTrade
+		if p.spot.iter().any(|s| s == "SpotTrade") {
+			out.push(KeyPermission::SpotTrade);
+		}
+		// Wallet: "AccountTransfer", "SubMemberTransfer" → Transfer; "Withdraw" → Withdraw
+		if p.wallet.iter().any(|s| s == "AccountTransfer" || s == "SubMemberTransfer") {
+			out.push(KeyPermission::Transfer);
+		}
+		if p.wallet.iter().any(|s| s == "Withdraw") {
+			out.push(KeyPermission::Withdraw);
+		}
+		// Options: "OptionsTrade" → Options
+		if p.options.iter().any(|s| s == "OptionsTrade") {
+			out.push(KeyPermission::Options);
+		}
+		// Derivatives: "DerivativesTrade" → also Futures (if not already)
+		if p.derivatives.iter().any(|s| s == "DerivativesTrade") && !out.contains(&KeyPermission::Futures) {
+			out.push(KeyPermission::Futures);
+		}
+		// Exchange: "ExchangeHistory" → Other
+		for s in p.exchange {
+			out.push(KeyPermission::Other(format!("ExchangeHistory:{s}")));
+		}
+		// Earn: "Earn" → Earn
+		if p.earn.iter().any(|s| s == "Earn") {
+			out.push(KeyPermission::Earn);
+		}
+		out
+	}
 }

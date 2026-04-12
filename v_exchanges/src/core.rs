@@ -165,6 +165,47 @@ pub struct Balances {
 pub struct ApiKeyInfo {
 	/// `None` means no expiry set (key is permanent)
 	pub expire_time: Option<Timestamp>,
+	/// Empty means the exchange doesn't expose permissions via this endpoint.
+	pub permissions: Vec<KeyPermission>,
+}
+
+#[derive(Clone, Debug, strum::Display, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum KeyPermission {
+	/// Read-only access (market data, account info queries)
+	Read,
+	/// Spot trading
+	SpotTrade,
+	/// Futures/perpetual trading
+	Futures,
+	/// Options trading
+	Options,
+	/// Margin trading
+	Margin,
+	/// Withdrawals
+	Withdraw,
+	/// Asset transfers (internal, cross-account, sub-account)
+	Transfer,
+	/// Earn/savings products
+	Earn,
+	/// Anything not covered above
+	Other(String),
+}
+impl KeyPermission {
+	#[cfg(feature = "kucoin")]
+	pub(crate) fn from_kucoin(s: &str) -> Self {
+		match s {
+			"General" => Self::Read,
+			"Spot" => Self::SpotTrade,
+			"Futures" => Self::Futures,
+			"Options" => Self::Options,
+			"Margin" => Self::Margin,
+			"Withdrawal" => Self::Withdraw,
+			"FlexTransfers" => Self::Transfer,
+			"Earn" => Self::Earn,
+			other => Self::Other(other.to_owned()),
+		}
+	}
 }
 #[derive(Clone, Debug)]
 pub struct PersonalInfo {

@@ -12,7 +12,7 @@ use v_utils::{
 
 use crate::{
 	ExchangeResult,
-	core::{ApiKeyInfo, AssetBalance, Balances, PersonalInfo},
+	core::{ApiKeyInfo, AssetBalance, Balances, KeyPermission, PersonalInfo},
 };
 
 // balance {{{
@@ -285,7 +285,10 @@ pub(in crate::binance) async fn personal_info(client: &v_exchanges_adapters::Cli
 		.map(|ms| Timestamp::from_millisecond(ms).expect("Binance expireTime is valid ms timestamp"));
 
 	Ok(PersonalInfo {
-		api: ApiKeyInfo { expire_time },
+		api: ApiKeyInfo {
+			expire_time,
+			permissions: api_response.into(),
+		},
 		balances: Balances::new(non_zero, total),
 	})
 }
@@ -322,13 +325,14 @@ struct AssetBalanceResponse {
 //,}}}
 
 // Response Types {{{
-#[allow(unused)]
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ApiRestrictionsResponse {
 	/// Millisecond timestamp; absent when no expiry is set
 	expire_time: Option<i64>,
+	#[allow(unused)]
 	create_time: i64,
+	#[allow(unused)]
 	ip_restrict: bool,
 	enable_reading: bool,
 	enable_futures: bool,
@@ -343,6 +347,42 @@ struct ApiRestrictionsResponse {
 	enable_fix_api_trade: bool,
 	enable_fix_read_only: bool,
 	enable_margin: bool,
+}
+impl From<ApiRestrictionsResponse> for Vec<KeyPermission> {
+	fn from(r: ApiRestrictionsResponse) -> Self {
+		let mut out = Vec::new();
+		if r.enable_reading {
+			out.push(KeyPermission::Read);
+		}
+		if r.enable_futures {
+			out.push(KeyPermission::Futures);
+		}
+		if r.enable_spot_and_margin_trading {
+			out.push(KeyPermission::SpotTrade);
+		}
+		if r.enable_withdrawals {
+			out.push(KeyPermission::Withdraw);
+		}
+		if r.enable_internal_transfer || r.permits_universal_transfer {
+			out.push(KeyPermission::Transfer);
+		}
+		if r.enable_margin_loan.unwrap_or(false) || r.enable_margin {
+			out.push(KeyPermission::Margin);
+		}
+		if r.enable_vanilla_options {
+			out.push(KeyPermission::Options);
+		}
+		if r.enable_portfolio_margin_trading {
+			out.push(KeyPermission::Other("PortfolioMarginTrading".to_owned()));
+		}
+		if r.enable_fix_api_trade {
+			out.push(KeyPermission::Other("FixApiTrade".to_owned()));
+		}
+		if r.enable_fix_read_only {
+			out.push(KeyPermission::Other("FixReadOnly".to_owned()));
+		}
+		out
+	}
 }
 //,}}}
 
