@@ -16,6 +16,14 @@ pub struct ExchangeOrder<O> {
 	#[new(default)]
 	pub expected_fee_usd: Option<f64>,
 }
+impl<O: Eq> Eq for ExchangeOrder<O> {}
+impl<O: std::hash::Hash> std::hash::Hash for ExchangeOrder<O> {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.order.hash(state);
+		self.ticker.hash(state);
+		self.expected_fee_usd.map(f64::to_bits).hash(state);
+	}
+}
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, SmartDefault)]
 pub struct OrderId {
