@@ -1,9 +1,9 @@
 use std::{
-	collections::HashSet,
 	time::{Duration, SystemTime},
 	vec,
 };
 
+use ahash::AHashSet;
 use eyre::{Result, bail};
 use futures_util::{SinkExt as _, StreamExt as _};
 use jiff::Timestamp;
@@ -57,7 +57,7 @@ pub trait WsHandler: std::fmt::Debug {
 	  - and then the latter could be requiring signing
 	  */
 	#[allow(unused_variables)]
-	fn handle_subscribe(&mut self, topics: HashSet<Topic>) -> Result<Vec<tungstenite::Message>, WsError>;
+	fn handle_subscribe(&mut self, topics: AHashSet<Topic>) -> Result<Vec<tungstenite::Message>, WsError>;
 
 	/// Called when the [WsConnection] received a JSON-RPC value, returns messages to be sent to the server or the content with parsed event name. If not the desired content and no respose is to be sent (like after a confirmation for a subscription), return a Response with an empty Vec.
 	#[allow(unused_variables)]
@@ -389,7 +389,7 @@ pub struct WsConfig {
 	/// Difference from the [message_timeout](Self::message_timeout) is that here we directly request communication. Eg: sending a Ping or attempting to auth.
 	response_timeout: Duration,
 	/// The topics that will be subscribed to on creation of the connection. Note that we don't allow for passing anything that changes state here like [Trade](Topic::Trade) payloads, thus submissions are limited to [String]s
-	pub topics: HashSet<String>,
+	pub topics: AHashSet<String>,
 }
 impl WsConfig {
 	pub fn set_reconnect(&mut self, reconnect: RetryConfig) {
@@ -479,7 +479,7 @@ impl Default for WsConfig {
 			refresh_after: Duration::from_hours(12),
 			message_timeout: Duration::from_mins(16),
 			response_timeout: Duration::from_mins(2),
-			topics: HashSet::new(),
+			topics: AHashSet::new(),
 		}
 	}
 }

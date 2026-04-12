@@ -2,6 +2,7 @@
 
 use std::{collections::HashSet, marker::PhantomData, time::SystemTime};
 
+use ahash::AHashSet;
 use eyre::eyre;
 use generics::{
 	ConstructAuthError, UrlError,
@@ -180,7 +181,7 @@ impl WsHandler for KucoinWsHandler {
 		Ok(vec![])
 	}
 
-	fn handle_subscribe(&mut self, topics: HashSet<Topic>) -> Result<Vec<tungstenite::Message>, WsError> {
+	fn handle_subscribe(&mut self, topics: AHashSet<Topic>) -> Result<Vec<tungstenite::Message>, WsError> {
 		let string_topics = topics
 			.iter()
 			.filter_map(|topic| if let Topic::String(s) = topic { Some(s) } else { None })
@@ -338,7 +339,7 @@ pub struct KucoinOptions {
 	/// see [KucoinOption::WsConfig]
 	pub ws_config: WsConfig,
 	/// see [KucoinOption::WsTopics]
-	pub ws_topics: HashSet<String>,
+	pub ws_topics: AHashSet<String>,
 	/// see [KucoinOption::Test]
 	pub test: bool,
 }

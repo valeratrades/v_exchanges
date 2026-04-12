@@ -15,6 +15,20 @@ struct QueryApiResponse {
 #[serde(rename_all = "camelCase")]
 struct QueryApiResult {
 	expired_at: String,
+	permissions: Permissions,
+	read_only: u8,
+	ips: Vec<String>,
+}
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "PascalCase", default)]
+struct Permissions {
+	contract_trade: Vec<String>,
+	spot: Vec<String>,
+	wallet: Vec<String>,
+	options: Vec<String>,
+	derivatives: Vec<String>,
+	exchange: Vec<String>,
+	earn: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -46,10 +60,10 @@ async fn main() {
 	v_utils::clientside!();
 
 	let (pub_, sec) = match (env::var("QUANTM_BYBIT_SUB_PUBKEY"), env::var("QUANTM_BYBIT_SUB_SECRET")) {
+		//let (pub_, sec) = match (env::var("BYBIT_TESTSUB_PUBKEY"), env::var("BYBIT_TESTSUB_SECRET")) {
 		(Ok(p), Ok(s)) => (p, s),
 		_ => {
-			eprintln!("QUANTM_BYBIT_SUB_PUBKEY or QUANTM_BYBIT_SUB_SECRET not set");
-			return;
+			panic!("one of the keys is not set");
 		}
 	};
 
@@ -61,6 +75,9 @@ async fn main() {
 	// --- before ---
 	let before: QueryApiResponse = c.get_no_query("/v5/user/query-api", auth_options()).await.unwrap();
 	print_expiry("before", &before.result.expired_at);
+	let r = &before.result;
+	println!("  read_only={} ips={:?}", r.read_only, r.ips);
+	println!("  permissions: {:?}", r.permissions);
 
 	// --- attempt to extend ---
 	let body = json!({ "ips": "*" });

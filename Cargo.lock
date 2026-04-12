@@ -3267,6 +3267,7 @@ dependencies = [
 name = "v_exchanges_adapters"
 version = "0.17.2"
 dependencies = [
+ "ahash 0.8.12",
  "base64",
  "derive-new",
  "derive_more",
@@ -3294,6 +3295,7 @@ dependencies = [
 name = "v_exchanges_api_generics"
 version = "0.19.2"
 dependencies = [
+ "ahash 0.8.12",
  "bytes",
  "dashmap",
  "derive-new",

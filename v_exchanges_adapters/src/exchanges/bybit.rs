@@ -1,8 +1,9 @@
 //! A module for communicating with the [Bybit API](https://bybit-exchange.github.io/docs/spot/v3/#t-introduction).
 //! For example usages, see files in the examples/ directory.
 
-use std::{borrow::Cow, collections::HashSet, marker::PhantomData, time::SystemTime, vec};
+use std::{borrow::Cow, marker::PhantomData, time::SystemTime, vec};
 
+use ahash::AHashSet;
 use eyre::{WrapErr as _, eyre};
 use generics::{ConstructAuthError, UrlError, tokio_tungstenite::tungstenite};
 use hmac::{Hmac, KeyInit as _, Mac};
@@ -73,7 +74,7 @@ pub struct BybitOptions {
 	/// see [BybitOption::WsConfig]
 	pub ws_config: WsConfig,
 	/// see [BybitOption::WsTopics]
-	pub ws_topics: HashSet<String>,
+	pub ws_topics: AHashSet<String>,
 }
 
 /// A `enum` that represents the base url of the Bybit REST API.
@@ -565,7 +566,7 @@ impl WsHandler for BybitWsHandler {
 		}
 	}
 
-	fn handle_subscribe(&mut self, topics: HashSet<Topic>) -> Result<Vec<tungstenite::Message>, WsError> {
+	fn handle_subscribe(&mut self, topics: AHashSet<Topic>) -> Result<Vec<tungstenite::Message>, WsError> {
 		let topics: Vec<String> = topics
 			.into_iter()
 			.map(|topic| match topic {

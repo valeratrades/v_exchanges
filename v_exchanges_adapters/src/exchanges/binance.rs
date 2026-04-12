@@ -1,7 +1,8 @@
 // A module for communicating with the [Binance API](https://binance-docs.github.io/apidocs/spot/en/).
 
-use std::{collections::HashSet, marker::PhantomData, str::FromStr, time::SystemTime};
+use std::{marker::PhantomData, str::FromStr, time::SystemTime};
 
+use ahash::AHashSet;
 use eyre::eyre;
 use generics::{
 	ConstructAuthError, UrlError,
@@ -198,7 +199,7 @@ impl WsHandler for BinanceWsHandler {
 		Ok(vec![])
 	}
 
-	fn handle_subscribe(&mut self, topics: HashSet<Topic>) -> Result<Vec<tungstenite::Message>, WsError> {
+	fn handle_subscribe(&mut self, topics: AHashSet<Topic>) -> Result<Vec<tungstenite::Message>, WsError> {
 		let string_topics = topics
 			.iter()
 			.filter_map(|topic| if let Topic::String(s) = topic { Some(s) } else { None })
@@ -489,7 +490,7 @@ pub struct BinanceOptions {
 	/// see [BinanceOption::WsConfig]
 	pub ws_config: WsConfig,
 	/// see [BinanceOption::WsTopics]
-	pub ws_topics: HashSet<String>,
+	pub ws_topics: AHashSet<String>,
 	/// see [BinanceOption::Test]
 	pub test: bool,
 }

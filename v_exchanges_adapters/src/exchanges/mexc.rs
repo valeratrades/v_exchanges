@@ -2,6 +2,7 @@
 
 use std::{collections::HashSet, marker::PhantomData, str::FromStr, time::SystemTime};
 
+use ahash::AHashSet;
 use eyre::eyre;
 use generics::{ConstructAuthError, UrlError};
 use hmac::{Hmac, KeyInit as _, Mac};
@@ -60,7 +61,7 @@ pub struct MexcOptions {
 	/// see [MexcOption::WsConfig]
 	pub ws_config: WsConfig,
 	/// see [MexcOption::WsTopics]
-	pub ws_topics: HashSet<String>,
+	pub ws_topics: AHashSet<String>,
 }
 /// Enum that represents the base url of the MEXC REST API
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -341,7 +342,7 @@ impl WsHandler for MexcWsHandler {
 		todo!();
 	}
 
-	fn handle_subscribe(&mut self, _topics: HashSet<Topic>) -> Result<Vec<generics::tokio_tungstenite::tungstenite::Message>, WsError> {
+	fn handle_subscribe(&mut self, _topics: AHashSet<Topic>) -> Result<Vec<generics::tokio_tungstenite::tungstenite::Message>, WsError> {
 		todo!()
 	}
 }

@@ -148,3 +148,8 @@ path = "../examples/info/time_to_expiration_coins.rs"
 name = "time_to_expiration_keys"
 required-features = ["binance", "bybit", "kucoin"]
 path = "../examples/info/time_to_expiration_keys.rs"
+
+[[example]]
+name = "try_extend_lifetime"
+required-features = ["bybit"]
+path = "../examples/info/_try_extend_lifetime.rs"
