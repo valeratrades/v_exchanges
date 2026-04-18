@@ -3234,7 +3234,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges"
-version = "0.17.2"
+version = "0.17.3"
 dependencies = [
  "ahash 0.8.12",
  "arrayvec",
@@ -3265,7 +3265,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_adapters"
-version = "0.17.2"
+version = "0.17.3"
 dependencies = [
  "ahash 0.8.12",
  "base64",
@@ -3293,7 +3293,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_api_generics"
-version = "0.19.2"
+version = "0.19.3"
 dependencies = [
  "ahash 0.8.12",
  "bytes",
