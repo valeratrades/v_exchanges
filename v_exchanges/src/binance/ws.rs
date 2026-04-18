@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use adapters::{
 	Client,
 	binance::{BinanceOption, BinanceWsHandler, BinanceWsUrl},
@@ -7,18 +9,17 @@ use jiff::Timestamp;
 use serde_with::{DisplayFromStr, serde_as};
 use v_utils::trades::Pair;
 
-use crate::{BookShape, BookUpdate, ExchangeStream, Instrument, Trade};
+use crate::{BookShape, BookUpdate, ExchangeStream, Instrument, Price, Qty, Trade};
 
 // trades {{{
-#[derive(Debug, derive_more::Deref, derive_more::DerefMut)]
+#[derive(Debug)]
 pub struct TradesConnection {
-	#[deref]
-	#[deref_mut]
 	connection: WsConnection<BinanceWsHandler>,
 	instrument: Instrument,
+	pair_precisions: BTreeMap<Pair, (u8, u8)>,
 }
 impl TradesConnection {
-	pub fn try_new(client: &Client, pairs: Vec<Pair>, instrument: Instrument) -> Result<Self, WsError> {
+	pub fn try_new(client: &Client, pairs: Vec<Pair>, instrument: Instrument, pair_precisions: BTreeMap<Pair, (u8, u8)>) -> Result<Self, WsError> {
 		let vec_topic_str = pairs.into_iter().map(|p| format!("{}@trade", p.fmt_binance().to_lowercase())).collect::<Vec<_>>();
 
 		let base_url = match instrument {
@@ -28,7 +29,7 @@ impl TradesConnection {
 		};
 		let connection = client.ws_connection("", vec![BinanceOption::WsUrl(base_url), BinanceOption::WsTopics(vec_topic_str)])?;
 
-		Ok(Self { connection, instrument })
+		Ok(Self { connection, instrument, pair_precisions })
 	}
 }
 #[async_trait::async_trait]
@@ -38,18 +39,25 @@ impl ExchangeStream for TradesConnection {
 	async fn next(&mut self) -> Result<Self::Item, WsError> {
 		loop {
 			let content_event = self.connection.next().await?;
-			let trade = match self.instrument {
+			let (pair_str, timestamp, qty_asset_f64, price_f64) = match self.instrument {
 				Instrument::Perp => {
 					let parsed = serde_json::from_value::<TradeEventPerp>(content_event.data.clone()).expect("Exchange responded with invalid trade event");
-					Trade::from(parsed)
+					(parsed.pair, parsed.timestamp, parsed.qty_asset, parsed.price)
 				}
 				Instrument::Spot | Instrument::Margin => {
 					let parsed = serde_json::from_value::<TradeEventSpot>(content_event.data.clone()).expect("Exchange responded with invalid trade event");
-					Trade::from(parsed)
+					(parsed.pair, parsed.timestamp, parsed.qty_asset, parsed.price)
 				}
 				_ => unimplemented!(),
 			};
-			if trade.price == 0.0 || trade.qty_asset == 0.0 {
+			let pair: Pair = pair_str.as_str().try_into().unwrap_or_else(|_| panic!("failed to parse pair from trade event: {pair_str}"));
+			let &(price_prec, qty_prec) = self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
+			let trade = Trade {
+				time: Timestamp::from_millisecond(timestamp).expect("Exchange responded with invalid timestamp"),
+				qty_asset: Qty::from_f64(qty_asset_f64, qty_prec),
+				price: Price::from_f64(price_f64, price_prec),
+			};
+			if trade.price.is_zero() || trade.qty_asset.is_zero() {
 				tracing::debug!(
 					raw_json = %content_event.data,
 					topic = %content_event.topic,
@@ -80,18 +88,9 @@ pub struct TradeEventPerp {
 	#[serde(rename = "p")]
 	price: f64,
 	#[serde(rename = "s")]
-	_pair: String,
+	pair: String,
 	#[serde(rename = "t")]
 	_trade_id: u64,
-}
-impl From<TradeEventPerp> for Trade {
-	fn from(futs: TradeEventPerp) -> Self {
-		Self {
-			time: Timestamp::from_millisecond(futs.timestamp).expect("Exchange responded with invalid timestamp"),
-			qty_asset: futs.qty_asset,
-			price: futs.price,
-		}
-	}
 }
 
 #[serde_as]
@@ -106,29 +105,19 @@ pub struct TradeEventSpot {
 	#[serde(rename = "p")]
 	price: f64,
 	#[serde(rename = "s")]
-	_pair: String,
-}
-impl From<TradeEventSpot> for Trade {
-	fn from(futs: TradeEventSpot) -> Self {
-		Self {
-			time: Timestamp::from_millisecond(futs.timestamp).expect("Exchange responded with invalid timestamp"),
-			qty_asset: futs.qty_asset,
-			price: futs.price,
-		}
-	}
+	pair: String,
 }
 
 //,}}}
 
 // book {{{
-#[derive(Debug, derive_more::Deref, derive_more::DerefMut)]
+#[derive(Debug)]
 pub struct BookConnection {
-	#[deref]
-	#[deref_mut]
 	connection: WsConnection<BinanceWsHandler>,
+	pair_precisions: BTreeMap<Pair, (u8, u8)>,
 }
 impl BookConnection {
-	pub fn try_new(client: &Client, pairs: Vec<Pair>, instrument: Instrument) -> Result<Self, WsError> {
+	pub fn try_new(client: &Client, pairs: Vec<Pair>, instrument: Instrument, pair_precisions: BTreeMap<Pair, (u8, u8)>) -> Result<Self, WsError> {
 		let vec_topic_str = pairs.into_iter().map(|p| format!("{}@depth@100ms", p.fmt_binance().to_lowercase())).collect::<Vec<_>>();
 
 		let base_url = match instrument {
@@ -138,7 +127,7 @@ impl BookConnection {
 		};
 		let connection = client.ws_connection("", vec![BinanceOption::WsUrl(base_url), BinanceOption::WsTopics(vec_topic_str)])?;
 
-		Ok(Self { connection })
+		Ok(Self { connection, pair_precisions })
 	}
 }
 #[async_trait::async_trait]
@@ -152,10 +141,16 @@ impl ExchangeStream for BookConnection {
 			.transaction_time
 			.map(|ts| Timestamp::from_millisecond(ts).expect("Exchange responded with invalid timestamp"))
 			.unwrap_or(content_event.time);
+
+		// topic: "btcusdt@depth@100ms" → take before first '@' → uppercase → pair
+		let pair_str = content_event.topic.split('@').next().expect("Binance depth topic always contains '@'").to_uppercase();
+		let pair: Pair = pair_str.as_str().try_into().unwrap_or_else(|_| panic!("failed to parse pair from depth topic: {}", content_event.topic));
+		let &(price_prec, qty_prec) = self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
+
 		let shape = BookShape {
 			time,
-			bids: parsed.bids.into_iter().map(|(p, q)| (p.parse().unwrap(), q.parse().unwrap())).collect(),
-			asks: parsed.asks.into_iter().map(|(p, q)| (p.parse().unwrap(), q.parse().unwrap())).collect(),
+			bids: parsed.bids.into_iter().map(|(p, q)| (Price::from_f64(p.parse().expect("valid price string"), price_prec), Qty::from_f64(q.parse().expect("valid qty string"), qty_prec))).collect(),
+			asks: parsed.asks.into_iter().map(|(p, q)| (Price::from_f64(p.parse().expect("valid price string"), price_prec), Qty::from_f64(q.parse().expect("valid qty string"), qty_prec))).collect(),
 		};
 		Ok(BookUpdate::Delta(shape))
 	}

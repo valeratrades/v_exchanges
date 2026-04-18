@@ -16,10 +16,19 @@ use crate::{
 };
 
 #[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
-pub struct Kucoin(pub Client);
+pub struct Kucoin {
+	#[deref]
+	#[deref_mut]
+	pub client: Client,
+	pub info_cache: std::collections::BTreeMap<Instrument, ExchangeInfo>,
+}
 
 #[async_trait::async_trait]
 impl ExchangeImpl for Kucoin {
+	fn info_cache_mut(&mut self) -> &mut std::collections::BTreeMap<Instrument, ExchangeInfo> {
+		&mut self.info_cache
+	}
+
 	fn name(&self) -> ExchangeName {
 		ExchangeName::Kucoin
 	}

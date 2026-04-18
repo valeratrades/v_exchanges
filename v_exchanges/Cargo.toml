@@ -60,6 +60,7 @@ tokio.workspace = true
 tracing.workspace = true
 uuid.workspace = true
 v_exchanges_adapters = { workspace = true, optional = true }
+v_exchanges_core.workspace = true
 v_utils.workspace = true
 
 [dev-dependencies]

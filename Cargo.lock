@@ -3260,6 +3260,7 @@ dependencies = [
  "tracing",
  "uuid",
  "v_exchanges_adapters",
+ "v_exchanges_core",
  "v_utils",
 ]
 
@@ -3318,6 +3319,13 @@ dependencies = [
  "url",
  "ustr",
  "v_utils",
+]
+
+[[package]]
+name = "v_exchanges_core"
+version = "0.1.0"
+dependencies = [
+ "derive-new",
 ]
 
 [[package]]

@@ -10,16 +10,25 @@ use v_exchanges_adapters::{Client, GetOptions};
 use v_utils::trades::{Pair, Timeframe};
 
 use crate::{
-	ExchangeName, ExchangeResult, Instrument, Symbol,
+	ExchangeName, ExchangeResult, ExchangeInfo, Instrument, Symbol,
 	core::{ExchangeImpl, Klines, PersonalInfo, RequestRange},
 };
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
-pub struct Mexc(pub Client);
+pub struct Mexc {
+	#[deref]
+	#[deref_mut]
+	pub client: Client,
+	pub info_cache: std::collections::BTreeMap<Instrument, ExchangeInfo>,
+}
 
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
 #[async_trait::async_trait]
 impl ExchangeImpl for Mexc {
+	fn info_cache_mut(&mut self) -> &mut std::collections::BTreeMap<Instrument, ExchangeInfo> {
+		&mut self.info_cache
+	}
+
 	fn name(&self) -> ExchangeName {
 		ExchangeName::Mexc
 	}

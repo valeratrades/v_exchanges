@@ -15,11 +15,20 @@ use crate::{
 };
 
 #[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
-pub struct Bybit(pub Client);
+pub struct Bybit {
+	#[deref]
+	#[deref_mut]
+	pub client: Client,
+	pub info_cache: BTreeMap<Instrument, ExchangeInfo>,
+}
 
 //? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
 #[async_trait::async_trait]
 impl ExchangeImpl for Bybit {
+	fn info_cache_mut(&mut self) -> &mut BTreeMap<Instrument, ExchangeInfo> {
+		&mut self.info_cache
+	}
+
 	fn name(&self) -> ExchangeName {
 		ExchangeName::Bybit
 	}
@@ -72,7 +81,15 @@ impl ExchangeImpl for Bybit {
 	fn ws_book(&self, pairs: Vec<Pair>, instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = BookUpdate>>, ExchangeError> {
 		match instrument {
 			Instrument::Perp | Instrument::Spot => {
-				let connection = ws::BookConnection::try_new(self, pairs, instrument)?;
+				let info = self.info_cache.get(&instrument).unwrap_or_else(|| panic!("prime({instrument}) must be called before opening WS connections"));
+				let pair_precisions: BTreeMap<Pair, (u8, u8)> = pairs
+					.iter()
+					.map(|pair| {
+						let pi = info.pairs.get(pair).unwrap_or_else(|| panic!("{pair} not found in exchange_info for {instrument}"));
+						(*pair, (pi.price_precision, pi.qty_precision))
+					})
+					.collect();
+				let connection = ws::BookConnection::try_new(self, pairs, instrument, pair_precisions)?;
 				Ok(Box::new(connection))
 			}
 			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), instrument))),

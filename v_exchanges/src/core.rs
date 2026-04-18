@@ -1,5 +1,7 @@
 use std::collections::{BTreeMap, VecDeque};
 
+use crate::{Price, Qty};
+
 use adapters::{
 	Client, HttpClient,
 	generics::{RetryConfig, ws::WsError},
@@ -31,6 +33,8 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	fn set_retry_config(&mut self, config: RetryConfig);
 	fn set_use_testnet(&mut self, b: bool);
 	fn set_cache_testnet_calls(&mut self, duration: Option<std::time::Duration>);
+	/// Fetch and cache exchange info for `instrument`. Must be called before `ws_book`/`ws_trades`.
+	async fn prime(&mut self, instrument: Instrument) -> ExchangeResult<()>;
 	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo>;
 	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines>;
 	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>>;
@@ -246,13 +250,13 @@ impl ExchangeName {
 	pub fn init_client(&self) -> Box<dyn Exchange> {
 		match self {
 			#[cfg(feature = "binance")]
-			Self::Binance => Box::new(crate::Binance(Client::default())),
+			Self::Binance => Box::new(crate::Binance::default()),
 			#[cfg(feature = "bybit")]
-			Self::Bybit => Box::new(crate::Bybit(Client::default())),
+			Self::Bybit => Box::new(crate::Bybit::default()),
 			#[cfg(feature = "kucoin")]
-			Self::Kucoin => Box::new(crate::Kucoin(Client::default())),
+			Self::Kucoin => Box::new(crate::Kucoin::default()),
 			#[cfg(feature = "mexc")]
-			Self::Mexc => Box::new(crate::Mexc(Client::default())),
+			Self::Mexc => Box::new(crate::Mexc::default()),
 			_ => unimplemented!(),
 		}
 	}
@@ -260,19 +264,19 @@ impl ExchangeName {
 	pub fn init_mock_client(&self) -> Box<dyn Exchange> {
 		match self {
 			#[cfg(feature = "binance")]
-			Self::Binance => Box::new(crate::Binance(Client::new_mock())),
+			Self::Binance => Box::new(crate::Binance { client: Client::new_mock(), info_cache: std::collections::BTreeMap::default() }),
 			#[cfg(feature = "bybit")]
-			Self::Bybit => Box::new(crate::Bybit(Client::new_mock())),
+			Self::Bybit => Box::new(crate::Bybit { client: Client::new_mock(), info_cache: std::collections::BTreeMap::default() }),
 			#[cfg(feature = "kucoin")]
-			Self::Kucoin => Box::new(crate::Kucoin(Client::new_mock())),
+			Self::Kucoin => Box::new(crate::Kucoin { client: Client::new_mock(), info_cache: std::collections::BTreeMap::default() }),
 			#[cfg(feature = "mexc")]
-			Self::Mexc => Box::new(crate::Mexc(Client::new_mock())),
+			Self::Mexc => Box::new(crate::Mexc { client: Client::new_mock(), info_cache: std::collections::BTreeMap::default() }),
 			_ => unimplemented!(),
 		}
 	}
 }
 
-#[derive(Clone, Copy, Debug, Default, serde::Deserialize, strum::Display, strum::EnumString, Eq, Hash, PartialEq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Default, serde::Deserialize, strum::Display, strum::EnumString, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Serialize)]
 #[non_exhaustive]
 pub enum Instrument {
 	#[default]
@@ -300,8 +304,8 @@ pub struct Symbol {
 #[derive(Clone, Debug, Default)]
 pub struct Trade {
 	pub time: Timestamp,
-	pub qty_asset: f64,
-	pub price: f64,
+	pub qty_asset: Qty,
+	pub price: Price,
 }
 
 /// (price, qty) levels for one side of an orderbook.
@@ -309,8 +313,8 @@ pub struct Trade {
 #[derive(Clone, Debug, Default)]
 pub struct BookShape {
 	pub time: Timestamp,
-	pub asks: Vec<(f64, f64)>,
-	pub bids: Vec<(f64, f64)>,
+	pub asks: Vec<(Price, Qty)>,
+	pub bids: Vec<(Price, Qty)>,
 }
 
 /// Distinguishes full snapshots from incremental deltas.
@@ -331,6 +335,8 @@ pub enum BookUpdate {
 #[async_trait::async_trait]
 pub(crate) trait ExchangeImpl: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Client> + std::ops::DerefMut {
 	fn name(&self) -> ExchangeName;
+	fn info_cache_mut(&mut self) -> &mut BTreeMap<Instrument, ExchangeInfo>;
+
 	// Config {{{
 	fn auth(&mut self, pubkey: String, secret: SecretString);
 	/// Set number of **milliseconds** the request is valid for. Recv Window of over a minute does not make sense, thus it's expressed as u16.
@@ -341,6 +347,12 @@ pub(crate) trait ExchangeImpl: std::fmt::Debug + Send + Sync + std::ops::Deref<T
 	/// Get the default recv_window configured for this exchange, if any.
 	fn default_recv_window(&self) -> Option<std::time::Duration>;
 	//,}}}
+
+	async fn prime(&mut self, instrument: Instrument) -> ExchangeResult<()> {
+		let info = self.exchange_info(instrument).await?;
+		self.info_cache_mut().insert(instrument, info);
+		Ok(())
+	}
 
 	//Q: do we actually want to return a `MethodNotSupported` error, or should we just `unimplemented!()`?
 
@@ -455,6 +467,10 @@ impl<T: ExchangeImpl> Exchange for T {
 
 	fn set_cache_testnet_calls(&mut self, duration: Option<std::time::Duration>) {
 		self.http_client_mut().config.cache_testnet_calls = duration;
+	}
+
+	async fn prime(&mut self, instrument: Instrument) -> ExchangeResult<()> {
+		ExchangeImpl::prime(self, instrument).await
 	}
 
 	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {

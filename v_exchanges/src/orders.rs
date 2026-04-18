@@ -2,9 +2,9 @@ use arrayvec::ArrayString;
 use jiff::Timestamp;
 use smart_default::SmartDefault;
 use uuid::Uuid;
-use v_utils::{arch::ComponentState, trades::Side};
+use v_utils::trades::Side;
 
-use crate::Ticker;
+use crate::{Price, Qty, Ticker};
 
 /// An order bound to a specific exchange and ticker, ready to be placed.
 #[derive(Clone, Debug, derive_more::Deref, derive_more::DerefMut, PartialEq, derive_new::new)]
@@ -40,8 +40,8 @@ pub struct OrderId {
 #[derive(Clone, Debug, PartialEq, derive_new::new)]
 pub struct LimitOrder {
 	pub side: Side,
-	pub price: f64,
-	pub qty: f64, //Q: should I make order be generic over the qty? Or maybe just Decimal?
+	pub price: Price,
+	pub qty: Qty, //Q: should I make order be generic over the qty? Or maybe just Decimal?
 	#[new(value = "TimeInForce::Gtc")]
 	pub time_in_force: TimeInForce,
 	#[new(default)]
@@ -50,7 +50,7 @@ pub struct LimitOrder {
 	pub reduce_only: bool,
 	/// Visible quantity for iceberg orders. When set, only this amount is shown on the book; the rest is hidden.
 	#[new(default)]
-	pub display_qty: Option<f64>,
+	pub display_qty: Option<Qty>,
 	#[new(default)]
 	pub trigger: Option<Trigger>,
 	#[new(default)]
@@ -70,12 +70,12 @@ impl Eq for LimitOrder {}
 impl std::hash::Hash for LimitOrder {
 	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 		self.side.hash(state);
-		self.price.to_bits().hash(state);
-		self.qty.to_bits().hash(state);
+		self.price.hash(state);
+		self.qty.hash(state);
 		self.time_in_force.hash(state);
 		self.post_only.hash(state);
 		self.reduce_only.hash(state);
-		self.display_qty.map(f64::to_bits).hash(state);
+		self.display_qty.hash(state);
 		self.trigger.hash(state);
 		self.stp.hash(state);
 		self.order_id.hash(state);
@@ -88,7 +88,7 @@ impl std::hash::Hash for LimitOrder {
 #[derive(Clone, Debug, derive_new::new)]
 pub struct MarketOrder {
 	pub side: Side,
-	pub qty: f64,
+	pub qty: Qty,
 	#[new(default)]
 	pub reduce_only: bool,
 	#[new(default)]
@@ -101,8 +101,8 @@ pub struct MarketOrder {
 #[derive(Clone, Debug, derive_new::new)]
 pub struct StopLimitOrder {
 	pub side: Side,
-	pub price: f64,
-	pub qty: f64,
+	pub price: Price,
+	pub qty: Qty,
 	pub trigger: Trigger,
 	#[new(value = "TimeInForce::Gtc")]
 	pub time_in_force: TimeInForce,
@@ -120,7 +120,7 @@ pub struct StopLimitOrder {
 #[derive(Clone, Debug, derive_new::new)]
 pub struct StopMarketOrder {
 	pub side: Side,
-	pub qty: f64,
+	pub qty: Qty,
 	pub trigger: Trigger,
 	#[new(default)]
 	pub reduce_only: bool,
@@ -136,11 +136,11 @@ pub struct StopMarketOrder {
 #[derive(Clone, Debug, derive_new::new)]
 pub struct TrailingStopOrder {
 	pub side: Side,
-	pub qty: f64,
+	pub qty: Qty,
 	pub callback: TrailingCallback,
 	/// Price at which the trailing mechanism activates. If None, activates immediately.
 	#[new(default)]
-	pub activation_price: Option<f64>,
+	pub activation_price: Option<Price>,
 	#[new(default)]
 	pub trigger_price_type: TriggerPriceType,
 	#[new(default)]
@@ -152,40 +152,32 @@ pub struct TrailingStopOrder {
 }
 
 /// Trigger configuration for conditional orders (stop-limit, stop-market, take-profit, etc.)
-#[derive(Clone, Debug, PartialEq, derive_new::new)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, derive_new::new)]
 pub struct Trigger {
-	pub price: f64,
+	pub price: Price,
 	#[new(default)]
 	pub price_type: TriggerPriceType,
 }
 impl Trigger {
-	pub fn last(price: f64) -> Self {
+	pub fn last(price: Price) -> Self {
 		Self {
 			price,
 			price_type: TriggerPriceType::Last,
 		}
 	}
 
-	pub fn mark(price: f64) -> Self {
+	pub fn mark(price: Price) -> Self {
 		Self {
 			price,
 			price_type: TriggerPriceType::Mark,
 		}
 	}
 
-	pub fn index(price: f64) -> Self {
+	pub fn index(price: Price) -> Self {
 		Self {
 			price,
 			price_type: TriggerPriceType::Index,
 		}
-	}
-}
-
-impl Eq for Trigger {}
-impl std::hash::Hash for Trigger {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		self.price.to_bits().hash(state);
-		self.price_type.hash(state);
 	}
 }
 
@@ -206,7 +198,7 @@ pub enum TrailingCallback {
 	/// Percentage-based callback rate (e.g. 1.0 = 1%)
 	Percent(f64),
 	/// Absolute price offset
-	Price(f64),
+	Price(Price),
 }
 
 #[non_exhaustive]

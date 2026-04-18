@@ -1,0 +1,14 @@
+[package]
+name = "v_exchanges_core"
+version = "0.1.0"
+edition = "2024"
+authors = ["valeratrades"]
+description = "Core price and quantity primitives for v_exchanges"
+license = "MIT"
+repository = "https://github.com/valeratrades/v_exchanges"
+
+[dependencies]
+derive-new = { workspace = true }
+
+[lints]
+workspace = true
