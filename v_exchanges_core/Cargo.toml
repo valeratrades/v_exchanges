@@ -8,7 +8,8 @@ license = "MIT"
 repository = "https://github.com/valeratrades/v_exchanges"
 
 [dependencies]
-derive-new = { workspace = true }
+ahash = { workspace = true, features = ["serde"] }
+derive-new.workspace = true
 
 [lints]
 workspace = true

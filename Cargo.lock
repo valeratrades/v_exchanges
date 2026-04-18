@@ -3325,6 +3325,7 @@ dependencies = [
 name = "v_exchanges_core"
 version = "0.1.0"
 dependencies = [
+ "ahash 0.8.12",
  "derive-new",
 ]
 

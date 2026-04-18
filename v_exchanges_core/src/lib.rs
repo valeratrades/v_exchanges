@@ -1,17 +1,10 @@
+#![feature(default_field_values)]
 /// Fixed-point quantity. Non-negative. raw = value × 10^precision
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, derive_new::new)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, derive_new::new)]
 pub struct Qty {
 	pub raw: u64,
 	pub precision: u8,
 }
-
-/// Fixed-point price. Signed to support spreads and options. raw = value × 10^precision
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, derive_new::new)]
-pub struct Price {
-	pub raw: i64,
-	pub precision: u8,
-}
-
 impl Qty {
 	pub fn from_f64(value: f64, precision: u8) -> Self {
 		let raw = (value * 10f64.powi(precision as i32)).round() as u64;
@@ -25,6 +18,13 @@ impl Qty {
 	pub fn is_zero(self) -> bool {
 		self.raw == 0
 	}
+}
+
+/// Fixed-point price. Signed to support spreads and options. raw = value × 10^precision
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, derive_new::new)]
+pub struct Price {
+	pub raw: i64,
+	pub precision: u8,
 }
 
 impl Price {
