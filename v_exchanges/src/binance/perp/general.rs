@@ -53,6 +53,7 @@ impl From<FuturesSymbol> for PairInfo {
 		};
 		Self {
 			price_precision: v.price_precision,
+			qty_precision: v.quantity_precision as u8,
 			delivery_date,
 		}
 	}

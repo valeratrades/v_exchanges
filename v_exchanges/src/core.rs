@@ -226,6 +226,7 @@ impl ExchangeInfo {
 #[derive(Clone, Debug, Default)]
 pub struct PairInfo {
 	pub price_precision: u8,
+	pub qty_precision: u8,
 	/// `None` means perpetual (no expiry). Only set for dated futures.
 	pub delivery_date: Option<Timestamp>,
 }

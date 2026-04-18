@@ -132,9 +132,11 @@ pub(super) async fn exchange_info(client: &Client) -> ExchangeResult<ExchangeInf
 
 		// priceScale is number of decimal places
 		let price_precision = contract.price_scale as u8;
+		let qty_precision = contract.vol_decimal as u8;
 
 		let pair_info = PairInfo {
 			price_precision,
+			qty_precision,
 			delivery_date: None,
 		};
 		pairs.insert(pair, pair_info);
@@ -158,6 +160,7 @@ struct ContractInfo {
 	base_coin: String,
 	quote_coin: String,
 	price_scale: i32,
+	vol_decimal: i32,
 	state: i32,
 }
 //,}}}

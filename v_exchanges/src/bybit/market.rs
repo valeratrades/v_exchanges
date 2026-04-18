@@ -289,6 +289,12 @@ struct InstrumentsInfoResponse {
 struct InstrumentsInfoResult {
 	list: Vec<InstrumentInfo>,
 }
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LotSizeFilter {
+	qty_step: String,
+}
+
 #[serde_as]
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -298,6 +304,7 @@ struct InstrumentInfo {
 	/// Millisecond timestamp; 0 for perpetuals
 	#[serde_as(as = "DisplayFromStr")]
 	delivery_time: i64,
+	lot_size_filter: LotSizeFilter,
 }
 pub(super) async fn exchange_info(client: &v_exchanges_adapters::Client, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
 	let category = match instrument {
@@ -316,11 +323,24 @@ pub(super) async fn exchange_info(client: &v_exchanges_adapters::Client, instrum
 		.filter_map(|i| {
 			let pair: Pair = i.symbol.try_into().ok()?;
 			let price_precision = i.price_scale.parse::<u8>().unwrap_or(0);
+			let qty_precision = i
+				.lot_size_filter
+				.qty_step
+				.split_once('.')
+				.map(|(_, decimals)| decimals.trim_end_matches('0').len() as u8)
+				.unwrap_or(0);
 			let delivery_date = match i.delivery_time {
 				0 => None,
 				ms => Some(Timestamp::from_millisecond(ms).expect("Bybit deliveryTime is valid ms")),
 			};
-			Some((pair, PairInfo { price_precision, delivery_date }))
+			Some((
+				pair,
+				PairInfo {
+					price_precision,
+					qty_precision,
+					delivery_date,
+				},
+			))
 		})
 		.collect();
 	Ok(ExchangeInfo { server_time, pairs })

@@ -262,6 +262,7 @@ pub mod futures {
 		let response: ContractsActiveResponse = client.get("/api/v1/contracts/active", &json!({}), options).await?;
 
 		let mut pairs = BTreeMap::default();
+		let step_precision = |step: f64| if step == 0.0 { 0u8 } else { (-step.log10()).max(0.0).round() as u8 };
 
 		for contract in response.data {
 			// Only include active contracts
@@ -273,15 +274,12 @@ pub mod futures {
 			let base = from_kucoin_futures_base(&contract.base_currency);
 			let pair = Pair::new(base, contract.quote_currency.as_str());
 
-			// Calculate price precision from tick_size
-			let price_precision = if contract.tick_size == 0.0 {
-				0
-			} else {
-				(-contract.tick_size.log10()).max(0.0).round() as u8
-			};
+			let price_precision = step_precision(contract.tick_size);
+			let qty_precision = step_precision(contract.lot_size);
 
 			let pair_info = PairInfo {
 				price_precision,
+				qty_precision,
 				delivery_date: None,
 			};
 			pairs.insert(pair, pair_info);
@@ -395,6 +393,7 @@ pub(super) async fn exchange_info(client: &v_exchanges_adapters::Client, _recv_w
 	let response: SymbolsResponse = client.get("/api/v2/symbols", &json!({}), options).await?;
 
 	let mut pairs = BTreeMap::default();
+	let step_precision = |step: f64| if step == 0.0 { 0u8 } else { (-step.log10()).max(0.0).round() as u8 };
 
 	for symbol in response.data {
 		// Only include enabled trading pairs
@@ -402,15 +401,11 @@ pub(super) async fn exchange_info(client: &v_exchanges_adapters::Client, _recv_w
 			&& let Some((base, quote)) = symbol.symbol.split_once('-')
 		{
 			let pair = Pair::new(base, quote);
-			// Calculate price precision from priceIncrement
-			// e.g., 0.0001 -> 4, 0.001 -> 3, 1.0 -> 0
-			let price_precision = if symbol.price_increment == 0.0 {
-				0
-			} else {
-				(-symbol.price_increment.log10()).max(0.0).round() as u8
-			};
+			let price_precision = step_precision(symbol.price_increment);
+			let qty_precision = step_precision(symbol.base_increment);
 			let pair_info = PairInfo {
 				price_precision,
+				qty_precision,
 				delivery_date: None,
 			};
 			pairs.insert(pair, pair_info);
