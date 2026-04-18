@@ -4,7 +4,7 @@
     rust-overlay.url = "github:oxalica/rust-overlay";
     flake-utils.url = "github:numtide/flake-utils";
     pre-commit-hooks.url = "github:cachix/git-hooks.nix";
-    v-flakes.url = "github:valeratrades/v_flakes?ref=v1.5";
+    v-flakes.url = "github:valeratrades/v_flakes?ref=v1.6";
   };
 
   outputs = { self, nixpkgs, rust-overlay, flake-utils, pre-commit-hooks, v-flakes }:
@@ -44,6 +44,7 @@
         github = v-flakes.github {
           inherit pkgs pname rs;
           enable = true;
+          excalidraw."docs/arch.excalidraw".standalone = true;
           lastSupportedVersion = "nightly-2025-10-12";
           jobs = {
             default = true;

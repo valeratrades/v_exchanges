@@ -57,6 +57,9 @@ venv/
 
 ## Web
 **/*.sass-cache/
+
+## Other Tools
+.codeviz/
 ## Rust
 **/**.pending-snap
 ### could be used for initial debugging of apps using `config` crate
