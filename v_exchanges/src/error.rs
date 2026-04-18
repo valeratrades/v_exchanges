@@ -6,7 +6,7 @@ use adapters::generics::{
 };
 use v_utils::{
 	prelude::*,
-	trades::Timeframe,
+	trades::{Pair, Timeframe},
 	utils::{Sysexit, SysexitCode},
 };
 
@@ -93,6 +93,15 @@ pub enum MethodError {
 	MethodNotSupported {
 		exchange: ExchangeName,
 		instrument: Instrument,
+		#[new(value = "Backtrace::capture()")]
+		backtrace: Backtrace,
+	},
+	#[error("{pair} is not listed on {exchange} for {instrument}")]
+	#[diagnostic(code(v_exchanges::method::pair_not_listed))]
+	PairNotListed {
+		exchange: ExchangeName,
+		instrument: Instrument,
+		pair: Pair,
 		#[new(value = "Backtrace::capture()")]
 		backtrace: Backtrace,
 	},

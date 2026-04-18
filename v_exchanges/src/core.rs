@@ -1,7 +1,5 @@
 use std::collections::{BTreeMap, VecDeque};
 
-use crate::{Price, Qty};
-
 use adapters::{
 	Client, HttpClient,
 	generics::{RetryConfig, ws::WsError},
@@ -16,7 +14,10 @@ use v_utils::{
 	utils::filter_nulls,
 };
 
-use crate::error::{ExchangeError, ExchangeResult, MethodError, OutOfRangeError, RequestRangeError};
+use crate::{
+	Price, Qty,
+	error::{ExchangeError, ExchangeResult, MethodError, OutOfRangeError, RequestRangeError},
+};
 
 const MAX_RECV_WINDOW: std::time::Duration = std::time::Duration::from_secs(10 * 60); // 10 minutes
 
@@ -33,16 +34,14 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	fn set_retry_config(&mut self, config: RetryConfig);
 	fn set_use_testnet(&mut self, b: bool);
 	fn set_cache_testnet_calls(&mut self, duration: Option<std::time::Duration>);
-	/// Fetch and cache exchange info for `instrument`. Must be called before `ws_book`/`ws_trades`.
-	async fn prime(&mut self, instrument: Instrument) -> ExchangeResult<()>;
-	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo>;
+	async fn exchange_info(&mut self, instrument: Instrument) -> ExchangeResult<ExchangeInfo>;
 	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines>;
 	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>>;
 	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64>;
 	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>>;
 	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo>;
-	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>>;
-	fn ws_book(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>>;
+	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>>;
+	async fn ws_book(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>>;
 }
 /// Concerns itself with exact types.
 #[async_trait::async_trait]
@@ -234,7 +233,7 @@ pub struct PairInfo {
 	/// `None` means perpetual (no expiry). Only set for dated futures.
 	pub delivery_date: Option<Timestamp>,
 }
-#[derive(Clone, Debug, strum::Display, strum::EnumString, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, strum::Display, strum::EnumString, Eq, Hash, PartialEq)]
 #[strum(serialize_all = "lowercase")]
 #[non_exhaustive]
 pub enum ExchangeName {
@@ -264,13 +263,25 @@ impl ExchangeName {
 	pub fn init_mock_client(&self) -> Box<dyn Exchange> {
 		match self {
 			#[cfg(feature = "binance")]
-			Self::Binance => Box::new(crate::Binance { client: Client::new_mock(), info_cache: std::collections::BTreeMap::default() }),
+			Self::Binance => Box::new(crate::Binance {
+				client: Client::new_mock(),
+				info_cache: std::collections::BTreeMap::default(),
+			}),
 			#[cfg(feature = "bybit")]
-			Self::Bybit => Box::new(crate::Bybit { client: Client::new_mock(), info_cache: std::collections::BTreeMap::default() }),
+			Self::Bybit => Box::new(crate::Bybit {
+				client: Client::new_mock(),
+				info_cache: std::collections::BTreeMap::default(),
+			}),
 			#[cfg(feature = "kucoin")]
-			Self::Kucoin => Box::new(crate::Kucoin { client: Client::new_mock(), info_cache: std::collections::BTreeMap::default() }),
+			Self::Kucoin => Box::new(crate::Kucoin {
+				client: Client::new_mock(),
+				info_cache: std::collections::BTreeMap::default(),
+			}),
 			#[cfg(feature = "mexc")]
-			Self::Mexc => Box::new(crate::Mexc { client: Client::new_mock(), info_cache: std::collections::BTreeMap::default() }),
+			Self::Mexc => Box::new(crate::Mexc {
+				client: Client::new_mock(),
+				info_cache: std::collections::BTreeMap::default(),
+			}),
 			_ => unimplemented!(),
 		}
 	}
@@ -348,12 +359,6 @@ pub(crate) trait ExchangeImpl: std::fmt::Debug + Send + Sync + std::ops::Deref<T
 	fn default_recv_window(&self) -> Option<std::time::Duration>;
 	//,}}}
 
-	async fn prime(&mut self, instrument: Instrument) -> ExchangeResult<()> {
-		let info = self.exchange_info(instrument).await?;
-		self.info_cache_mut().insert(instrument, info);
-		Ok(())
-	}
-
 	//Q: do we actually want to return a `MethodNotSupported` error, or should we just `unimplemented!()`?
 
 	#[allow(unused_variables)]
@@ -402,13 +407,13 @@ pub(crate) trait ExchangeImpl: std::fmt::Debug + Send + Sync + std::ops::Deref<T
 	// Websocket {{{
 	// Start a websocket connection for individual trades
 	#[allow(unused_variables)]
-	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>> {
+	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>> {
 		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), instrument)))
 	}
 
 	/// Start a websocket connection for orderbook depth updates (max depth only).
 	#[allow(unused_variables)]
-	fn ws_book(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>> {
+	async fn ws_book(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>> {
 		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), instrument)))
 	}
 	//,}}}
@@ -469,12 +474,10 @@ impl<T: ExchangeImpl> Exchange for T {
 		self.http_client_mut().config.cache_testnet_calls = duration;
 	}
 
-	async fn prime(&mut self, instrument: Instrument) -> ExchangeResult<()> {
-		ExchangeImpl::prime(self, instrument).await
-	}
-
-	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
-		ExchangeImpl::exchange_info(self, instrument).await
+	async fn exchange_info(&mut self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
+		let info = ExchangeImpl::exchange_info(self, instrument).await?;
+		self.info_cache_mut().insert(instrument, info.clone());
+		Ok(info)
 	}
 
 	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
@@ -499,12 +502,12 @@ impl<T: ExchangeImpl> Exchange for T {
 	}
 
 	// Websocket connections are NOT rate-limited by the semaphore
-	fn ws_trades(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>> {
-		ExchangeImpl::ws_trades(self, pairs, instrument)
+	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>> {
+		ExchangeImpl::ws_trades(self, pairs, instrument).await
 	}
 
-	fn ws_book(&self, pairs: Vec<Pair>, instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>> {
-		ExchangeImpl::ws_book(self, pairs, instrument)
+	async fn ws_book(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>> {
+		ExchangeImpl::ws_book(self, pairs, instrument).await
 	}
 }
 

@@ -19,8 +19,8 @@ pub struct TradesConnection {
 	pair_precisions: BTreeMap<Pair, (u8, u8)>,
 }
 impl TradesConnection {
-	pub fn try_new(client: &Client, pairs: Vec<Pair>, instrument: Instrument, pair_precisions: BTreeMap<Pair, (u8, u8)>) -> Result<Self, WsError> {
-		let vec_topic_str = pairs.into_iter().map(|p| format!("{}@trade", p.fmt_binance().to_lowercase())).collect::<Vec<_>>();
+	pub fn try_new(client: &Client, pairs: &[Pair], instrument: Instrument, pair_precisions: BTreeMap<Pair, (u8, u8)>) -> Result<Self, WsError> {
+		let vec_topic_str = pairs.iter().map(|p| format!("{}@trade", p.fmt_binance().to_lowercase())).collect::<Vec<_>>();
 
 		let base_url = match instrument {
 			Instrument::Perp => BinanceWsUrl::FuturesUsdM,
@@ -29,7 +29,11 @@ impl TradesConnection {
 		};
 		let connection = client.ws_connection("", vec![BinanceOption::WsUrl(base_url), BinanceOption::WsTopics(vec_topic_str)])?;
 
-		Ok(Self { connection, instrument, pair_precisions })
+		Ok(Self {
+			connection,
+			instrument,
+			pair_precisions,
+		})
 	}
 }
 #[async_trait::async_trait]
@@ -117,8 +121,8 @@ pub struct BookConnection {
 	pair_precisions: BTreeMap<Pair, (u8, u8)>,
 }
 impl BookConnection {
-	pub fn try_new(client: &Client, pairs: Vec<Pair>, instrument: Instrument, pair_precisions: BTreeMap<Pair, (u8, u8)>) -> Result<Self, WsError> {
-		let vec_topic_str = pairs.into_iter().map(|p| format!("{}@depth@100ms", p.fmt_binance().to_lowercase())).collect::<Vec<_>>();
+	pub fn try_new(client: &Client, pairs: &[Pair], instrument: Instrument, pair_precisions: BTreeMap<Pair, (u8, u8)>) -> Result<Self, WsError> {
+		let vec_topic_str = pairs.iter().map(|p| format!("{}@depth@100ms", p.fmt_binance().to_lowercase())).collect::<Vec<_>>();
 
 		let base_url = match instrument {
 			Instrument::Perp => BinanceWsUrl::FuturesUsdM,
@@ -144,13 +148,34 @@ impl ExchangeStream for BookConnection {
 
 		// topic: "btcusdt@depth@100ms" → take before first '@' → uppercase → pair
 		let pair_str = content_event.topic.split('@').next().expect("Binance depth topic always contains '@'").to_uppercase();
-		let pair: Pair = pair_str.as_str().try_into().unwrap_or_else(|_| panic!("failed to parse pair from depth topic: {}", content_event.topic));
+		let pair: Pair = pair_str
+			.as_str()
+			.try_into()
+			.unwrap_or_else(|_| panic!("failed to parse pair from depth topic: {}", content_event.topic));
 		let &(price_prec, qty_prec) = self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
 
 		let shape = BookShape {
 			time,
-			bids: parsed.bids.into_iter().map(|(p, q)| (Price::from_f64(p.parse().expect("valid price string"), price_prec), Qty::from_f64(q.parse().expect("valid qty string"), qty_prec))).collect(),
-			asks: parsed.asks.into_iter().map(|(p, q)| (Price::from_f64(p.parse().expect("valid price string"), price_prec), Qty::from_f64(q.parse().expect("valid qty string"), qty_prec))).collect(),
+			bids: parsed
+				.bids
+				.into_iter()
+				.map(|(p, q)| {
+					(
+						Price::from_f64(p.parse().expect("valid price string"), price_prec),
+						Qty::from_f64(q.parse().expect("valid qty string"), qty_prec),
+					)
+				})
+				.collect(),
+			asks: parsed
+				.asks
+				.into_iter()
+				.map(|(p, q)| {
+					(
+						Price::from_f64(p.parse().expect("valid price string"), price_prec),
+						Qty::from_f64(q.parse().expect("valid qty string"), qty_prec),
+					)
+				})
+				.collect(),
 		};
 		Ok(BookUpdate::Delta(shape))
 	}

@@ -15,8 +15,7 @@ async fn main() {
 }
 
 async fn across_an_await_point(mut binance: Binance, pairs: Vec<Pair>, instrument: Instrument) {
-	binance.prime(instrument).await.unwrap();
-	let mut trades_connection = binance.ws_trades(pairs, instrument).unwrap();
+	let mut trades_connection = binance.ws_trades(&pairs, instrument).await.unwrap();
 	while let Ok(trade_event) = trades_connection.next().await {
 		dbg!(&trade_event);
 	}

@@ -7,7 +7,7 @@ async fn main() {
 
 	let now = Timestamp::now();
 
-	for (name, exchange) in [("Binance", ExchangeName::Binance.init_client()), ("Bybit", ExchangeName::Bybit.init_client())] {
+	for (name, mut exchange) in [("Binance", ExchangeName::Binance.init_client()), ("Bybit", ExchangeName::Bybit.init_client())] {
 		let info = exchange.exchange_info(Instrument::Perp).await.unwrap();
 		let mut expiring: Vec<_> = info.pairs.iter().filter_map(|(pair, pair_info)| pair_info.delivery_date.map(|d| (pair, d))).collect();
 		expiring.sort_by_key(|(_, d)| *d);

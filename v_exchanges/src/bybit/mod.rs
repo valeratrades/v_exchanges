@@ -78,17 +78,26 @@ impl ExchangeImpl for Bybit {
 		account::personal_info(self, recv_window).await
 	}
 
-	fn ws_book(&self, pairs: Vec<Pair>, instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = BookUpdate>>, ExchangeError> {
+	async fn ws_book(&mut self, pairs: &[Pair], instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = BookUpdate>>, ExchangeError> {
 		match instrument {
 			Instrument::Perp | Instrument::Spot => {
-				let info = self.info_cache.get(&instrument).unwrap_or_else(|| panic!("prime({instrument}) must be called before opening WS connections"));
-				let pair_precisions: BTreeMap<Pair, (u8, u8)> = pairs
-					.iter()
-					.map(|pair| {
-						let pi = info.pairs.get(pair).unwrap_or_else(|| panic!("{pair} not found in exchange_info for {instrument}"));
-						(*pair, (pi.price_precision, pi.qty_precision))
-					})
-					.collect();
+				if !self.info_cache.contains_key(&instrument) {
+					let info = ExchangeImpl::exchange_info(&*self, instrument).await?;
+					self.info_cache.insert(instrument, info);
+				}
+				let exchange = self.name();
+				let pair_precisions: BTreeMap<Pair, (u8, u8)> = {
+					let info = self.info_cache.get(&instrument).expect("just inserted or was present");
+					pairs
+						.iter()
+						.map(|pair| {
+							info.pairs
+								.get(pair)
+								.ok_or_else(|| ExchangeError::Method(MethodError::new_pair_not_listed(exchange, instrument, *pair)))
+								.map(|pi| (*pair, (pi.price_precision, pi.qty_precision)))
+						})
+						.collect::<ExchangeResult<_>>()?
+				};
 				let connection = ws::BookConnection::try_new(self, pairs, instrument, pair_precisions)?;
 				Ok(Box::new(connection))
 			}

@@ -10,16 +10,12 @@ async fn main() {
 	let pair = vec![Pair::from_str("BTCUSDT").unwrap()];
 
 	let mut binance = Binance::default();
-	binance.prime(Instrument::Spot).await.unwrap();
-	binance.prime(Instrument::Perp).await.unwrap();
 	let mut bybit = Bybit::default();
-	bybit.prime(Instrument::Spot).await.unwrap();
-	bybit.prime(Instrument::Perp).await.unwrap();
 
-	let mut binance_spot = binance.ws_book(pair.clone(), Instrument::Spot).unwrap();
-	let mut binance_perp = binance.ws_book(pair.clone(), Instrument::Perp).unwrap();
-	let mut bybit_spot = bybit.ws_book(pair.clone(), Instrument::Spot).unwrap();
-	let mut bybit_perp = bybit.ws_book(pair.clone(), Instrument::Perp).unwrap();
+	let mut binance_spot = binance.ws_book(&pair, Instrument::Spot).await.unwrap();
+	let mut binance_perp = binance.ws_book(&pair, Instrument::Perp).await.unwrap();
+	let mut bybit_spot = bybit.ws_book(&pair, Instrument::Spot).await.unwrap();
+	let mut bybit_perp = bybit.ws_book(&pair, Instrument::Perp).await.unwrap();
 
 	loop {
 		tokio::select! {

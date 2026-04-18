@@ -62,6 +62,44 @@ impl From<Qty> for f64 {
 	}
 }
 
+impl std::str::FromStr for Price {
+	type Err = String;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s.find('.') {
+			Some(dot) => {
+				let precision = (s.len() - dot - 1) as u8;
+				let raw_str = format!("{}{}", &s[..dot], &s[dot + 1..]);
+				let raw = raw_str.parse::<i64>().map_err(|e| e.to_string())?;
+				Ok(Self { raw, precision })
+			}
+			None => {
+				let raw = s.parse::<i64>().map_err(|e| e.to_string())?;
+				Ok(Self { raw, precision: 0 })
+			}
+		}
+	}
+}
+
+impl std::str::FromStr for Qty {
+	type Err = String;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s.find('.') {
+			Some(dot) => {
+				let precision = (s.len() - dot - 1) as u8;
+				let raw_str = format!("{}{}", &s[..dot], &s[dot + 1..]);
+				let raw = raw_str.parse::<u64>().map_err(|e| e.to_string())?;
+				Ok(Self { raw, precision })
+			}
+			None => {
+				let raw = s.parse::<u64>().map_err(|e| e.to_string())?;
+				Ok(Self { raw, precision: 0 })
+			}
+		}
+	}
+}
+
 impl std::fmt::Display for Price {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{:.prec$}", self.as_f64(), prec = self.precision as usize)
@@ -97,5 +135,40 @@ mod tests {
 	fn price_integer_addition_exact() {
 		// raw integer addition is exact where f64 fails for 0.1 + 0.2
 		assert_eq!(Price::from_f64(0.1, 1).raw + Price::from_f64(0.2, 1).raw, Price::from_f64(0.3, 1).raw);
+	}
+
+	#[test]
+	fn price_from_str() {
+		let p: Price = "42000.50".parse().unwrap();
+		assert_eq!(p.raw, 4200050);
+		assert_eq!(p.precision, 2);
+	}
+
+	#[test]
+	fn price_from_str_negative() {
+		let p: Price = "-1.25".parse().unwrap();
+		assert_eq!(p.raw, -125);
+		assert_eq!(p.precision, 2);
+	}
+
+	#[test]
+	fn price_from_str_no_decimal() {
+		let p: Price = "100".parse().unwrap();
+		assert_eq!(p.raw, 100);
+		assert_eq!(p.precision, 0);
+	}
+
+	#[test]
+	fn qty_from_str() {
+		let q: Qty = "1.234".parse().unwrap();
+		assert_eq!(q.raw, 1234);
+		assert_eq!(q.precision, 3);
+	}
+
+	#[test]
+	fn qty_from_str_no_decimal() {
+		let q: Qty = "50".parse().unwrap();
+		assert_eq!(q.raw, 50);
+		assert_eq!(q.precision, 0);
 	}
 }
