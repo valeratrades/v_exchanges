@@ -9,7 +9,9 @@ async fn main() {
 
 	let pair = vec![Pair::from_str("BTCUSDT").unwrap()];
 
-	let binance = Binance::default();
+	let mut binance = Binance::default();
+	binance.prime(Instrument::Spot).await.unwrap();
+	binance.prime(Instrument::Perp).await.unwrap();
 
 	let mut spot = binance.ws_book(pair.clone(), Instrument::Spot).unwrap();
 	let mut perp = binance.ws_book(pair.clone(), Instrument::Perp).unwrap();
@@ -37,8 +39,8 @@ fn print_update(source: &str, update: &BookUpdate) {
 		"[{source}] {kind:>8} | bids: {:>4} asks: {:>4} | best_bid: {:<12} best_ask: {:<12} | {}",
 		shape.bids.len(),
 		shape.asks.len(),
-		best_bid.map_or("-".to_string(), |p| format!("{p:.2}")),
-		best_ask.map_or("-".to_string(), |p| format!("{p:.2}")),
+		best_bid.map_or("-".to_string(), |p| p.to_string()),
+		best_ask.map_or("-".to_string(), |p| p.to_string()),
 		shape.time,
 	);
 }

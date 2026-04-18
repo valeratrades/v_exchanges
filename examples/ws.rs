@@ -14,7 +14,8 @@ async fn main() {
 	tokio::spawn(across_an_await_point(binance, pairs.clone(), instrument));
 }
 
-async fn across_an_await_point(binance: Binance, pairs: Vec<Pair>, instrument: Instrument) {
+async fn across_an_await_point(mut binance: Binance, pairs: Vec<Pair>, instrument: Instrument) {
+	binance.prime(instrument).await.unwrap();
 	let mut trades_connection = binance.ws_trades(pairs, instrument).unwrap();
 	while let Ok(trade_event) = trades_connection.next().await {
 		dbg!(&trade_event);
