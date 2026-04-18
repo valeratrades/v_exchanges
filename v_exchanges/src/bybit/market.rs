@@ -1,4 +1,7 @@
-use std::collections::VecDeque;
+use std::{
+	collections::{BTreeMap, VecDeque},
+	str::FromStr,
+};
 
 use ahash::AHashMap;
 use jiff::Timestamp;
@@ -168,17 +171,46 @@ pub(super) async fn klines(client: &v_exchanges_adapters::Client, symbol: Symbol
 
 //,}}}
 
-// price {{{
-pub(super) async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> ExchangeResult<f64> {
-	let params = filter_nulls(json!({
-		"category": "linear",
-		"symbol": pair.fmt_bybit(),
-	}));
-	let options = vec![BybitOption::None];
-	let response: MarketTickerResponse = client.get("/v5/market/tickers", &params, options).await?;
-	Ok(response.result.list[0].last_price)
+// prices {{{
+#[serde_as]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TickerPriceEntry {
+	symbol: String,
+	#[serde_as(as = "Option<DisplayFromStr>")]
+	last_price: Option<f64>,
 }
-
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TickerPriceResult {
+	list: Vec<TickerPriceEntry>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TickerPriceResponse {
+	result: TickerPriceResult,
+}
+pub(super) async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
+	let category = match instrument {
+		Instrument::Perp => "linear",
+		_ => unimplemented!(),
+	};
+	let params = filter_nulls(json!({ "category": category }));
+	let options = vec![BybitOption::None];
+	let response: TickerPriceResponse = client.get("/v5/market/tickers", &params, options).await?;
+	let mut price_map = BTreeMap::default();
+	for entry in response.result.list {
+		let Some(price) = entry.last_price else { continue };
+		let Ok(pair) = Pair::from_str(&entry.symbol) else { continue };
+		if let Some(ref requested) = pairs
+			&& !requested.contains(&pair)
+		{
+			continue;
+		}
+		price_map.insert(pair, price);
+	}
+	Ok(price_map)
+}
 //,}}}
 
 // open_interest {{{

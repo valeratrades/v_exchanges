@@ -44,13 +44,6 @@ impl ExchangeImpl for Mexc {
 		}
 	}
 
-	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
-		match symbol.instrument {
-			Instrument::Perp => market::price(self, symbol.pair).await,
-			_ => unimplemented!(),
-		}
-	}
-
 	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
 		match symbol.instrument {
 			Instrument::Perp => market::klines(self, symbol, tf.try_into()?, range).await,

@@ -2,6 +2,8 @@ mod account;
 mod market;
 mod ws;
 
+use std::collections::BTreeMap;
+
 use adapters::bybit::{BybitOption, BybitOptions};
 use secrecy::SecretString;
 use v_exchanges_adapters::{Client, GetOptions};
@@ -49,9 +51,9 @@ impl ExchangeImpl for Bybit {
 		}
 	}
 
-	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
-		match symbol.instrument {
-			Instrument::Perp => market::price(self, symbol.pair).await,
+	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
+		match instrument {
+			Instrument::Perp => market::prices(self, pairs, instrument).await,
 			_ => unimplemented!(),
 		}
 	}

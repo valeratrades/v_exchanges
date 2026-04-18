@@ -96,6 +96,7 @@
             openssl
             pkg-config
             rust
+            (writeShellScriptBin "test_all" "cargo t && cargo t --examples")
           ] ++ pre-commit-check.enabledPackages ++ combined.enabledPackages;
 
           env.RUST_BACKTRACE = 1;

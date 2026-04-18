@@ -71,9 +71,11 @@ pub(super) async fn balances(client: &Client, recv_window: Option<std::time::Dur
 		}
 		// Fetch price for non-stablecoin assets
 		let usdt_pair = Pair::new(asset, "USDT".into());
-		let usdt_price = market::price(client, usdt_pair, None)
+		let usdt_price = market::prices(client, Some(vec![usdt_pair]), None)
 			.await
-			.map_err(|e| eyre!("Failed to fetch USDT price for {asset} (balance: {underlying}): {e}"))?;
+			.map_err(|e| eyre!("Failed to fetch USDT price for {asset} (balance: {underlying}): {e}"))?
+			.remove(&usdt_pair)
+			.ok_or_else(|| eyre!("{usdt_pair} not found in kucoin prices response"))?;
 		Ok((underlying * usdt_price).into())
 	}
 

@@ -13,32 +13,6 @@ use crate::{
 	kucoin::KucoinTimeframe,
 };
 
-// price {{{
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TickerResponse {
-	pub code: String,
-	pub data: TickerData,
-}
-#[serde_as]
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TickerData {
-	pub time: i64,
-	pub sequence: String,
-	#[serde_as(as = "DisplayFromStr")]
-	pub price: f64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub size: f64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub best_bid: f64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub best_bid_size: f64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub best_ask: f64,
-	#[serde_as(as = "DisplayFromStr")]
-	pub best_ask_size: f64,
-}
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AllTickersResponse {
 	pub code: String,
@@ -130,7 +104,6 @@ pub mod futures {
 	use jiff::Timestamp;
 	use serde::{Deserialize, Serialize};
 	use serde_json::json;
-	use serde_with::{DisplayFromStr, serde_as};
 	use v_exchanges_adapters::kucoin::{KucoinHttpUrl, KucoinOption};
 	use v_utils::trades::{Kline, Ohlc, Pair};
 
@@ -155,47 +128,6 @@ pub mod futures {
 			other => other,
 		}
 	}
-
-	// price {{{
-	pub(in crate::kucoin) async fn price(client: &v_exchanges_adapters::Client, pair: Pair, _recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
-		// Kucoin futures symbol format: XBTUSDTM (base + quote + "M" for perpetual)
-		let base = to_kucoin_futures_base(pair.base().as_ref());
-		let symbol = format!("{base}{}M", pair.quote());
-		let params = json!({
-			"symbol": symbol,
-		});
-		let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Futures)];
-		let response: FuturesTickerResponse = client.get("/api/v1/ticker", &params, options).await?;
-		Ok(response.data.price)
-	}
-
-	#[derive(Debug, Deserialize, Serialize)]
-	#[serde(rename_all = "camelCase")]
-	pub struct FuturesTickerResponse {
-		pub code: String,
-		pub data: FuturesTickerData,
-	}
-
-	#[serde_as]
-	#[derive(Debug, Deserialize, Serialize)]
-	#[serde(rename_all = "camelCase")]
-	pub struct FuturesTickerData {
-		pub sequence: i64,
-		pub symbol: String,
-		pub side: String,
-		pub size: i64,
-		pub trade_id: String,
-		#[serde_as(as = "DisplayFromStr")]
-		pub price: f64,
-		#[serde_as(as = "DisplayFromStr")]
-		pub best_bid_price: f64,
-		pub best_bid_size: i64,
-		#[serde_as(as = "DisplayFromStr")]
-		pub best_ask_price: f64,
-		pub best_ask_size: i64,
-		pub ts: i64,
-	}
-	//,}}}
 
 	// prices {{{
 	pub(in crate::kucoin) async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>, _recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
@@ -362,18 +294,6 @@ pub mod futures {
 	}
 	//,}}}
 }
-pub(super) async fn price(client: &v_exchanges_adapters::Client, pair: Pair, _recv_window: Option<std::time::Duration>) -> ExchangeResult<f64> {
-	let symbol = format!("{}-{}", pair.base(), pair.quote());
-	let params = json!({
-		"symbol": symbol,
-	});
-	let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Spot)];
-	let response: TickerResponse = client.get("/api/v1/market/orderbook/level1", &params, options).await?;
-	Ok(response.data.price)
-}
-
-//,}}}
-
 // prices {{{
 pub(super) async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>, _recv_window: Option<std::time::Duration>) -> ExchangeResult<BTreeMap<Pair, f64>> {
 	let options = vec![KucoinOption::HttpUrl(KucoinHttpUrl::Spot)];

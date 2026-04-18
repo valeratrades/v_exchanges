@@ -16,57 +16,6 @@ use crate::{
 };
 
 // balance {{{
-/// Place a new order on Binance Futures
-pub async fn place_order(client: &v_exchanges_adapters::Client, request: OrderRequest, recv_window: Option<std::time::Duration>) -> ExchangeResult<OrderResponse> {
-	assert!(client.is_authenticated::<BinanceOption>());
-
-	let mut options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM), BinanceOption::HttpAuth(BinanceAuth::Sign)];
-	if let Some(rw) = recv_window {
-		options.push(BinanceOption::RecvWindow(rw));
-	}
-
-	let mut params = vec![("symbol", request.symbol.clone()), ("side", request.side.to_string()), ("type", request.order_type.to_string())];
-
-	if let Some(ps) = &request.position_side {
-		params.push(("positionSide", ps.to_string()));
-	}
-	if let Some(tif) = &request.time_in_force {
-		params.push(("timeInForce", tif.to_string()));
-	}
-	if let Some(qty) = request.qty {
-		params.push(("quantity", qty.to_string()));
-	}
-	if let Some(price) = request.price {
-		params.push(("price", price.to_string()));
-	}
-	if let Some(stop_price) = request.stop_price {
-		params.push(("stopPrice", stop_price.to_string()));
-	}
-	if let Some(reduce_only) = request.reduce_only {
-		params.push(("reduceOnly", reduce_only.to_string().to_uppercase()));
-	}
-	if let Some(close_pos) = request.close_position {
-		params.push(("closePosition", close_pos.to_string().to_uppercase()));
-	}
-	if let Some(act_price) = request.activation_price {
-		params.push(("activationPrice", act_price.to_string()));
-	}
-	if let Some(callback) = request.callback_rate {
-		params.push(("callbackRate", callback.to_string()));
-	}
-	if let Some(wt) = &request.working_type {
-		params.push(("workingType", wt.to_string()));
-	}
-	if let Some(pp) = request.price_protect {
-		params.push(("priceProtect", pp.to_string().to_uppercase()));
-	}
-	if let Some(client_order_id) = &request.new_client_order_id {
-		params.push(("newClientOrderId", client_order_id.clone()));
-	}
-
-	let response: OrderResponse = client.post("/fapi/v1/order", &params, options).await?;
-	Ok(response)
-}
 /// Query income history
 pub async fn income_history(client: &v_exchanges_adapters::Client, request: IncomeRequest, recv_window: Option<std::time::Duration>) -> ExchangeResult<Vec<IncomeRecord>> {
 	assert!(client.is_authenticated::<BinanceOption>());

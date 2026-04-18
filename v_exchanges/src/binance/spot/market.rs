@@ -13,13 +13,9 @@ use crate::ExchangeResult;
 pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pair>>) -> ExchangeResult<BTreeMap<Pair, f64>> {
 	let options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::Spot)];
 	let r: PricesResponse = match pairs {
-		//TODO!!!: fix this branch
-		//BUG: doesn't work for some reason
 		Some(pairs) => {
-			let params = json!({
-				"symbols": pairs.into_iter().map(|p| p.to_string()).collect::<Vec<String>>(),
-			});
-			dbg!(&params);
+			let symbols_json = serde_json::to_string(&pairs.iter().map(|p| p.fmt_binance()).collect::<Vec<_>>()).expect("Vec<String> always serializes");
+			let params = json!({ "symbols": symbols_json });
 			client.get("/api/v3/ticker/price", &params, options).await?
 		}
 		None => client.get_no_query("/api/v3/ticker/price", options).await?,
@@ -39,17 +35,6 @@ pub async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<Vec<Pai
 		};
 	}
 	Ok(prices)
-}
-
-pub async fn price(client: &v_exchanges_adapters::Client, pair: Pair) -> ExchangeResult<f64> {
-	let params = json!({
-		"symbol": pair.fmt_binance(),
-	});
-
-	let options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::Spot)];
-	let r: AssetPriceResponse = client.get("/api/v3/ticker/price", &params, options).await?;
-	let price = r.price;
-	Ok(price)
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, derive_new::new)]

@@ -61,14 +61,6 @@ impl ExchangeImpl for Binance {
 		}
 	}
 
-	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
-		match symbol.instrument {
-			Instrument::Spot | Instrument::Margin => spot::market::price(self, symbol.pair).await,
-			Instrument::Perp => perp::market::price(self, symbol.pair).await,
-			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), symbol.instrument))),
-		}
-	}
-
 	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<crate::core::OpenInterest>> {
 		match symbol.instrument {
 			Instrument::Perp => market::open_interest(self, symbol, tf.try_into()?, range).await,

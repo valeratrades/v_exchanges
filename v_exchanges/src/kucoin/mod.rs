@@ -46,14 +46,6 @@ impl ExchangeImpl for Kucoin {
 		}
 	}
 
-	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
-		match symbol.instrument {
-			Instrument::Spot => market::price(self, symbol.pair, None).await,
-			Instrument::Perp => market::futures::price(self, symbol.pair, None).await,
-			_ => unimplemented!(),
-		}
-	}
-
 	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		match instrument {
 			Instrument::Spot => market::prices(self, pairs, None).await,

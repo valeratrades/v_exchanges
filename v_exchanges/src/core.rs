@@ -361,8 +361,9 @@ pub(crate) trait ExchangeImpl: std::fmt::Debug + Send + Sync + std::ops::Deref<T
 	}
 
 	#[allow(unused_variables)]
+	/// NB: not perf-critical, so literally just calls `prices`, incurring cost of making a vec and a BTreeMap for no reason
 	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
-		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), symbol.instrument)))
+		self.prices(Some(vec![symbol.pair]), symbol.instrument).await.map(|m| m[&symbol.pair])
 	}
 
 	/// Get Open Interest data

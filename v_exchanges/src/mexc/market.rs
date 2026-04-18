@@ -17,28 +17,20 @@ use crate::{
 	mexc::MexcTimeframe,
 };
 
-//TODO: impl spot
 pub(super) async fn price(client: &Client, pair: Pair) -> ExchangeResult<f64> {
 	let endpoint = format!("/api/v1/contract/index_price/{}", pair.fmt_mexc());
 	let options = vec![MexcOption::HttpUrl(MexcHttpUrl::Futures)];
-	let r: PriceResponse = client.get_no_query(&endpoint, options).await?;
-	Ok(r.data.into())
-}
-
-#[derive(Clone, Debug, Default, Deserialize)]
-struct PriceResponse {
-	pub data: PriceData,
-}
-
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PriceData {
-	index_price: f64,
-}
-impl From<PriceData> for f64 {
-	fn from(data: PriceData) -> f64 {
-		data.index_price
+	#[derive(Clone, Debug, Default, Deserialize)]
+	struct PriceResponse {
+		data: PriceData,
 	}
+	#[derive(Clone, Debug, Default, Deserialize)]
+	#[serde(rename_all = "camelCase")]
+	struct PriceData {
+		index_price: f64,
+	}
+	let r: PriceResponse = client.get_no_query(&endpoint, options).await?;
+	Ok(r.data.index_price)
 }
 
 // klines {{{
