@@ -11,7 +11,8 @@ async fn main() {
 	let pairs = vec![Pair::from_str("BTCUSDT").unwrap()];
 	let instrument = Instrument::Perp;
 
-	tokio::spawn(across_an_await_point(binance, pairs.clone(), instrument));
+	let handle = tokio::spawn(across_an_await_point(binance, pairs, instrument));
+	handle.await;
 }
 
 async fn across_an_await_point(mut binance: Binance, pairs: Vec<Pair>, instrument: Instrument) {

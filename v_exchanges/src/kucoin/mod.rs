@@ -20,12 +20,12 @@ pub struct Kucoin {
 	#[deref]
 	#[deref_mut]
 	pub client: Client,
-	pub info_cache: std::collections::BTreeMap<Instrument, ExchangeInfo>,
+	pub info_cache: BTreeMap<Instrument, ExchangeInfo>,
 }
 
 #[async_trait::async_trait]
 impl ExchangeImpl for Kucoin {
-	fn info_cache_mut(&mut self) -> &mut std::collections::BTreeMap<Instrument, ExchangeInfo> {
+	fn info_cache_mut(&mut self) -> &mut BTreeMap<Instrument, ExchangeInfo> {
 		&mut self.info_cache
 	}
 

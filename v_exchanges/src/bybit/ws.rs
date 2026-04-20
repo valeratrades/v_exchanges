@@ -7,7 +7,7 @@ use adapters::{
 };
 use v_utils::trades::Pair;
 
-use crate::{BookShape, BookUpdate, ExchangeStream, Instrument, PrecisionPriceQty, Price, Qty};
+use crate::{BookShape, BookUpdate, ExchangeStream, Instrument, PrecisionPriceQty};
 
 // book {{{
 #[derive(Debug)]
@@ -44,13 +44,7 @@ impl ExchangeStream for BookConnection {
 			.unwrap_or_else(|_| panic!("failed to parse pair from orderbook topic: {}", content_event.topic));
 		let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
 
-		let parse_level = |(p, q): (String, String)| -> (i32, u32) {
-			let price = Price::from_f64(p.parse().expect("valid price string"), prec.price);
-			let qty = Qty::from_f64(q.parse().expect("valid qty string"), prec.qty);
-			assert_eq!(price.precision, prec.price, "price precision mismatch with batch prec");
-			assert_eq!(qty.precision, prec.qty, "qty precision mismatch with batch prec");
-			(price.raw, qty.raw)
-		};
+		let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.parse_price(&p), prec.parse_qty(&q)) };
 		let shape = BookShape {
 			time: content_event.time,
 			prec,

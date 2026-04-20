@@ -262,22 +262,22 @@ impl ExchangeName {
 			#[cfg(feature = "binance")]
 			Self::Binance => Box::new(crate::Binance {
 				client: Client::new_mock(),
-				info_cache: std::collections::BTreeMap::default(),
+				info_cache: BTreeMap::default(),
 			}),
 			#[cfg(feature = "bybit")]
 			Self::Bybit => Box::new(crate::Bybit {
 				client: Client::new_mock(),
-				info_cache: std::collections::BTreeMap::default(),
+				info_cache: BTreeMap::default(),
 			}),
 			#[cfg(feature = "kucoin")]
 			Self::Kucoin => Box::new(crate::Kucoin {
 				client: Client::new_mock(),
-				info_cache: std::collections::BTreeMap::default(),
+				info_cache: BTreeMap::default(),
 			}),
 			#[cfg(feature = "mexc")]
 			Self::Mexc => Box::new(crate::Mexc {
 				client: Client::new_mock(),
-				info_cache: std::collections::BTreeMap::default(),
+				info_cache: BTreeMap::default(),
 			}),
 			_ => unimplemented!(),
 		}
@@ -314,6 +314,33 @@ pub struct Symbol {
 pub struct PrecisionPriceQty {
 	pub price: u8,
 	pub qty: u8,
+}
+
+impl PrecisionPriceQty {
+	/// Strip the decimal point from a string, asserting it has exactly `expected_precision` decimals.
+	/// Returns the raw digit string ready to parse.
+	fn digits(s: &str, expected_precision: u8) -> String {
+		match s.find('.') {
+			Some(dot) => {
+				let decimals = (s.len() - dot - 1) as u8;
+				assert_eq!(decimals, expected_precision, "string {s:?} has {decimals} decimal places, expected {expected_precision}");
+				[&s[..dot], &s[dot + 1..]].concat()
+			}
+			None => {
+				// Exchanges send bare "0" for zero/null values even when precision > 0
+				assert!(expected_precision == 0 || s == "0", "string {s:?} has 0 decimal places, expected {expected_precision}");
+				s.to_owned()
+			}
+		}
+	}
+
+	pub(crate) fn parse_price(&self, s: &str) -> i32 {
+		Self::digits(s, self.price).parse().expect("price digits are valid i32")
+	}
+
+	pub(crate) fn parse_qty(&self, s: &str) -> u32 {
+		Self::digits(s, self.qty).parse().expect("qty digits are valid u32")
+	}
 }
 
 /// (price, qty) levels for both sides of an orderbook, keyed by raw price.
@@ -354,13 +381,6 @@ impl BatchTrades {
 	pub fn iter(&self) -> impl Iterator<Item = (Timestamp, i32, u32)> + '_ {
 		self.trades.iter().map(|t| (t.time, t.price, t.qty))
 	}
-}
-
-#[derive(Clone, Debug, Default)]
-pub(crate) struct InnerTrade {
-	pub time: Timestamp,
-	pub price: i32,
-	pub qty: u32,
 }
 
 /// Internal trait for exchange implementations.
@@ -445,6 +465,13 @@ pub(crate) trait ExchangeImpl: std::fmt::Debug + Send + Sync + std::ops::Deref<T
 	}
 	//,}}}
 }
+#[derive(Clone, Debug, Default)]
+pub(crate) struct InnerTrade {
+	pub time: Timestamp,
+	pub price: i32,
+	pub qty: u32,
+}
+
 /// Validates recv_window parameters and warns if using global default.
 /// Returns an error if either the provided or default recv_window exceeds MAX_RECV_WINDOW.
 fn validate_recv_window(recv_window: Option<std::time::Duration>, default_recv_window: Option<std::time::Duration>) -> ExchangeResult<()> {

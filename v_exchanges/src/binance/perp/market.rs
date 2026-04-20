@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use adapters::Client;
 //HACK: Methods should be implemented on the central interface struct, following <https://github.com/wisespace-io/binance-rs>.
 use serde_with::{DisplayFromStr, serde_as};

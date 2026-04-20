@@ -6,10 +6,9 @@ use adapters::{
 	generics::ws::{WsConnection, WsError},
 };
 use jiff::Timestamp;
-use serde_with::{DisplayFromStr, serde_as};
 use v_utils::trades::Pair;
 
-use crate::{BatchTrades, BookShape, BookUpdate, ExchangeStream, Instrument, PrecisionPriceQty, Price, Qty, core::InnerTrade};
+use crate::{BatchTrades, BookShape, BookUpdate, ExchangeStream, Instrument, PrecisionPriceQty, core::InnerTrade};
 
 // trades {{{
 #[derive(Debug)]
@@ -43,7 +42,7 @@ impl ExchangeStream for TradesConnection {
 	async fn next(&mut self) -> Result<Self::Item, WsError> {
 		loop {
 			let content_event = self.connection.next().await?;
-			let (pair_str, timestamp, qty_asset_f64, price_f64) = match self.instrument {
+			let (pair_str, timestamp, qty_asset_str, price_str) = match self.instrument {
 				Instrument::Perp => {
 					let parsed = serde_json::from_value::<TradeEventPerp>(content_event.data.clone()).expect("Exchange responded with invalid trade event");
 					(parsed.pair, parsed.timestamp, parsed.qty_asset, parsed.price)
@@ -56,11 +55,9 @@ impl ExchangeStream for TradesConnection {
 			};
 			let pair: Pair = pair_str.as_str().try_into().unwrap_or_else(|_| panic!("failed to parse pair from trade event: {pair_str}"));
 			let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
-			let price = Price::from_f64(price_f64, prec.price);
-			let qty = Qty::from_f64(qty_asset_f64, prec.qty);
-			assert_eq!(price.precision, prec.price, "price precision mismatch with batch prec");
-			assert_eq!(qty.precision, prec.qty, "qty precision mismatch with batch prec");
-			if price.is_zero() || qty.is_zero() {
+			let price_raw = prec.parse_price(&price_str);
+			let qty_raw = prec.parse_qty(&qty_asset_str);
+			if price_raw == 0 || qty_raw == 0 {
 				tracing::debug!(
 					raw_json = %content_event.data,
 					topic = %content_event.topic,
@@ -72,15 +69,14 @@ impl ExchangeStream for TradesConnection {
 			}
 			let trade = InnerTrade {
 				time: Timestamp::from_millisecond(timestamp).expect("Exchange responded with invalid timestamp"),
-				price: price.raw,
-				qty: qty.raw,
+				price: price_raw,
+				qty: qty_raw,
 			};
 			return Ok(BatchTrades { prec, trades: vec![trade] });
 		}
 	}
 }
 
-#[serde_as]
 #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
 pub struct TradeEventPerp {
 	#[serde(rename = "T")]
@@ -89,29 +85,24 @@ pub struct TradeEventPerp {
 	_order_type: String,
 	#[serde(rename = "m")]
 	_is_maker: bool,
-	#[serde_as(as = "DisplayFromStr")]
 	#[serde(rename = "q")]
-	qty_asset: f64,
-	#[serde_as(as = "DisplayFromStr")]
+	qty_asset: String,
 	#[serde(rename = "p")]
-	price: f64,
+	price: String,
 	#[serde(rename = "s")]
 	pair: String,
 	#[serde(rename = "t")]
 	_trade_id: u64,
 }
 
-#[serde_as]
 #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
 pub struct TradeEventSpot {
 	#[serde(rename = "T")]
 	timestamp: i64,
-	#[serde_as(as = "DisplayFromStr")]
 	#[serde(rename = "q")]
-	qty_asset: f64,
-	#[serde_as(as = "DisplayFromStr")]
+	qty_asset: String,
 	#[serde(rename = "p")]
-	price: f64,
+	price: String,
 	#[serde(rename = "s")]
 	pair: String,
 }
@@ -158,13 +149,7 @@ impl ExchangeStream for BookConnection {
 			.unwrap_or_else(|_| panic!("failed to parse pair from depth topic: {}", content_event.topic));
 		let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
 
-		let parse_level = |(p, q): (String, String)| -> (i32, u32) {
-			let price = Price::from_f64(p.parse().expect("valid price string"), prec.price);
-			let qty = Qty::from_f64(q.parse().expect("valid qty string"), prec.qty);
-			assert_eq!(price.precision, prec.price, "price precision mismatch with batch prec");
-			assert_eq!(qty.precision, prec.qty, "qty precision mismatch with batch prec");
-			(price.raw, qty.raw)
-		};
+		let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.parse_price(&p), prec.parse_qty(&q)) };
 		let shape = BookShape {
 			time,
 			prec,

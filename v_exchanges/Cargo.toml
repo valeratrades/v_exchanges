@@ -38,7 +38,7 @@ mexc = ["v_exchanges_adapters/mexc"]
 data = ["dep:reqwest"]
 
 [dependencies]
-ahash.workspace = true
+ahash = { workspace = true, features = ["serde"] }
 arrayvec.workspace = true
 async-trait.workspace = true
 cfg-if.workspace = true
@@ -153,4 +153,4 @@ path = "../examples/info/time_to_expiration_keys.rs"
 [[example]]
 name = "try_extend_lifetime"
 required-features = ["bybit"]
-path = "../examples/info/_try_extend_lifetime.rs"
+path = "../examples/info/extend_lifetime.rs"
