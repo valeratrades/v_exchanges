@@ -10,7 +10,7 @@ use v_exchanges_adapters::{Client, GetOptions};
 use v_utils::trades::{Pair, Timeframe};
 
 use crate::{
-	BookUpdate, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Instrument, MethodError, OpenInterest, Symbol,
+	BookUpdate, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Instrument, MethodError, OpenInterest, PrecisionPriceQty, Symbol,
 	core::{ExchangeImpl, Klines, PersonalInfo, RequestRange},
 };
 
@@ -86,7 +86,7 @@ impl ExchangeImpl for Bybit {
 					self.info_cache.insert(instrument, info);
 				}
 				let exchange = self.name();
-				let pair_precisions: BTreeMap<Pair, (u8, u8)> = {
+				let pair_precisions: BTreeMap<Pair, PrecisionPriceQty> = {
 					let info = self.info_cache.get(&instrument).expect("just inserted or was present");
 					pairs
 						.iter()
@@ -94,7 +94,15 @@ impl ExchangeImpl for Bybit {
 							info.pairs
 								.get(pair)
 								.ok_or_else(|| ExchangeError::Method(MethodError::new_pair_not_listed(exchange, instrument, *pair)))
-								.map(|pi| (*pair, (pi.price_precision, pi.qty_precision)))
+								.map(|pi| {
+									(
+										*pair,
+										PrecisionPriceQty {
+											price: pi.price_precision,
+											qty: pi.qty_precision,
+										},
+									)
+								})
 						})
 						.collect::<ExchangeResult<_>>()?
 				};

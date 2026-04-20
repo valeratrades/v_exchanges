@@ -29,10 +29,16 @@ async fn main() {
 fn print_update(source: &str, update: &BookUpdate) {
 	let (kind, shape) = match update {
 		BookUpdate::Snapshot(s) => ("SNAPSHOT", s),
-		BookUpdate::Delta(d) => ("DELTA", d),
+		BookUpdate::BatchDelta(d) => ("DELTA", d),
 	};
-	let best_bid = shape.bids.first().map(|(p, _)| *p);
-	let best_ask = shape.asks.first().map(|(p, _)| *p);
+	let best_bid = shape.bids.iter().next_back().map(|(p, _)| Price {
+		raw: *p,
+		precision: shape.prec.price,
+	});
+	let best_ask = shape.asks.iter().next().map(|(p, _)| Price {
+		raw: *p,
+		precision: shape.prec.price,
+	});
 	println!(
 		"[{source}] {kind:>8} | bids: {:>4} asks: {:>4} | best_bid: {:<12} best_ask: {:<12} | {}",
 		shape.bids.len(),

@@ -9,17 +9,17 @@ use jiff::Timestamp;
 use serde_with::{DisplayFromStr, serde_as};
 use v_utils::trades::Pair;
 
-use crate::{BookShape, BookUpdate, ExchangeStream, Instrument, Price, Qty, Trade};
+use crate::{BatchTrades, BookShape, BookUpdate, ExchangeStream, Instrument, PrecisionPriceQty, Price, Qty, core::InnerTrade};
 
 // trades {{{
 #[derive(Debug)]
 pub struct TradesConnection {
 	connection: WsConnection<BinanceWsHandler>,
 	instrument: Instrument,
-	pair_precisions: BTreeMap<Pair, (u8, u8)>,
+	pair_precisions: BTreeMap<Pair, PrecisionPriceQty>,
 }
 impl TradesConnection {
-	pub fn try_new(client: &Client, pairs: &[Pair], instrument: Instrument, pair_precisions: BTreeMap<Pair, (u8, u8)>) -> Result<Self, WsError> {
+	pub fn try_new(client: &Client, pairs: &[Pair], instrument: Instrument, pair_precisions: BTreeMap<Pair, PrecisionPriceQty>) -> Result<Self, WsError> {
 		let vec_topic_str = pairs.iter().map(|p| format!("{}@trade", p.fmt_binance().to_lowercase())).collect::<Vec<_>>();
 
 		let base_url = match instrument {
@@ -38,7 +38,7 @@ impl TradesConnection {
 }
 #[async_trait::async_trait]
 impl ExchangeStream for TradesConnection {
-	type Item = Trade;
+	type Item = BatchTrades;
 
 	async fn next(&mut self) -> Result<Self::Item, WsError> {
 		loop {
@@ -55,23 +55,27 @@ impl ExchangeStream for TradesConnection {
 				_ => unimplemented!(),
 			};
 			let pair: Pair = pair_str.as_str().try_into().unwrap_or_else(|_| panic!("failed to parse pair from trade event: {pair_str}"));
-			let &(price_prec, qty_prec) = self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
-			let trade = Trade {
-				time: Timestamp::from_millisecond(timestamp).expect("Exchange responded with invalid timestamp"),
-				qty_asset: Qty::from_f64(qty_asset_f64, qty_prec),
-				price: Price::from_f64(price_f64, price_prec),
-			};
-			if trade.price.is_zero() || trade.qty_asset.is_zero() {
+			let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
+			let price = Price::from_f64(price_f64, prec.price);
+			let qty = Qty::from_f64(qty_asset_f64, prec.qty);
+			assert_eq!(price.precision, prec.price, "price precision mismatch with batch prec");
+			assert_eq!(qty.precision, prec.qty, "qty precision mismatch with batch prec");
+			if price.is_zero() || qty.is_zero() {
 				tracing::debug!(
 					raw_json = %content_event.data,
 					topic = %content_event.topic,
 					event_type = %content_event.event_type,
 					event_time = %content_event.time,
-					"Binance sent a zero-valued trade, skipping.\nWas deserialized to: {trade:?}\nReportedly, means non-orderbook trades. Look at `X` value for more info (could be in: {{ADL, INSURANCE_FUND, NA}})",
+					"Binance sent a zero-valued trade, skipping. Reportedly, means non-orderbook trades. Look at `X` value for more info (could be in: {{ADL, INSURANCE_FUND, NA}})",
 				);
 				continue;
 			}
-			return Ok(trade);
+			let trade = InnerTrade {
+				time: Timestamp::from_millisecond(timestamp).expect("Exchange responded with invalid timestamp"),
+				price: price.raw,
+				qty: qty.raw,
+			};
+			return Ok(BatchTrades { prec, trades: vec![trade] });
 		}
 	}
 }
@@ -118,10 +122,10 @@ pub struct TradeEventSpot {
 #[derive(Debug)]
 pub struct BookConnection {
 	connection: WsConnection<BinanceWsHandler>,
-	pair_precisions: BTreeMap<Pair, (u8, u8)>,
+	pair_precisions: BTreeMap<Pair, PrecisionPriceQty>,
 }
 impl BookConnection {
-	pub fn try_new(client: &Client, pairs: &[Pair], instrument: Instrument, pair_precisions: BTreeMap<Pair, (u8, u8)>) -> Result<Self, WsError> {
+	pub fn try_new(client: &Client, pairs: &[Pair], instrument: Instrument, pair_precisions: BTreeMap<Pair, PrecisionPriceQty>) -> Result<Self, WsError> {
 		let vec_topic_str = pairs.iter().map(|p| format!("{}@depth@100ms", p.fmt_binance().to_lowercase())).collect::<Vec<_>>();
 
 		let base_url = match instrument {
@@ -152,32 +156,22 @@ impl ExchangeStream for BookConnection {
 			.as_str()
 			.try_into()
 			.unwrap_or_else(|_| panic!("failed to parse pair from depth topic: {}", content_event.topic));
-		let &(price_prec, qty_prec) = self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
+		let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
 
+		let parse_level = |(p, q): (String, String)| -> (i32, u32) {
+			let price = Price::from_f64(p.parse().expect("valid price string"), prec.price);
+			let qty = Qty::from_f64(q.parse().expect("valid qty string"), prec.qty);
+			assert_eq!(price.precision, prec.price, "price precision mismatch with batch prec");
+			assert_eq!(qty.precision, prec.qty, "qty precision mismatch with batch prec");
+			(price.raw, qty.raw)
+		};
 		let shape = BookShape {
 			time,
-			bids: parsed
-				.bids
-				.into_iter()
-				.map(|(p, q)| {
-					(
-						Price::from_f64(p.parse().expect("valid price string"), price_prec),
-						Qty::from_f64(q.parse().expect("valid qty string"), qty_prec),
-					)
-				})
-				.collect(),
-			asks: parsed
-				.asks
-				.into_iter()
-				.map(|(p, q)| {
-					(
-						Price::from_f64(p.parse().expect("valid price string"), price_prec),
-						Qty::from_f64(q.parse().expect("valid qty string"), qty_prec),
-					)
-				})
-				.collect(),
+			prec,
+			bids: parsed.bids.into_iter().map(parse_level).collect(),
+			asks: parsed.asks.into_iter().map(parse_level).collect(),
 		};
-		Ok(BookUpdate::Delta(shape))
+		Ok(BookUpdate::BatchDelta(shape))
 	}
 }
 

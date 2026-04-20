@@ -2,12 +2,12 @@
 /// Fixed-point quantity. Non-negative. raw = value × 10^precision
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, derive_new::new)]
 pub struct Qty {
-	pub raw: u64,
+	pub raw: u32,
 	pub precision: u8,
 }
 impl Qty {
 	pub fn from_f64(value: f64, precision: u8) -> Self {
-		let raw = (value * 10f64.powi(precision as i32)).round() as u64;
+		let raw = (value * 10f64.powi(precision as i32)).round() as u32;
 		Self { raw, precision }
 	}
 
@@ -23,13 +23,13 @@ impl Qty {
 /// Fixed-point price. Signed to support spreads and options. raw = value × 10^precision
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, derive_new::new)]
 pub struct Price {
-	pub raw: i64,
+	pub raw: i32,
 	pub precision: u8,
 }
 
 impl Price {
 	pub fn from_f64(value: f64, precision: u8) -> Self {
-		let raw = (value * 10f64.powi(precision as i32)).round() as i64;
+		let raw = (value * 10f64.powi(precision as i32)).round() as i32;
 		Self { raw, precision }
 	}
 
@@ -42,11 +42,11 @@ impl Price {
 	}
 
 	pub fn max(precision: u8) -> Self {
-		Self { raw: i64::MAX, precision }
+		Self { raw: i32::MAX, precision }
 	}
 
 	pub fn min(precision: u8) -> Self {
-		Self { raw: i64::MIN, precision }
+		Self { raw: i32::MIN, precision }
 	}
 }
 
@@ -70,11 +70,11 @@ impl std::str::FromStr for Price {
 			Some(dot) => {
 				let precision = (s.len() - dot - 1) as u8;
 				let raw_str = format!("{}{}", &s[..dot], &s[dot + 1..]);
-				let raw = raw_str.parse::<i64>().map_err(|e| e.to_string())?;
+				let raw = raw_str.parse::<i32>().map_err(|e| e.to_string())?;
 				Ok(Self { raw, precision })
 			}
 			None => {
-				let raw = s.parse::<i64>().map_err(|e| e.to_string())?;
+				let raw = s.parse::<i32>().map_err(|e| e.to_string())?;
 				Ok(Self { raw, precision: 0 })
 			}
 		}
@@ -89,11 +89,11 @@ impl std::str::FromStr for Qty {
 			Some(dot) => {
 				let precision = (s.len() - dot - 1) as u8;
 				let raw_str = format!("{}{}", &s[..dot], &s[dot + 1..]);
-				let raw = raw_str.parse::<u64>().map_err(|e| e.to_string())?;
+				let raw = raw_str.parse::<u32>().map_err(|e| e.to_string())?;
 				Ok(Self { raw, precision })
 			}
 			None => {
-				let raw = s.parse::<u64>().map_err(|e| e.to_string())?;
+				let raw = s.parse::<u32>().map_err(|e| e.to_string())?;
 				Ok(Self { raw, precision: 0 })
 			}
 		}

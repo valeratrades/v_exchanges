@@ -12,7 +12,7 @@ use secrecy::SecretString;
 use v_utils::trades::{Pair, Timeframe};
 
 use crate::{
-	BookUpdate, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Klines, MethodError, RequestRange, Trade,
+	BatchTrades, BookUpdate, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Klines, MethodError, PrecisionPriceQty, RequestRange,
 	core::{ExchangeImpl, Instrument, PersonalInfo, Symbol},
 };
 
@@ -88,7 +88,7 @@ impl ExchangeImpl for Binance {
 		}
 	}
 
-	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = Trade>>, ExchangeError> {
+	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = BatchTrades>>, ExchangeError> {
 		match instrument {
 			Instrument::Perp | Instrument::Spot | Instrument::Margin => {
 				if !self.info_cache.contains_key(&instrument) {
@@ -96,7 +96,7 @@ impl ExchangeImpl for Binance {
 					self.info_cache.insert(instrument, info);
 				}
 				let exchange = self.name();
-				let pair_precisions: BTreeMap<Pair, (u8, u8)> = {
+				let pair_precisions: BTreeMap<Pair, PrecisionPriceQty> = {
 					let info = self.info_cache.get(&instrument).expect("just inserted or was present");
 					pairs
 						.iter()
@@ -104,7 +104,15 @@ impl ExchangeImpl for Binance {
 							info.pairs
 								.get(pair)
 								.ok_or_else(|| ExchangeError::Method(MethodError::new_pair_not_listed(exchange, instrument, *pair)))
-								.map(|pi| (*pair, (pi.price_precision, pi.qty_precision)))
+								.map(|pi| {
+									(
+										*pair,
+										PrecisionPriceQty {
+											price: pi.price_precision,
+											qty: pi.qty_precision,
+										},
+									)
+								})
 						})
 						.collect::<ExchangeResult<_>>()?
 				};
@@ -123,7 +131,7 @@ impl ExchangeImpl for Binance {
 					self.info_cache.insert(instrument, info);
 				}
 				let exchange = self.name();
-				let pair_precisions: BTreeMap<Pair, (u8, u8)> = {
+				let pair_precisions: BTreeMap<Pair, PrecisionPriceQty> = {
 					let info = self.info_cache.get(&instrument).expect("just inserted or was present");
 					pairs
 						.iter()
@@ -131,7 +139,15 @@ impl ExchangeImpl for Binance {
 							info.pairs
 								.get(pair)
 								.ok_or_else(|| ExchangeError::Method(MethodError::new_pair_not_listed(exchange, instrument, *pair)))
-								.map(|pi| (*pair, (pi.price_precision, pi.qty_precision)))
+								.map(|pi| {
+									(
+										*pair,
+										PrecisionPriceQty {
+											price: pi.price_precision,
+											qty: pi.qty_precision,
+										},
+									)
+								})
 						})
 						.collect::<ExchangeResult<_>>()?
 				};

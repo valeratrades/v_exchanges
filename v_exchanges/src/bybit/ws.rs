@@ -7,16 +7,16 @@ use adapters::{
 };
 use v_utils::trades::Pair;
 
-use crate::{BookShape, BookUpdate, ExchangeStream, Instrument, Price, Qty};
+use crate::{BookShape, BookUpdate, ExchangeStream, Instrument, PrecisionPriceQty, Price, Qty};
 
 // book {{{
 #[derive(Debug)]
 pub struct BookConnection {
 	connection: WsConnection<BybitWsHandler>,
-	pair_precisions: BTreeMap<Pair, (u8, u8)>,
+	pair_precisions: BTreeMap<Pair, PrecisionPriceQty>,
 }
 impl BookConnection {
-	pub fn try_new(client: &Client, pairs: &[Pair], instrument: Instrument, pair_precisions: BTreeMap<Pair, (u8, u8)>) -> Result<Self, WsError> {
+	pub fn try_new(client: &Client, pairs: &[Pair], instrument: Instrument, pair_precisions: BTreeMap<Pair, PrecisionPriceQty>) -> Result<Self, WsError> {
 		let vec_topic_str = pairs.iter().map(|p| format!("orderbook.1000.{}", p.fmt_bybit())).collect::<Vec<_>>();
 
 		let url_suffix = match instrument {
@@ -42,34 +42,24 @@ impl ExchangeStream for BookConnection {
 		let pair: Pair = pair_str
 			.try_into()
 			.unwrap_or_else(|_| panic!("failed to parse pair from orderbook topic: {}", content_event.topic));
-		let &(price_prec, qty_prec) = self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
+		let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
 
+		let parse_level = |(p, q): (String, String)| -> (i32, u32) {
+			let price = Price::from_f64(p.parse().expect("valid price string"), prec.price);
+			let qty = Qty::from_f64(q.parse().expect("valid qty string"), prec.qty);
+			assert_eq!(price.precision, prec.price, "price precision mismatch with batch prec");
+			assert_eq!(qty.precision, prec.qty, "qty precision mismatch with batch prec");
+			(price.raw, qty.raw)
+		};
 		let shape = BookShape {
 			time: content_event.time,
-			bids: parsed
-				.b
-				.into_iter()
-				.map(|(p, q)| {
-					(
-						Price::from_f64(p.parse().expect("valid price string"), price_prec),
-						Qty::from_f64(q.parse().expect("valid qty string"), qty_prec),
-					)
-				})
-				.collect(),
-			asks: parsed
-				.a
-				.into_iter()
-				.map(|(p, q)| {
-					(
-						Price::from_f64(p.parse().expect("valid price string"), price_prec),
-						Qty::from_f64(q.parse().expect("valid qty string"), qty_prec),
-					)
-				})
-				.collect(),
+			prec,
+			bids: parsed.b.into_iter().map(parse_level).collect(),
+			asks: parsed.a.into_iter().map(parse_level).collect(),
 		};
 		match content_event.event_type.as_str() {
 			"snapshot" => Ok(BookUpdate::Snapshot(shape)),
-			"delta" => Ok(BookUpdate::Delta(shape)),
+			"delta" => Ok(BookUpdate::BatchDelta(shape)),
 			other => panic!("Bybit sent unexpected book event type: {other}"),
 		}
 	}

@@ -14,10 +14,7 @@ use v_utils::{
 	utils::filter_nulls,
 };
 
-use crate::{
-	Price, Qty,
-	error::{ExchangeError, ExchangeResult, MethodError, OutOfRangeError, RequestRangeError},
-};
+use crate::error::{ExchangeError, ExchangeResult, MethodError, OutOfRangeError, RequestRangeError};
 
 const MAX_RECV_WINDOW: std::time::Duration = std::time::Duration::from_secs(10 * 60); // 10 minutes
 
@@ -40,7 +37,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64>;
 	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>>;
 	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo>;
-	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>>;
+	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BatchTrades>>>;
 	async fn ws_book(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>>;
 }
 /// Concerns itself with exact types.
@@ -312,20 +309,21 @@ pub struct Symbol {
 	pub pair: Pair,
 	pub instrument: Instrument,
 }
-#[derive(Clone, Debug, Default)]
-pub struct Trade {
-	pub time: Timestamp,
-	pub qty_asset: Qty,
-	pub price: Price,
+/// Per-batch precision shared across all levels / trades in a [`BookShape`] / [`BatchTrades`].
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct PrecisionPriceQty {
+	pub price: u8,
+	pub qty: u8,
 }
 
-/// (price, qty) levels for one side of an orderbook.
-/// Asks are sorted ascending, bids descending.
+/// (price, qty) levels for both sides of an orderbook, keyed by raw price.
+/// Both BTreeMaps are ascending; consumers reverse `bids` for best-bid.
 #[derive(Clone, Debug, Default)]
 pub struct BookShape {
 	pub time: Timestamp,
-	pub asks: Vec<(Price, Qty)>,
-	pub bids: Vec<(Price, Qty)>,
+	pub prec: PrecisionPriceQty,
+	pub asks: BTreeMap<i32, u32>,
+	pub bids: BTreeMap<i32, u32>,
 }
 
 /// Distinguishes full snapshots from incremental deltas.
@@ -333,7 +331,36 @@ pub struct BookShape {
 #[derive(Clone, Debug)]
 pub enum BookUpdate {
 	Snapshot(BookShape),
-	Delta(BookShape),
+	BatchDelta(BookShape),
+}
+
+/// Batched trade stream event. All trades share `prec`.
+#[derive(Clone, Debug, Default)]
+pub struct BatchTrades {
+	pub prec: PrecisionPriceQty,
+	pub(crate) trades: Vec<InnerTrade>,
+}
+
+impl BatchTrades {
+	pub fn len(&self) -> usize {
+		self.trades.len()
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.trades.is_empty()
+	}
+
+	/// Iterate `(time, price_raw, qty_raw)` tuples. Precision is shared via [`Self::prec`].
+	pub fn iter(&self) -> impl Iterator<Item = (Timestamp, i32, u32)> + '_ {
+		self.trades.iter().map(|t| (t.time, t.price, t.qty))
+	}
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct InnerTrade {
+	pub time: Timestamp,
+	pub price: i32,
+	pub qty: u32,
 }
 
 /// Internal trait for exchange implementations.
@@ -407,7 +434,7 @@ pub(crate) trait ExchangeImpl: std::fmt::Debug + Send + Sync + std::ops::Deref<T
 	// Websocket {{{
 	// Start a websocket connection for individual trades
 	#[allow(unused_variables)]
-	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>> {
+	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BatchTrades>>> {
 		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), instrument)))
 	}
 
@@ -502,7 +529,7 @@ impl<T: ExchangeImpl> Exchange for T {
 	}
 
 	// Websocket connections are NOT rate-limited by the semaphore
-	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = Trade>>> {
+	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BatchTrades>>> {
 		ExchangeImpl::ws_trades(self, pairs, instrument).await
 	}
 
