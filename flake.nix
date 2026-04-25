@@ -98,6 +98,12 @@
             pkg-config
             rust
             (writeShellScriptBin "test_all" "cargo t && cargo t --examples")
+            (writeShellScriptBin "examples" ''
+              for f in $(find . -path "*/examples/*.rs" -not -path "*/target/*" | sort); do
+                name=$(basename "$f" .rs)
+                echo "- $name: $f"
+              done
+            '')
           ] ++ pre-commit-check.enabledPackages ++ combined.enabledPackages;
 
           env.RUST_BACKTRACE = 1;
