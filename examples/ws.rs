@@ -12,7 +12,7 @@ async fn main() {
 	let instrument = Instrument::Perp;
 
 	let handle = tokio::spawn(across_an_await_point(binance, pairs, instrument));
-	handle.await;
+	let _ = handle.await;
 }
 
 async fn across_an_await_point(mut binance: Binance, pairs: Vec<Pair>, instrument: Instrument) {

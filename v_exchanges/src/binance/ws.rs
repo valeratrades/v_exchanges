@@ -55,18 +55,22 @@ impl ExchangeStream for TradesConnection {
 			};
 			let pair: Pair = pair_str.as_str().try_into().unwrap_or_else(|_| panic!("failed to parse pair from trade event: {pair_str}"));
 			let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
+
 			let price_raw = prec.parse_price(&price_str);
 			let qty_raw = prec.parse_qty(&qty_asset_str);
-			if price_raw == 0 || qty_raw == 0 {
-				tracing::debug!(
-					raw_json = %content_event.data,
-					topic = %content_event.topic,
-					event_type = %content_event.event_type,
-					event_time = %content_event.time,
-					"Binance sent a zero-valued trade, skipping. Reportedly, means non-orderbook trades. Look at `X` value for more info (could be in: {{ADL, INSURANCE_FUND, NA}})",
-				);
+			if (price_raw == 0 || qty_raw == 0) {
+				if content_event.data.get("X").unwrap().as_str().unwrap() == "NA" {
+					tracing::warn!(
+						raw_json = %content_event.data,
+						topic = %content_event.topic,
+						event_type = %content_event.event_type,
+						event_time = %content_event.time,
+						"Binance sent a zero-valued trade. Normally it will have X = NA, meaning bookkeeping artifact). But we hit it for something else. I heard X=ADL or X=INSURANCE_FUND could fall here, but not certain. Gotta study if happens..",
+					)
+				}
 				continue;
 			}
+
 			let trade = InnerTrade {
 				time: Timestamp::from_millisecond(timestamp).expect("Exchange responded with invalid timestamp"),
 				price: price_raw,
