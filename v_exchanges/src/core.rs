@@ -8,6 +8,7 @@ use derive_more::{Deref, DerefMut};
 use jiff::Timestamp;
 use secrecy::SecretString;
 use serde_json::json;
+use v_exchanges_core::Price;
 use v_utils::{
 	prelude::*,
 	trades::{Asset, Kline, Pair, Timeframe, Usd},
@@ -364,17 +365,22 @@ pub enum BookUpdate {
 /// Batched trade stream event. All trades share `prec`.
 #[derive(Clone, Debug, Default)]
 pub struct BatchTrades {
-	pub prec: PrecisionPriceQty,
-	pub(crate) trades: Vec<InnerTrade>,
+	prec: PrecisionPriceQty,
+	trades: Vec<InnerTrade>,
 }
 
 impl BatchTrades {
+	pub(crate) fn new(prec: PrecisionPriceQty, trades: Vec<InnerTrade>) -> Self {
+		assert!(trades.len() != 0); // this is an invariant upheld by our own implementation, so we shouldn't introduce runtime cost of checking it in release builds.
+		Self { prec, trades }
+	}
+
 	pub fn len(&self) -> usize {
 		self.trades.len()
 	}
 
-	pub fn is_empty(&self) -> bool {
-		self.trades.is_empty()
+	pub fn last_price(&self) -> Price {
+		Price::new(self.trades.last().expect("never empty").price, self.prec.price)
 	}
 
 	/// Iterate `(time, price_raw, qty_raw)` tuples. Precision is shared via [`Self::prec`].

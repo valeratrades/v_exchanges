@@ -179,7 +179,7 @@
         "nixpkgs": "nixpkgs",
         "pre-commit-hooks": "pre-commit-hooks",
         "rust-overlay": "rust-overlay",
-        "v-flakes": "v-flakes"
+        "v_flakes": "v_flakes"
       }
     },
     "rust-overlay": {
@@ -248,18 +248,18 @@
         "type": "github"
       }
     },
-    "v-flakes": {
+    "v_flakes": {
       "inputs": {
         "flake-utils": "flake-utils_2",
         "nixpkgs": "nixpkgs_4",
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1776525682,
-        "narHash": "sha256-QKq4x5+NttlbjlTltUbNbZVeumPtJbkpPCVzVsa8CVI=",
+        "lastModified": 1777132999,
+        "narHash": "sha256-Mn6odVTV6sq3ucWv2oOsq/N9xRvgoZmB7c/djoKKYA4=",
         "owner": "valeratrades",
         "repo": "v_flakes",
-        "rev": "c4d3ff5b73cf9d4840ef8b84bc201b16e0e947e3",
+        "rev": "51f1930dbdc90084e6febbe18ffc935db8aef2c1",
         "type": "github"
       },
       "original": {

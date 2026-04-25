@@ -6,6 +6,8 @@ fn main() {
 }
 
 fn deprecate() {
+	println!("cargo:rerun-if-changed=src");
+	println!("cargo:rerun-if-changed=Cargo.toml");
 	let pkg_version = env!("CARGO_PKG_VERSION");
 	let current = parse_semver(pkg_version);
 	let default_deprecate_at = DEPRECATE_BY_VERSION.map(parse_semver);

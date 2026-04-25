@@ -4,10 +4,10 @@
     rust-overlay.url = "github:oxalica/rust-overlay";
     flake-utils.url = "github:numtide/flake-utils";
     pre-commit-hooks.url = "github:cachix/git-hooks.nix";
-    v-flakes.url = "github:valeratrades/v_flakes?ref=v1.6";
+    v_flakes.url = "github:valeratrades/v_flakes?ref=v1.6";
   };
 
-  outputs = { self, nixpkgs, rust-overlay, flake-utils, pre-commit-hooks, v-flakes }:
+  outputs = { self, nixpkgs, rust-overlay, flake-utils, pre-commit-hooks, v_flakes }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         overlays = builtins.trace "flake.nix sourced" [ (import rust-overlay) ];
@@ -19,12 +19,12 @@
           extensions = [ "rust-src" "rust-analyzer" "rust-docs" "rustc-codegen-cranelift-preview" ];
         });
 
-        pre-commit-check = pre-commit-hooks.lib.${system}.run (v-flakes.files.preCommit { inherit pkgs; });
+        pre-commit-check = pre-commit-hooks.lib.${system}.run (v_flakes.files.preCommit { inherit pkgs; });
         manifest = (pkgs.lib.importTOML ./v_exchanges/Cargo.toml).package;
         pname = manifest.name;
         stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv;
 
-        rs = v-flakes.rs {
+        rs = v_flakes.rs {
           inherit pkgs rust;
           build = {
             deny = true;
@@ -41,7 +41,7 @@
             };
           };
         };
-        github = v-flakes.github {
+        github = v_flakes.github {
           inherit pkgs pname rs;
           enable = true;
           excalidraw."docs/arch.excalidraw".standalone = true;
@@ -54,8 +54,8 @@
             #,}}}1
           };
         };
-        readme = v-flakes.readme-fw { inherit pkgs pname; defaults = true; lastSupportedVersion = "nightly-1.92"; rootDir = ./.; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; };
-        combined = v-flakes.utils.combine [ rs github readme ];
+        readme = v_flakes.readme-fw { inherit pkgs pname; defaults = true; lastSupportedVersion = "nightly-1.92"; rootDir = ./.; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; };
+        combined = v_flakes.utils.combine [ rs github readme ];
       in
       {
         packages =
@@ -90,7 +90,7 @@
             pre-commit-check.shellHook +
             combined.shellHook +
             ''
-              cp -f ${(v-flakes.files.treefmt) {inherit pkgs;}} ./.treefmt.toml
+              cp -f ${(v_flakes.files.treefmt) {inherit pkgs;}} ./.treefmt.toml
             '';
           buildInputs = with pkgs; [
             mold
