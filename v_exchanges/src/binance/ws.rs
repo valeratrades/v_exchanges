@@ -58,8 +58,8 @@ impl ExchangeStream for TradesConnection {
 
 			let price_raw = prec.parse_price(&price_str);
 			let qty_raw = prec.parse_qty(&qty_asset_str);
-			if (price_raw == 0 || qty_raw == 0) {
-				if content_event.data.get("X").unwrap().as_str().unwrap() == "NA" {
+			if price_raw == 0 || qty_raw == 0 {
+				if content_event.data.get("X").unwrap().as_str().unwrap() != "NA" {
 					tracing::warn!(
 						raw_json = %content_event.data,
 						topic = %content_event.topic,
