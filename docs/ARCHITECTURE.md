@@ -10,6 +10,8 @@ flowchart TD
 	D --> T
 ```
 
+![](../assets/arch.png)
+
 ### `v_exchanges_api_generics`
 Provides a standardized interface for defining how an exchange wants to be communicated with.
 
