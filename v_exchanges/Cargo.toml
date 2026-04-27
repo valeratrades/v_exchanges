@@ -21,7 +21,7 @@ features = ["major", "data"]
 rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 
 [package.metadata.cargo-machete]
-ignored = ["derive-new", "color-eyre", "serde", "tokio", "v_utils"]
+ignored = ["color-eyre"]
 
 [features]
 default = ["major", "data"]
@@ -29,43 +29,27 @@ default = ["major", "data"]
 full = ["major", "data", "mexc", "kucoin", "bitflyer", "coincheck"]
 major = ["binance", "bybit"]
 
-binance = ["v_exchanges_adapters/binance"]
-bybit = ["v_exchanges_adapters/bybit"]
-bitflyer = ["v_exchanges_adapters/bitflyer"]
-coincheck = ["v_exchanges_adapters/coincheck"]
-kucoin = ["v_exchanges_adapters/kucoin"]
-mexc = ["v_exchanges_adapters/mexc"]
-data = ["dep:reqwest"]
+binance = ["v_exchanges_methods/binance"]
+bybit = ["v_exchanges_methods/bybit"]
+bitflyer = ["v_exchanges_methods/bitflyer"]
+coincheck = ["v_exchanges_methods/coincheck"]
+kucoin = ["v_exchanges_methods/kucoin"]
+mexc = ["v_exchanges_methods/mexc"]
+data = ["v_exchanges_methods/data"]
 
 [dependencies]
-ahash = { workspace = true, features = ["serde"] }
-arrayvec.workspace = true
-async-trait.workspace = true
-cfg-if.workspace = true
-derive-new.workspace = true
-derive_more.workspace = true
-enum_dispatch.workspace = true
-eyre.workspace = true
-jiff.workspace = true
-miette.workspace = true
-reqwest = { workspace = true, optional = true }
-secrecy.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-serde_with.workspace = true
-smart-default.workspace = true
-strum.workspace = true
-thiserror.workspace = true
-tokio.workspace = true
-tracing.workspace = true
-uuid.workspace = true
-v_exchanges_adapters = { workspace = true, optional = true }
-v_exchanges_core.workspace = true
-v_utils.workspace = true
+v_exchanges_methods = { workspace = true, default-features = false }
 
 [dev-dependencies]
 color-eyre.workspace = true
 insta.workspace = true
+jiff.workspace = true
+miette.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+v_exchanges_adapters.workspace = true
+v_utils.workspace = true
 
 [lints]
 workspace = true

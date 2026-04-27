@@ -1,0 +1,15 @@
+cargo-features = ["codegen-backend"]
+
+[package]
+name = "v_exchanges_book"
+version = "0.1.0"
+edition = "2024"
+authors = ["valeratrades"]
+categories = ["api-bindings", "asynchronous"]
+description = "Orderbook abstraction for v_exchanges"
+homepage = "https://github.com/valeratrades/v_exchanges"
+license = "MIT"
+repository = "https://github.com/valeratrades/v_exchanges/tree/master/v_exchanges_book"
+
+[lints]
+workspace = true

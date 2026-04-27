@@ -1,0 +1,63 @@
+cargo-features = ["codegen-backend"]
+
+[package]
+name = "v_exchanges_methods"
+version = "0.1.0"
+edition = "2024"
+authors = ["negi-grass", "valeratrades"]
+categories = ["api-bindings", "asynchronous"]
+description = "Exchange method implementations backing the v_exchanges crate"
+homepage = "https://github.com/valeratrades/v_exchanges"
+keywords = ["client", "websocket", "asynchronous"]
+license = "MIT"
+repository = "https://github.com/valeratrades/v_exchanges/tree/master/v_exchanges_methods"
+
+[package.metadata.cargo-machete]
+ignored = ["derive-new", "serde", "tokio", "v_utils"]
+
+[features]
+default = ["major", "data"]
+
+full = ["major", "data", "mexc", "kucoin", "bitflyer", "coincheck"]
+major = ["binance", "bybit"]
+
+binance = ["v_exchanges_adapters/binance"]
+bybit = ["v_exchanges_adapters/bybit"]
+bitflyer = ["v_exchanges_adapters/bitflyer"]
+coincheck = ["v_exchanges_adapters/coincheck"]
+kucoin = ["v_exchanges_adapters/kucoin"]
+mexc = ["v_exchanges_adapters/mexc"]
+data = ["dep:reqwest"]
+
+[dependencies]
+ahash = { workspace = true, features = ["serde"] }
+arrayvec.workspace = true
+async-trait.workspace = true
+cfg-if.workspace = true
+derive-new.workspace = true
+derive_more.workspace = true
+enum_dispatch.workspace = true
+eyre.workspace = true
+jiff.workspace = true
+miette.workspace = true
+reqwest = { workspace = true, optional = true }
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
+smart-default.workspace = true
+strum.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+v_exchanges_adapters.workspace = true
+v_exchanges_core.workspace = true
+v_utils.workspace = true
+
+[dev-dependencies]
+color-eyre.workspace = true
+insta.workspace = true
+
+[lints]
+workspace = true

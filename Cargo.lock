@@ -3251,31 +3251,15 @@ dependencies = [
 name = "v_exchanges"
 version = "0.18.0"
 dependencies = [
- "ahash 0.8.12",
- "arrayvec",
- "async-trait",
- "cfg-if",
  "color-eyre",
- "derive-new",
- "derive_more",
- "enum_dispatch",
- "eyre",
  "insta",
  "jiff",
  "miette",
- "reqwest",
- "secrecy",
  "serde",
  "serde_json",
- "serde_with",
- "smart-default",
- "strum",
- "thiserror 2.0.18",
  "tokio",
- "tracing",
- "uuid",
  "v_exchanges_adapters",
- "v_exchanges_core",
+ "v_exchanges_methods",
  "v_utils",
 ]
 
@@ -3337,11 +3321,47 @@ dependencies = [
 ]
 
 [[package]]
+name = "v_exchanges_book"
+version = "0.1.0"
+
+[[package]]
 name = "v_exchanges_core"
 version = "0.2.0"
 dependencies = [
  "ahash 0.8.12",
  "derive-new",
+]
+
+[[package]]
+name = "v_exchanges_methods"
+version = "0.1.0"
+dependencies = [
+ "ahash 0.8.12",
+ "arrayvec",
+ "async-trait",
+ "cfg-if",
+ "color-eyre",
+ "derive-new",
+ "derive_more",
+ "enum_dispatch",
+ "eyre",
+ "insta",
+ "jiff",
+ "miette",
+ "reqwest",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "smart-default",
+ "strum",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "v_exchanges_adapters",
+ "v_exchanges_core",
+ "v_utils",
 ]
 
 [[package]]

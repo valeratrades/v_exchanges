@@ -63,4 +63,6 @@ strum = { version = "^0.28", features = ["derive"] }
 tokio-tungstenite = "0.29.0"
 v_exchanges_adapters = { version = "0.18.0", path = "v_exchanges_adapters" }
 v_exchanges_api_generics = { version = "0.20.0", path = "v_exchanges_api_generics" }
+v_exchanges_book = { version = "0.1.0", path = "v_exchanges_book" }
 v_exchanges_core = { version = "0.2.0", path = "v_exchanges_core" }
+v_exchanges_methods = { version = "0.1.0", path = "v_exchanges_methods", default-features = false }
