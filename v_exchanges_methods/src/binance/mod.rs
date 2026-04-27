@@ -12,7 +12,7 @@ use secrecy::SecretString;
 use v_utils::trades::{Pair, Timeframe};
 
 use crate::{
-	BatchTrades, BookUpdate, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Klines, MethodError, PrecisionPriceQty, RequestRange,
+	BatchTrades, BookShape, BookUpdate, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Klines, MethodError, PrecisionPriceQty, RequestRange,
 	core::{ExchangeImpl, Instrument, PersonalInfo, Symbol},
 };
 
@@ -22,6 +22,27 @@ pub struct Binance {
 	#[deref_mut]
 	pub client: Client,
 	pub info_cache: BTreeMap<Instrument, ExchangeInfo>,
+}
+impl Binance {
+	pub async fn book_snapshot(&mut self, pair: Pair, instrument: Instrument) -> ExchangeResult<BookShape> {
+		if !self.info_cache.contains_key(&instrument) {
+			let info = ExchangeImpl::exchange_info(&*self, instrument).await?;
+			self.info_cache.insert(instrument, info);
+		}
+		let prec = {
+			let exchange = self.name();
+			let info = &self.info_cache[&instrument];
+			let pi = info
+				.pairs
+				.get(&pair)
+				.ok_or_else(|| ExchangeError::Method(MethodError::new_pair_not_listed(exchange, instrument, pair)))?;
+			PrecisionPriceQty {
+				price: pi.price_precision,
+				qty: pi.qty_precision,
+			}
+		};
+		market::fetch_book_snapshot(&self.client, pair, instrument, prec).await
+	}
 }
 
 #[async_trait::async_trait]
@@ -152,7 +173,8 @@ impl ExchangeImpl for Binance {
 						})
 						.collect::<ExchangeResult<_>>()?
 				};
-				let connection = ws::BookConnection::try_new(self, pairs, instrument, pair_precisions)?;
+				let book_snapshot_freq = GetOptions::<BinanceOptions>::default_options(&self.client).book_snapshot_freq;
+				let connection = ws::BookConnection::try_new(self.client.clone(), pairs.to_vec(), instrument, pair_precisions, book_snapshot_freq)?;
 				Ok(Box::new(connection))
 			}
 			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), instrument))),

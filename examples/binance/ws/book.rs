@@ -1,18 +1,21 @@
-use std::str::FromStr as _;
+use std::{str::FromStr as _, time::Duration};
 
 use v_exchanges::prelude::*;
+use v_exchanges_adapters::binance::BinanceOption;
 use v_utils::trades::Pair;
 
 #[tokio::main]
 async fn main() {
 	v_utils::clientside!();
 
-	let pair = vec![Pair::from_str("BTCUSDT").unwrap()];
+	let pairs = vec![Pair::from_str("BTCUSDT").unwrap(), Pair::from_str("ETHUSDT").unwrap()];
 
 	let mut binance = Binance::default();
+	// Interleave REST book snapshots every 10 s (5 s per pair for two pairs).
+	binance.update_default_option(BinanceOption::BookSnapshotFreq(Some(Duration::from_secs(10))));
 
-	let mut spot = binance.ws_book(&pair, Instrument::Spot).await.unwrap();
-	let mut perp = binance.ws_book(&pair, Instrument::Perp).await.unwrap();
+	let mut spot = binance.ws_book(&pairs, Instrument::Spot).await.unwrap();
+	let mut perp = binance.ws_book(&pairs, Instrument::Perp).await.unwrap();
 
 	loop {
 		tokio::select! {

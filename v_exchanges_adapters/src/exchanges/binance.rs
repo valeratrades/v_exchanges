@@ -320,6 +320,10 @@ pub enum BinanceOption {
 
 	/// Duration the request is valid for. Only applicable for signed requests.
 	RecvWindow(std::time::Duration),
+	/// Frequency at which REST book snapshots are interleaved into the WS book stream.
+	/// `None` = disabled (default). For multi-pair connections this is the full-cycle period;
+	/// each individual pair is re-snapshotted once per `freq`, with fires spaced `freq / pairs.len()` apart.
+	BookSnapshotFreq(Option<std::time::Duration>),
 	/// Base url for HTTP requests
 	HttpUrl(BinanceHttpUrl),
 	/// Authentication type for HTTP requests
@@ -493,6 +497,8 @@ pub struct BinanceOptions {
 	pub ws_topics: AHashSet<String>,
 	/// see [BinanceOption::Test]
 	pub test: bool,
+	/// see [BinanceOption::BookSnapshotFreq]
+	pub book_snapshot_freq: Option<std::time::Duration>,
 }
 impl HandlerOptions for BinanceOptions {
 	type OptionItem = BinanceOption;
@@ -509,6 +515,7 @@ impl HandlerOptions for BinanceOptions {
 			Self::OptionItem::WsUrl(v) => self.ws_url = v,
 			Self::OptionItem::WsConfig(v) => self.ws_config = v,
 			Self::OptionItem::WsTopics(v) => self.ws_topics = v.into_iter().collect(),
+			Self::OptionItem::BookSnapshotFreq(v) => self.book_snapshot_freq = v,
 		}
 	}
 

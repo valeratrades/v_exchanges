@@ -6,12 +6,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
-use v_utils::trades::{Kline, Ohlc};
+use v_utils::trades::{Kline, Ohlc, Pair};
 
 use super::BinanceTimeframe;
 use crate::{
-	ExchangeError, ExchangeName, Instrument, Symbol,
-	core::{Klines, OpenInterest, RequestRange},
+	ExchangeError, ExchangeName, Instrument, PrecisionPriceQty, Symbol,
+	core::{BookShape, Klines, OpenInterest, RequestRange},
 	utils::join_params,
 };
 
@@ -149,6 +149,37 @@ pub(super) async fn open_interest(client: &v_exchanges_adapters::Client, symbol:
 	Ok(result)
 }
 
+//,}}}
+
+// book snapshot {{{
+#[derive(serde::Deserialize)]
+struct DepthResponse {
+	bids: Vec<(String, String)>,
+	asks: Vec<(String, String)>,
+}
+
+pub(crate) async fn fetch_book_snapshot(client: &v_exchanges_adapters::Client, pair: Pair, instrument: Instrument, prec: PrecisionPriceQty) -> Result<BookShape, ExchangeError> {
+	let (endpoint, base_url) = match instrument {
+		Instrument::Spot | Instrument::Margin => ("/api/v3/depth", BinanceHttpUrl::Spot),
+		Instrument::Perp => ("/fapi/v1/depth", BinanceHttpUrl::FuturesUsdM),
+		_ => unimplemented!(),
+	};
+	let params = json!({
+		"symbol": pair.fmt_binance(),
+		"limit": 1000_u32,
+	});
+	let options = vec![BinanceOption::HttpUrl(base_url)];
+	let response: DepthResponse = client.get(endpoint, &params, options).await?;
+
+	let time = Timestamp::now();
+	let parse_level = |(p, q): (String, String)| (prec.parse_price(&p), prec.parse_qty(&q));
+	Ok(BookShape {
+		time,
+		prec,
+		bids: response.bids.into_iter().map(parse_level).collect(),
+		asks: response.asks.into_iter().map(parse_level).collect(),
+	})
+}
 //,}}}
 
 #[cfg(test)]

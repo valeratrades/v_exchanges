@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, future::Future, pin::Pin, time::Duration};
 
 use adapters::{
 	Client,
@@ -8,7 +8,7 @@ use adapters::{
 use jiff::Timestamp;
 use v_utils::trades::Pair;
 
-use crate::{BatchTrades, BookShape, BookUpdate, ExchangeStream, Instrument, PrecisionPriceQty, core::InnerTrade};
+use crate::{BatchTrades, BookShape, BookUpdate, ExchangeError, ExchangeStream, Instrument, PrecisionPriceQty, core::InnerTrade};
 
 // trades {{{
 #[derive(Debug)]
@@ -114,13 +114,26 @@ pub struct TradeEventSpot {
 //,}}}
 
 // book {{{
-#[derive(Debug)]
 pub struct BookConnection {
 	connection: WsConnection<BinanceWsHandler>,
 	pair_precisions: BTreeMap<Pair, PrecisionPriceQty>,
+	instrument: Instrument,
+	// snapshot scheduling
+	client: Client,
+	pairs: Vec<Pair>,
+	next_pair_idx: usize,
+	/// `freq / pairs.len()`; `None` = disabled.
+	per_pair_interval: Option<Duration>,
+	pending_snapshot_fut: Option<Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>>>,
 }
 impl BookConnection {
-	pub fn try_new(client: &Client, pairs: &[Pair], instrument: Instrument, pair_precisions: BTreeMap<Pair, PrecisionPriceQty>) -> Result<Self, WsError> {
+	pub fn try_new(
+		client: Client,
+		pairs: Vec<Pair>,
+		instrument: Instrument,
+		pair_precisions: BTreeMap<Pair, PrecisionPriceQty>,
+		book_snapshot_freq: Option<Duration>,
+	) -> Result<Self, WsError> {
 		let vec_topic_str = pairs.iter().map(|p| format!("{}@depth@100ms", p.fmt_binance().to_lowercase())).collect::<Vec<_>>();
 
 		let base_url = match instrument {
@@ -130,39 +143,120 @@ impl BookConnection {
 		};
 		let connection = client.ws_connection("", vec![BinanceOption::WsUrl(base_url), BinanceOption::WsTopics(vec_topic_str)])?;
 
-		Ok(Self { connection, pair_precisions })
+		let per_pair_interval = if pairs.is_empty() { None } else { book_snapshot_freq.map(|f| f / pairs.len() as u32) };
+
+		// Seed the initial snapshot future — fires immediately on first next() when enabled.
+		let pending_snapshot_fut: Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>> = if let (Some(_), Some(&pair)) = (per_pair_interval, pairs.first()) {
+			let prec = pair_precisions[&pair];
+			let client_clone = client.clone();
+			let deadline = tokio::time::Instant::now();
+			Box::pin(async move {
+				tokio::time::sleep_until(deadline).await;
+				crate::binance::market::fetch_book_snapshot(&client_clone, pair, instrument, prec).await
+			})
+		} else {
+			Box::pin(std::future::pending())
+		};
+		// Pair 0 is claimed by the seed above; next rotation starts at 1.
+		let next_pair_idx = if pairs.len() > 1 { 1 } else { 0 };
+
+		Ok(Self {
+			connection,
+			pair_precisions,
+			instrument,
+			client,
+			pairs,
+			next_pair_idx,
+			per_pair_interval,
+			pending_snapshot_fut: Some(pending_snapshot_fut),
+		})
+	}
+
+	fn build_next_snapshot_fut(&mut self) -> Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>> {
+		let Some(interval) = self.per_pair_interval else {
+			return Box::pin(std::future::pending());
+		};
+		let pair = self.pairs[self.next_pair_idx];
+		self.next_pair_idx = (self.next_pair_idx + 1) % self.pairs.len();
+		let prec = self.pair_precisions[&pair];
+		let client = self.client.clone();
+		let instrument = self.instrument;
+		let deadline = tokio::time::Instant::now() + interval;
+		Box::pin(async move {
+			tokio::time::sleep_until(deadline).await;
+			crate::binance::market::fetch_book_snapshot(&client, pair, instrument, prec).await
+		})
 	}
 }
+
+impl std::fmt::Debug for BookConnection {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("BookConnection")
+			.field("connection", &self.connection)
+			.field("pair_precisions", &self.pair_precisions)
+			.field("instrument", &self.instrument)
+			.field("pairs", &self.pairs)
+			.field("next_pair_idx", &self.next_pair_idx)
+			.field("per_pair_interval", &self.per_pair_interval)
+			.finish_non_exhaustive()
+	}
+}
+
 #[async_trait::async_trait]
 impl ExchangeStream for BookConnection {
 	type Item = BookUpdate;
 
 	async fn next(&mut self) -> Result<Self::Item, WsError> {
-		let content_event = self.connection.next().await?;
-		let parsed: DepthEvent = serde_json::from_value(content_event.data.clone()).expect("Exchange responded with invalid depth event");
-		let time = parsed
-			.transaction_time
-			.map(|ts| Timestamp::from_millisecond(ts).expect("Exchange responded with invalid timestamp"))
-			.unwrap_or(content_event.time);
+		enum Branch {
+			Snapshot(Result<BookShape, ExchangeError>),
+			Delta(Result<adapters::generics::ws::ContentEvent, WsError>),
+		}
 
-		// topic: "btcusdt@depth@100ms" → take before first '@' → uppercase → pair
-		let pair_str = content_event.topic.split('@').next().expect("Binance depth topic always contains '@'").to_uppercase();
-		let pair: Pair = pair_str
-			.as_str()
-			.try_into()
-			.unwrap_or_else(|_| panic!("failed to parse pair from depth topic: {}", content_event.topic));
-		let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
-
-		let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.parse_price(&p), prec.parse_qty(&q)) };
-		let shape = BookShape {
-			time,
-			prec,
-			bids: parsed.bids.into_iter().map(parse_level).collect(),
-			asks: parsed.asks.into_iter().map(parse_level).collect(),
+		let branch = {
+			let Self {
+				connection, pending_snapshot_fut, ..
+			} = self;
+			let pending = pending_snapshot_fut.as_mut().expect("seeded in try_new, replaced on every fire").as_mut();
+			tokio::select! {
+				biased;
+				r = pending => Branch::Snapshot(r),
+				r = connection.next() => Branch::Delta(r),
+			}
 		};
-		match content_event.event_type.as_str() {
-			"depthUpdate" => Ok(BookUpdate::BatchDelta(shape)),
-			other => panic!("Binance sent unexpected book event type: {other}"),
+
+		match branch {
+			Branch::Snapshot(r) => {
+				self.pending_snapshot_fut = Some(self.build_next_snapshot_fut());
+				Ok(BookUpdate::Snapshot(r.map_err(|e| WsError::Other(eyre::Report::new(e)))?))
+			}
+			Branch::Delta(r) => {
+				let content_event = r?;
+				let parsed: DepthEvent = serde_json::from_value(content_event.data.clone()).expect("Exchange responded with invalid depth event");
+				let time = parsed
+					.transaction_time
+					.map(|ts| Timestamp::from_millisecond(ts).expect("Exchange responded with invalid timestamp"))
+					.unwrap_or(content_event.time);
+
+				// topic: "btcusdt@depth@100ms" → take before first '@' → uppercase → pair
+				let pair_str = content_event.topic.split('@').next().expect("Binance depth topic always contains '@'").to_uppercase();
+				let pair: Pair = pair_str
+					.as_str()
+					.try_into()
+					.unwrap_or_else(|_| panic!("failed to parse pair from depth topic: {}", content_event.topic));
+				let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
+
+				let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.parse_price(&p), prec.parse_qty(&q)) };
+				let shape = BookShape {
+					time,
+					prec,
+					bids: parsed.bids.into_iter().map(parse_level).collect(),
+					asks: parsed.asks.into_iter().map(parse_level).collect(),
+				};
+				match content_event.event_type.as_str() {
+					"depthUpdate" => Ok(BookUpdate::BatchDelta(shape)),
+					other => panic!("Binance sent unexpected book event type: {other}"),
+				}
+			}
 		}
 	}
 }
