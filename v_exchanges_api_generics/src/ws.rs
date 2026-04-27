@@ -116,6 +116,9 @@ pub struct WsConnection<H: WsHandler> {
 	handler: H,
 	stream: Option<WsConnectionStream>,
 	backoff: ExponentialBackoff,
+	/// When set, `next()` will sleep until this instant before attempting to connect.
+	/// Only set on actual connection failure (not on cancellation), making `next()` cancel-safe.
+	reconnect_after: Option<tokio::time::Instant>,
 }
 impl<H: WsHandler> WsConnection<H> {
 	#[allow(missing_docs)]
@@ -133,11 +136,20 @@ impl<H: WsHandler> WsConnection<H> {
 			handler,
 			stream: None,
 			backoff,
+			reconnect_after: None,
 		})
 	}
 
 	/// The main interface. All ws operations are hidden, only thing getting through are the content messages or the lack thereof.
 	pub async fn next(&mut self) -> Result<ContentEvent, WsError> {
+		// Cancel-safe backoff: if a previous connection attempt failed, sleep until the backoff
+		// period expires. Stored as an Instant so cancellation (e.g. by tokio::select!) preserves
+		// the target time — next call resumes the remaining wait rather than restarting it.
+		if let Some(until) = self.reconnect_after {
+			tokio::time::sleep_until(until).await;
+			self.reconnect_after = None;
+		}
+
 		if let Some(inner) = &self.stream
 			&& inner.connected_since + self.config.refresh_after < SystemTime::now()
 		{
@@ -333,13 +345,18 @@ impl<H: WsHandler> WsConnection<H> {
 
 	async fn connect(&mut self) -> Result<(), WsError> {
 		tracing::info!("Connecting to {}...", self.url);
-		let delay = self.backoff.next_duration();
-		if !delay.is_zero() {
-			tracing::warn!(delay_ms = delay.as_millis(), "Reconnect backoff active. Likely indicative of a bad connection.");
-			tokio::time::sleep(delay).await;
-		}
 
-		let (stream, http_resp) = tokio_tungstenite::connect_async(self.url.as_str()).await?;
+		let (stream, http_resp) = match tokio_tungstenite::connect_async(self.url.as_str()).await {
+			Ok(result) => result,
+			Err(e) => {
+				let delay = self.backoff.next_duration();
+				if !delay.is_zero() {
+					tracing::warn!(delay_ms = delay.as_millis(), "Connection failed, backing off before retry.");
+					self.reconnect_after = Some(tokio::time::Instant::now() + delay);
+				}
+				return Err(e.into());
+			}
+		};
 		tracing::debug!("Ws handshake with server: {http_resp:#?}");
 
 		let now = SystemTime::now();
@@ -347,6 +364,7 @@ impl<H: WsHandler> WsConnection<H> {
 
 		let auth_messages = self.handler.handle_auth()?;
 		self.send_all(auth_messages).await?;
+		self.reconnect_after = None;
 		self.backoff.reset();
 		Ok(())
 	}
@@ -355,6 +373,9 @@ impl<H: WsHandler> WsConnection<H> {
 	///
 	/// `pub` for testing only, does not {have to || is expected to} be exposed in any wrappers.
 	pub async fn reconnect(&mut self) -> Result<(), WsError> {
+		// Clear any pending backoff — a server-initiated reconnect should be attempted immediately.
+		// If the new connection fails, `connect()` will set a fresh backoff.
+		self.reconnect_after = None;
 		if let Some(stream) = self.stream.as_mut() {
 			tracing::info!("Dropping old connection before reconnecting...");
 			// Best-effort close - ignore errors since the connection may already be broken

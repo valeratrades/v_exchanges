@@ -50,7 +50,8 @@ impl ExchangeImpl for Binance {
 	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
 		match instrument {
 			Instrument::Perp => perp::general::exchange_info(self).await,
-			_ => unimplemented!(),
+			Instrument::Spot | Instrument::Margin => spot::market::exchange_info(self).await,
+			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), instrument))),
 		}
 	}
 

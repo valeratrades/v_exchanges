@@ -318,18 +318,20 @@ pub struct PrecisionPriceQty {
 }
 
 impl PrecisionPriceQty {
-	/// Strip the decimal point from a string, asserting it has exactly `expected_precision` decimals.
+	/// Strip the decimal point from a string, asserting it has at most `expected_precision` decimals.
 	/// Returns the raw digit string ready to parse.
 	fn digits(s: &str, expected_precision: u8) -> String {
 		match s.find('.') {
 			Some(dot) => {
 				let decimals = (s.len() - dot - 1) as u8;
-				assert_eq!(decimals, expected_precision, "string {s:?} has {decimals} decimal places, expected {expected_precision}");
+				assert!(
+					decimals <= expected_precision,
+					"string {s:?} has {decimals} decimal places, expected at most {expected_precision}"
+				);
 				[&s[..dot], &s[dot + 1..]].concat()
 			}
 			None => {
-				// Exchanges send bare "0" for zero/null values even when precision > 0
-				assert!(expected_precision == 0 || s == "0", "string {s:?} has 0 decimal places, expected {expected_precision}");
+				// Some exchanges send bare values for exactly round values
 				s.to_owned()
 			}
 		}

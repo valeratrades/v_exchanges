@@ -48,7 +48,7 @@ impl ExchangeImpl for Bybit {
 
 	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
 		match instrument {
-			Instrument::Perp | Instrument::PerpInverse => market::exchange_info(self, instrument).await,
+			Instrument::Perp | Instrument::PerpInverse | Instrument::Spot => market::exchange_info(self, instrument).await,
 			_ => unimplemented!(),
 		}
 	}

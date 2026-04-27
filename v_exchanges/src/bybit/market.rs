@@ -307,6 +307,71 @@ struct InstrumentInfo {
 	lot_size_filter: LotSizeFilter,
 }
 pub(super) async fn exchange_info(client: &v_exchanges_adapters::Client, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
+	if instrument == Instrument::Spot {
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		struct SpotLotSizeFilter {
+			base_precision: String,
+		}
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		struct SpotPriceFilter {
+			tick_size: String,
+		}
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		struct SpotInfo {
+			symbol: String,
+			lot_size_filter: SpotLotSizeFilter,
+			price_filter: SpotPriceFilter,
+		}
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		struct SpotResult {
+			list: Vec<SpotInfo>,
+		}
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		struct SpotResponse {
+			result: SpotResult,
+			time: i64,
+		}
+
+		let response: SpotResponse = client
+			.get("/v5/market/instruments-info", &[("category", "spot"), ("limit", "1000")], vec![BybitOption::None])
+			.await?;
+		let server_time = Timestamp::from_millisecond(response.time).expect("Bybit time is valid ms");
+		let pairs = response
+			.result
+			.list
+			.into_iter()
+			.filter_map(|i| {
+				let pair: Pair = i.symbol.try_into().ok()?;
+				let price_precision = i
+					.price_filter
+					.tick_size
+					.split_once('.')
+					.map(|(_, decimals)| decimals.trim_end_matches('0').len() as u8)
+					.unwrap_or(0);
+				let qty_precision = i
+					.lot_size_filter
+					.base_precision
+					.split_once('.')
+					.map(|(_, decimals)| decimals.trim_end_matches('0').len() as u8)
+					.unwrap_or(0);
+				Some((
+					pair,
+					PairInfo {
+						price_precision,
+						qty_precision,
+						delivery_date: None,
+					},
+				))
+			})
+			.collect();
+		return Ok(ExchangeInfo { server_time, pairs });
+	}
+
 	let category = match instrument {
 		Instrument::Perp => "linear",
 		Instrument::PerpInverse => "inverse",

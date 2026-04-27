@@ -160,7 +160,10 @@ impl ExchangeStream for BookConnection {
 			bids: parsed.bids.into_iter().map(parse_level).collect(),
 			asks: parsed.asks.into_iter().map(parse_level).collect(),
 		};
-		Ok(BookUpdate::BatchDelta(shape))
+		match content_event.event_type.as_str() {
+			"depthUpdate" => Ok(BookUpdate::BatchDelta(shape)),
+			other => panic!("Binance sent unexpected book event type: {other}"),
+		}
 	}
 }
 
