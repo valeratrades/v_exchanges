@@ -11,5 +11,8 @@ homepage = "https://github.com/valeratrades/v_exchanges"
 license = "MIT"
 repository = "https://github.com/valeratrades/v_exchanges/tree/master/v_exchanges_book"
 
+[dependencies]
+v_exchanges_methods.workspace = true
+
 [lints]
 workspace = true

@@ -3323,6 +3323,9 @@ dependencies = [
 [[package]]
 name = "v_exchanges_book"
 version = "0.1.0"
+dependencies = [
+ "v_exchanges_methods",
+]
 
 [[package]]
 name = "v_exchanges_core"

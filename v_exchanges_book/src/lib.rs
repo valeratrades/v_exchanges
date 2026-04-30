@@ -1,3 +1,7 @@
+use std::{path::PathBuf, sync::Arc};
+
+use v_exchanges_methods::{self, Exchange, Ticker};
+
 pub struct Book;
 
 /* DO:
@@ -13,4 +17,22 @@ Has a method to request entire history for any Timestamp:Timestamp. When request
 
 //DO: need a daemon, subscribable over TCP // cause what if multiple things want same data + storage problems
 
-//DO: 
+/*DO:
+/// want to have distinction over what
+enum Data {
+	Snapshot,
+	Delta,
+	Trade,
+	/// Session close / trading halted randomly / delisted
+	Close,
+}
+*/
+
+struct BookCold {}
+impl BookCold {
+	pub fn new(storage_dir: PathBuf, clients: &[Arc<Box<dyn Exchange>>], tickers: &[Ticker]) -> Self {
+		todo!();
+	}
+}
+
+struct BookHot {}
