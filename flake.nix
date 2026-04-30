@@ -97,6 +97,7 @@
             openssl
             pkg-config
             rust
+            valgrind # iai-based microbenches in v_exchanges_persistence
             (writeShellScriptBin "test_all" "cargo t && cargo t --examples")
             (writeShellScriptBin "examples" "cargo -Zscript -q scripts/list_examples.rs")
           ] ++ pre-commit-check.enabledPackages ++ combined.enabledPackages;

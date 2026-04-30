@@ -1,0 +1,37 @@
+cargo-features = ["codegen-backend"]
+
+[package]
+name = "v_exchanges_persistence"
+version = "0.1.0"
+edition = "2024"
+authors = ["valeratrades"]
+description = "Local market-data persistence (Feather buffers + Parquet catalog) for v_exchanges"
+license = "MIT"
+repository = "https://github.com/valeratrades/v_exchanges"
+
+[dependencies]
+ahash = { workspace = true, features = ["serde"] }
+arrow.workspace = true
+futures-util.workspace = true
+jiff.workspace = true
+miette.workspace = true
+parquet = { workspace = true, features = ["arrow", "async", "snap", "zstd"] }
+serde.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["fs"] }
+tracing.workspace = true
+v_exchanges_core.workspace = true
+v_exchanges_methods = { workspace = true, default-features = false }
+v_utils.workspace = true
+
+[dev-dependencies]
+iai-callgrind.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[[bench]]
+name = "write_throughput"
+harness = false
+
+[lints]
+workspace = true

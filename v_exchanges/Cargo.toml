@@ -47,8 +47,11 @@ jiff.workspace = true
 miette.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 v_exchanges_adapters.workspace = true
+v_exchanges_persistence.workspace = true
 v_utils.workspace = true
 
 [lints]
@@ -70,6 +73,11 @@ path = "../examples/ws.rs"
 name = "ws_book"
 required-features = ["binance", "bybit"]
 path = "../examples/ws/book.rs"
+
+[[example]]
+name = "record_replay"
+required-features = ["binance"]
+path = "../examples/record_replay.rs"
 
 [[example]]
 name = "cli"

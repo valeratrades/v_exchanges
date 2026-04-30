@@ -8,7 +8,10 @@ use adapters::{
 use jiff::Timestamp;
 use v_utils::trades::Pair;
 
-use crate::{BatchTrades, BookShape, BookUpdate, ExchangeError, ExchangeStream, Instrument, PrecisionPriceQty, core::InnerTrade};
+use crate::{
+	BatchTrades, BookShape, BookUpdate, ExchangeError, ExchangeStream, Instrument, PrecisionPriceQty,
+	core::{BookPersistor, InnerTrade},
+};
 
 // trades {{{
 #[derive(Debug)]
@@ -125,6 +128,9 @@ pub struct BookConnection {
 	/// `freq / pairs.len()`; `None` = disabled.
 	per_pair_interval: Option<Duration>,
 	pending_snapshot_fut: Option<Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>>>,
+	/// Tracks which pair the in-flight snapshot future is fetching, so we can route its result.
+	pending_snapshot_pair: Option<Pair>,
+	persistor: Option<Box<dyn BookPersistor>>,
 }
 impl BookConnection {
 	pub fn try_new(
@@ -146,17 +152,19 @@ impl BookConnection {
 		let per_pair_interval = if pairs.is_empty() { None } else { book_snapshot_freq.map(|f| f / pairs.len() as u32) };
 
 		// Seed the initial snapshot future — fires immediately on first next() when enabled.
-		let pending_snapshot_fut: Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>> = if let (Some(_), Some(&pair)) = (per_pair_interval, pairs.first()) {
-			let prec = pair_precisions[&pair];
-			let client_clone = client.clone();
-			let deadline = tokio::time::Instant::now();
-			Box::pin(async move {
-				tokio::time::sleep_until(deadline).await;
-				crate::binance::market::fetch_book_snapshot(&client_clone, pair, instrument, prec).await
-			})
-		} else {
-			Box::pin(std::future::pending())
-		};
+		let (pending_snapshot_fut, pending_snapshot_pair): (Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>>, Option<Pair>) =
+			if let (Some(_), Some(&pair)) = (per_pair_interval, pairs.first()) {
+				let prec = pair_precisions[&pair];
+				let client_clone = client.clone();
+				let deadline = tokio::time::Instant::now();
+				let fut: Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>> = Box::pin(async move {
+					tokio::time::sleep_until(deadline).await;
+					crate::binance::market::fetch_book_snapshot(&client_clone, pair, instrument, prec).await
+				});
+				(fut, Some(pair))
+			} else {
+				(Box::pin(std::future::pending()), None)
+			};
 		// Pair 0 is claimed by the seed above; next rotation starts at 1.
 		let next_pair_idx = if pairs.len() > 1 { 1 } else { 0 };
 
@@ -169,12 +177,28 @@ impl BookConnection {
 			next_pair_idx,
 			per_pair_interval,
 			pending_snapshot_fut: Some(pending_snapshot_fut),
+			pending_snapshot_pair,
+			persistor: None,
 		})
 	}
 
-	fn build_next_snapshot_fut(&mut self) -> Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>> {
+	/// Attaches a persistor that captures every snapshot/delta as it flows through `next()`.
+	pub fn with_persistor(mut self, persistor: Box<dyn BookPersistor>) -> Self {
+		self.persistor = Some(persistor);
+		self
+	}
+
+	pub fn pair_precisions(&self) -> &BTreeMap<Pair, PrecisionPriceQty> {
+		&self.pair_precisions
+	}
+
+	pub fn persistor_mut(&mut self) -> Option<&mut (dyn BookPersistor + '_)> {
+		self.persistor.as_mut().map(|b| &mut **b as &mut dyn BookPersistor)
+	}
+
+	fn build_next_snapshot_fut(&mut self) -> (Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>>, Option<Pair>) {
 		let Some(interval) = self.per_pair_interval else {
-			return Box::pin(std::future::pending());
+			return (Box::pin(std::future::pending()), None);
 		};
 		let pair = self.pairs[self.next_pair_idx];
 		self.next_pair_idx = (self.next_pair_idx + 1) % self.pairs.len();
@@ -182,10 +206,11 @@ impl BookConnection {
 		let client = self.client.clone();
 		let instrument = self.instrument;
 		let deadline = tokio::time::Instant::now() + interval;
-		Box::pin(async move {
+		let fut: Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>> = Box::pin(async move {
 			tokio::time::sleep_until(deadline).await;
 			crate::binance::market::fetch_book_snapshot(&client, pair, instrument, prec).await
-		})
+		});
+		(fut, Some(pair))
 	}
 }
 
@@ -226,8 +251,15 @@ impl ExchangeStream for BookConnection {
 
 		match branch {
 			Branch::Snapshot(r) => {
-				self.pending_snapshot_fut = Some(self.build_next_snapshot_fut());
-				Ok(BookUpdate::Snapshot(r.map_err(|e| WsError::Other(eyre::Report::new(e)))?))
+				let snapshot_pair = self.pending_snapshot_pair;
+				let (next_fut, next_pair) = self.build_next_snapshot_fut();
+				self.pending_snapshot_fut = Some(next_fut);
+				self.pending_snapshot_pair = next_pair;
+				let shape = r.map_err(|e| WsError::Other(eyre::Report::new(e)))?;
+				if let (Some(p), Some(persistor)) = (snapshot_pair, self.persistor.as_deref_mut()) {
+					persistor.on_snapshot(p, &shape);
+				}
+				Ok(BookUpdate::Snapshot(shape))
 			}
 			Branch::Delta(r) => {
 				let content_event = r?;
@@ -253,7 +285,12 @@ impl ExchangeStream for BookConnection {
 					asks: parsed.asks.into_iter().map(parse_level).collect(),
 				};
 				match content_event.event_type.as_str() {
-					"depthUpdate" => Ok(BookUpdate::BatchDelta(shape)),
+					"depthUpdate" => {
+						if let Some(persistor) = self.persistor.as_deref_mut() {
+							persistor.on_delta(pair, &shape);
+						}
+						Ok(BookUpdate::BatchDelta(shape))
+					}
 					other => panic!("Binance sent unexpected book event type: {other}"),
 				}
 			}

@@ -54,6 +54,15 @@ pub trait SubscribeOrder {
 
 	async fn place_and_subscribe(&mut self, topics: Vec<Self::Order>) -> Result<(), WsError>;
 }
+/// Pluggable sink that captures book updates as they fly through the WS connection. The connection
+/// invokes `on_snapshot`/`on_delta` synchronously on every event, before returning from `next()`.
+/// Implementations are expected to be cheap; heavy I/O should be batched internally.
+pub trait BookPersistor: Send + Sync {
+	fn on_snapshot(&mut self, pair: Pair, shape: &BookShape);
+	fn on_delta(&mut self, pair: Pair, shape: &BookShape);
+	/// Flush any in-memory buffers immediately. Called by callers at shutdown to avoid losing rows.
+	fn flush(&mut self) {}
+}
 /// most exchanges default to returning OI value in asset quantity, not quote. Exception would be Inverse on Bybit.
 /// Which actually makes sense, as same endpoints accept things like "BTCETH", where quote value would be irrelevant.
 #[derive(Clone, Copy, Debug, Default)]
@@ -318,21 +327,36 @@ pub struct PrecisionPriceQty {
 }
 
 impl PrecisionPriceQty {
-	/// Strip the decimal point from a string, asserting it has at most `expected_precision` decimals.
-	/// Returns the raw digit string ready to parse.
+	/// Strip the decimal point from a string and right-pad to `expected_precision` decimals.
+	/// Trailing zeros beyond `expected_precision` are ignored (Binance pads `.24` to `.24000000`);
+	/// any non-zero digit beyond `expected_precision` is a bug and panics.
 	fn digits(s: &str, expected_precision: u8) -> String {
 		match s.find('.') {
 			Some(dot) => {
-				let decimals = (s.len() - dot - 1) as u8;
+				let int_part = &s[..dot];
+				let frac_part = &s[dot + 1..];
+				let frac_significant = frac_part.trim_end_matches('0');
+				let significant_decimals = frac_significant.len() as u8;
 				assert!(
-					decimals <= expected_precision,
-					"string {s:?} has {decimals} decimal places, expected at most {expected_precision}"
+					significant_decimals <= expected_precision,
+					"string {s:?} has {significant_decimals} significant decimal places, expected at most {expected_precision}"
 				);
-				[&s[..dot], &s[dot + 1..]].concat()
+				let pad = expected_precision as usize - frac_significant.len();
+				let mut out = String::with_capacity(int_part.len() + expected_precision as usize);
+				out.push_str(int_part);
+				out.push_str(frac_significant);
+				for _ in 0..pad {
+					out.push('0');
+				}
+				out
 			}
 			None => {
-				// Some exchanges send bare values for exactly round values
-				s.to_owned()
+				let mut out = String::with_capacity(s.len() + expected_precision as usize);
+				out.push_str(s);
+				for _ in 0..expected_precision {
+					out.push('0');
+				}
+				out
 			}
 		}
 	}

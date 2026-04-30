@@ -1,5 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
+use url::Url;
 use v_exchanges_methods::{self, Exchange, Ticker};
 
 pub struct Book;
@@ -28,6 +29,8 @@ enum Data {
 }
 */
 
+/// self-managed. One of the oh so few things allowed to have its proper tokio::spawn
+//Q: wait, does it have to? If it writes to kernel buffer anyways, could we make it be pull-based as everything else is?
 struct BookCold {}
 impl BookCold {
 	pub fn new(storage_dir: PathBuf, clients: &[Arc<Box<dyn Exchange>>], tickers: &[Ticker]) -> Self {
@@ -35,4 +38,19 @@ impl BookCold {
 	}
 }
 
-struct BookHot {}
+enum ColdSource {
+	Path(PathBuf),
+	//Q: do we need to make a distinction between www communications and same pc tcp?
+	Url(Url),
+}
+
+/// provides a channel to Cold. Its step is batch-reading from it
+//struct BookHot {
+//	pub snapshot: UnsafeCell<BookShape>,
+//	cache: todo!();, // needs to be persisting hot loaded areas of the map. In reality, BookHot itself should be a thin wrapper around BookCold I think. Only difference is we warm all the data contained + is always local.
+//}
+//impl BookHot {
+//	pub fn new(cold_source: ColdSource) -> Self {
+//		todo!();
+//	}
+//}
