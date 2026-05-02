@@ -44,10 +44,10 @@ enum ColdSource {
 	Url(Url),
 }
 
-/// provides a channel to Cold. Its step is batch-reading from it
+///// provides a channel to Cold. Its step is batch-reading from it
 //struct BookHot {
 //	pub snapshot: UnsafeCell<BookShape>,
-//	cache: todo!();, // needs to be persisting hot loaded areas of the map. In reality, BookHot itself should be a thin wrapper around BookCold I think. Only difference is we warm all the data contained + is always local.
+//	cache: BTreeMap<Timestamp, BookChunk<Duration::from_minutes(15)>,, // needs to be persisting hot loaded areas of the map. In reality, BookHot itself should be a thin wrapper around BookCold I think. Only difference is we warm all the data contained + is always local.
 //}
 //impl BookHot {
 //	pub fn new(cold_source: ColdSource) -> Self {

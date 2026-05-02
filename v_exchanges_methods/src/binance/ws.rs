@@ -9,7 +9,7 @@ use jiff::Timestamp;
 use v_utils::trades::Pair;
 
 use crate::{
-	BatchTrades, BookShape, BookUpdate, ExchangeError, ExchangeStream, Instrument, PrecisionPriceQty,
+	BatchTrades, BookShape, BookUpdate, ExchangeError, ExchangeStream, Instrument, PrecisionPriceQty, Symbol,
 	core::{BookPersistor, InnerTrade},
 };
 
@@ -119,17 +119,17 @@ pub struct TradeEventSpot {
 // book {{{
 pub struct BookConnection {
 	connection: WsConnection<BinanceWsHandler>,
-	pair_precisions: BTreeMap<Pair, PrecisionPriceQty>,
+	symbol_precision: BTreeMap<Symbol, PrecisionPriceQty>,
 	instrument: Instrument,
 	// snapshot scheduling
 	client: Client,
-	pairs: Vec<Pair>,
-	next_pair_idx: usize,
+	symbols: Vec<Symbol>,
+	next_symbol_idx: usize,
 	/// `freq / pairs.len()`; `None` = disabled.
-	per_pair_interval: Option<Duration>,
+	per_symbol_interval: Option<Duration>,
 	pending_snapshot_fut: Option<Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>>>,
 	/// Tracks which pair the in-flight snapshot future is fetching, so we can route its result.
-	pending_snapshot_pair: Option<Pair>,
+	pending_snapshot_symbol: Option<Symbol>,
 	persistor: Option<Box<dyn BookPersistor>>,
 }
 impl BookConnection {
@@ -170,14 +170,14 @@ impl BookConnection {
 
 		Ok(Self {
 			connection,
-			pair_precisions,
+			symbol_precision: pair_precisions,
 			instrument,
 			client,
-			pairs,
-			next_pair_idx,
-			per_pair_interval,
+			symbols: pairs,
+			next_symbol_idx: next_pair_idx,
+			per_symbol_interval: per_pair_interval,
 			pending_snapshot_fut: Some(pending_snapshot_fut),
-			pending_snapshot_pair,
+			pending_snapshot_symbol: pending_snapshot_pair,
 			persistor: None,
 		})
 	}
@@ -189,7 +189,7 @@ impl BookConnection {
 	}
 
 	pub fn pair_precisions(&self) -> &BTreeMap<Pair, PrecisionPriceQty> {
-		&self.pair_precisions
+		&self.symbol_precision
 	}
 
 	pub fn persistor_mut(&mut self) -> Option<&mut (dyn BookPersistor + '_)> {
@@ -197,12 +197,12 @@ impl BookConnection {
 	}
 
 	fn build_next_snapshot_fut(&mut self) -> (Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>>, Option<Pair>) {
-		let Some(interval) = self.per_pair_interval else {
+		let Some(interval) = self.per_symbol_interval else {
 			return (Box::pin(std::future::pending()), None);
 		};
-		let pair = self.pairs[self.next_pair_idx];
-		self.next_pair_idx = (self.next_pair_idx + 1) % self.pairs.len();
-		let prec = self.pair_precisions[&pair];
+		let pair = self.symbols[self.next_symbol_idx];
+		self.next_symbol_idx = (self.next_symbol_idx + 1) % self.symbols.len();
+		let prec = self.symbol_precision[&pair];
 		let client = self.client.clone();
 		let instrument = self.instrument;
 		let deadline = tokio::time::Instant::now() + interval;
@@ -218,11 +218,11 @@ impl std::fmt::Debug for BookConnection {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("BookConnection")
 			.field("connection", &self.connection)
-			.field("pair_precisions", &self.pair_precisions)
+			.field("pair_precisions", &self.symbol_precision)
 			.field("instrument", &self.instrument)
-			.field("pairs", &self.pairs)
-			.field("next_pair_idx", &self.next_pair_idx)
-			.field("per_pair_interval", &self.per_pair_interval)
+			.field("pairs", &self.symbols)
+			.field("next_pair_idx", &self.next_symbol_idx)
+			.field("per_pair_interval", &self.per_symbol_interval)
 			.finish_non_exhaustive()
 	}
 }
@@ -251,10 +251,10 @@ impl ExchangeStream for BookConnection {
 
 		match branch {
 			Branch::Snapshot(r) => {
-				let snapshot_pair = self.pending_snapshot_pair;
+				let snapshot_pair = self.pending_snapshot_symbol;
 				let (next_fut, next_pair) = self.build_next_snapshot_fut();
 				self.pending_snapshot_fut = Some(next_fut);
-				self.pending_snapshot_pair = next_pair;
+				self.pending_snapshot_symbol = next_pair;
 				let shape = r.map_err(|e| WsError::Other(eyre::Report::new(e)))?;
 				if let (Some(p), Some(persistor)) = (snapshot_pair, self.persistor.as_deref_mut()) {
 					persistor.on_snapshot(p, &shape);
@@ -275,7 +275,7 @@ impl ExchangeStream for BookConnection {
 					.as_str()
 					.try_into()
 					.unwrap_or_else(|_| panic!("failed to parse pair from depth topic: {}", content_event.topic));
-				let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
+				let prec = *self.symbol_precision.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
 
 				let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.parse_price(&p), prec.parse_qty(&q)) };
 				let shape = BookShape {
