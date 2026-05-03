@@ -119,29 +119,27 @@ pub struct TradeEventSpot {
 // book {{{
 pub struct BookConnection {
 	connection: WsConnection<BinanceWsHandler>,
-	symbol_precision: BTreeMap<Symbol, PrecisionPriceQty>,
+	symbol_precisions: BTreeMap<Symbol, PrecisionPriceQty>,
+	/// Shared by every symbol on this connection (one WS URL per instrument).
 	instrument: Instrument,
 	// snapshot scheduling
 	client: Client,
 	symbols: Vec<Symbol>,
 	next_symbol_idx: usize,
-	/// `freq / pairs.len()`; `None` = disabled.
+	/// `freq / symbols.len()`; `None` = disabled.
 	per_symbol_interval: Option<Duration>,
 	pending_snapshot_fut: Option<Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>>>,
-	/// Tracks which pair the in-flight snapshot future is fetching, so we can route its result.
+	/// Tracks which symbol the in-flight snapshot future is fetching, so we can route its result.
 	pending_snapshot_symbol: Option<Symbol>,
 	persistor: Option<Box<dyn BookPersistor>>,
 }
 impl BookConnection {
-	pub fn try_new(
-		client: Client,
-		pairs: Vec<Pair>,
-		instrument: Instrument,
-		pair_precisions: BTreeMap<Pair, PrecisionPriceQty>,
-		book_snapshot_freq: Option<Duration>,
-	) -> Result<Self, WsError> {
-		let vec_topic_str = pairs.iter().map(|p| format!("{}@depth@100ms", p.fmt_binance().to_lowercase())).collect::<Vec<_>>();
+	pub fn try_new(client: Client, symbols: Vec<Symbol>, symbol_precisions: BTreeMap<Symbol, PrecisionPriceQty>, book_snapshot_freq: Option<Duration>) -> Result<Self, WsError> {
+		let vec_topic_str = symbols.iter().map(|s| format!("{}@depth@100ms", s.pair.fmt_binance().to_lowercase())).collect::<Vec<_>>();
 
+		// All symbols in a connection must share the same instrument (single WS URL).
+		let instrument = symbols.first().map(|s| s.instrument).expect("BookConnection requires at least one symbol");
+		assert!(symbols.iter().all(|s| s.instrument == instrument), "BookConnection symbols must share a single instrument");
 		let base_url = match instrument {
 			Instrument::Perp => BinanceWsUrl::FuturesUsdM,
 			Instrument::Spot | Instrument::Margin => BinanceWsUrl::Spot,
@@ -149,35 +147,35 @@ impl BookConnection {
 		};
 		let connection = client.ws_connection("", vec![BinanceOption::WsUrl(base_url), BinanceOption::WsTopics(vec_topic_str)])?;
 
-		let per_pair_interval = if pairs.is_empty() { None } else { book_snapshot_freq.map(|f| f / pairs.len() as u32) };
+		let per_symbol_interval = book_snapshot_freq.map(|f| f / symbols.len() as u32);
 
 		// Seed the initial snapshot future — fires immediately on first next() when enabled.
-		let (pending_snapshot_fut, pending_snapshot_pair): (Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>>, Option<Pair>) =
-			if let (Some(_), Some(&pair)) = (per_pair_interval, pairs.first()) {
-				let prec = pair_precisions[&pair];
+		let (pending_snapshot_fut, pending_snapshot_symbol): (Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>>, Option<Symbol>) =
+			if let (Some(_), Some(&symbol)) = (per_symbol_interval, symbols.first()) {
+				let prec = symbol_precisions[&symbol];
 				let client_clone = client.clone();
 				let deadline = tokio::time::Instant::now();
 				let fut: Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>> = Box::pin(async move {
 					tokio::time::sleep_until(deadline).await;
-					crate::binance::market::fetch_book_snapshot(&client_clone, pair, instrument, prec).await
+					crate::binance::market::fetch_book_snapshot(&client_clone, symbol, prec).await
 				});
-				(fut, Some(pair))
+				(fut, Some(symbol))
 			} else {
 				(Box::pin(std::future::pending()), None)
 			};
-		// Pair 0 is claimed by the seed above; next rotation starts at 1.
-		let next_pair_idx = if pairs.len() > 1 { 1 } else { 0 };
+		// Symbol 0 is claimed by the seed above; next rotation starts at 1.
+		let next_symbol_idx = if symbols.len() > 1 { 1 } else { 0 };
 
 		Ok(Self {
 			connection,
-			symbol_precision: pair_precisions,
+			symbol_precisions,
 			instrument,
 			client,
-			symbols: pairs,
-			next_symbol_idx: next_pair_idx,
-			per_symbol_interval: per_pair_interval,
+			symbols,
+			next_symbol_idx,
+			per_symbol_interval,
 			pending_snapshot_fut: Some(pending_snapshot_fut),
-			pending_snapshot_symbol: pending_snapshot_pair,
+			pending_snapshot_symbol,
 			persistor: None,
 		})
 	}
@@ -188,29 +186,28 @@ impl BookConnection {
 		self
 	}
 
-	pub fn pair_precisions(&self) -> &BTreeMap<Pair, PrecisionPriceQty> {
-		&self.symbol_precision
+	pub fn symbol_precisions(&self) -> &BTreeMap<Symbol, PrecisionPriceQty> {
+		&self.symbol_precisions
 	}
 
 	pub fn persistor_mut(&mut self) -> Option<&mut (dyn BookPersistor + '_)> {
 		self.persistor.as_mut().map(|b| &mut **b as &mut dyn BookPersistor)
 	}
 
-	fn build_next_snapshot_fut(&mut self) -> (Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>>, Option<Pair>) {
+	fn build_next_snapshot_fut(&mut self) -> (Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>>, Option<Symbol>) {
 		let Some(interval) = self.per_symbol_interval else {
 			return (Box::pin(std::future::pending()), None);
 		};
-		let pair = self.symbols[self.next_symbol_idx];
+		let symbol = self.symbols[self.next_symbol_idx];
 		self.next_symbol_idx = (self.next_symbol_idx + 1) % self.symbols.len();
-		let prec = self.symbol_precision[&pair];
+		let prec = self.symbol_precisions[&symbol];
 		let client = self.client.clone();
-		let instrument = self.instrument;
 		let deadline = tokio::time::Instant::now() + interval;
 		let fut: Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>> = Box::pin(async move {
 			tokio::time::sleep_until(deadline).await;
-			crate::binance::market::fetch_book_snapshot(&client, pair, instrument, prec).await
+			crate::binance::market::fetch_book_snapshot(&client, symbol, prec).await
 		});
-		(fut, Some(pair))
+		(fut, Some(symbol))
 	}
 }
 
@@ -218,11 +215,10 @@ impl std::fmt::Debug for BookConnection {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("BookConnection")
 			.field("connection", &self.connection)
-			.field("pair_precisions", &self.symbol_precision)
-			.field("instrument", &self.instrument)
-			.field("pairs", &self.symbols)
-			.field("next_pair_idx", &self.next_symbol_idx)
-			.field("per_pair_interval", &self.per_symbol_interval)
+			.field("symbol_precisions", &self.symbol_precisions)
+			.field("symbols", &self.symbols)
+			.field("next_symbol_idx", &self.next_symbol_idx)
+			.field("per_symbol_interval", &self.per_symbol_interval)
 			.finish_non_exhaustive()
 	}
 }
@@ -275,7 +271,8 @@ impl ExchangeStream for BookConnection {
 					.as_str()
 					.try_into()
 					.unwrap_or_else(|_| panic!("failed to parse pair from depth topic: {}", content_event.topic));
-				let prec = *self.symbol_precision.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
+				let symbol = Symbol::new(pair, self.instrument);
+				let prec = *self.symbol_precisions.get(&symbol).unwrap_or_else(|| panic!("{symbol:?} not in symbol_precisions"));
 
 				let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.parse_price(&p), prec.parse_qty(&q)) };
 				let shape = BookShape {
@@ -287,7 +284,7 @@ impl ExchangeStream for BookConnection {
 				match content_event.event_type.as_str() {
 					"depthUpdate" => {
 						if let Some(persistor) = self.persistor.as_deref_mut() {
-							persistor.on_delta(pair, &shape);
+							persistor.on_delta(symbol, &shape);
 						}
 						Ok(BookUpdate::BatchDelta(shape))
 					}

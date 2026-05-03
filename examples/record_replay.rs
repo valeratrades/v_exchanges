@@ -27,9 +27,9 @@ async fn main() {
 	binance.update_default_option(BinanceOption::BookSnapshotFreq(Some(SNAPSHOT_FREQ)));
 
 	let conn = binance.book_connection(&[pair], Instrument::Perp).await.expect("book_connection");
-	let pair_precisions: BTreeMap<_, _> = conn.pair_precisions().clone();
+	let symbol_precisions: BTreeMap<_, _> = conn.symbol_precisions().clone();
 
-	let persistor = CatalogBookPersistor::new(catalog.clone(), "binance", pair_precisions, Arc::new(LiveClock));
+	let persistor = CatalogBookPersistor::new(catalog.clone(), "binance", symbol_precisions, Arc::new(LiveClock));
 	let mut conn = conn.with_persistor(Box::new(persistor));
 
 	let start_ns = jiff::Timestamp::now().as_nanosecond() as i64;
