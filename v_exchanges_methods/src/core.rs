@@ -59,9 +59,15 @@ pub trait SubscribeOrder {
 /// Implementations are expected to be cheap; heavy I/O should be batched internally.
 pub trait BookPersistor: Send + Sync {
 	fn on_snapshot(&mut self, pair: Pair, shape: &BookShape);
-	fn on_delta(&mut self, pair: Pair, shape: &BookShape);
+	fn on_delta(&mut self, pair: Pair, shape: &BookShape, gapped: bool);
 	/// Flush any in-memory buffers immediately. Called by callers at shutdown to avoid losing rows.
 	fn flush(&mut self) {}
+}
+
+/// Per-exchange book-event ordering token. Used internally by the WS connection to detect gaps
+/// in the per-pair delta chain. Not persisted; the *result* (`gapped: bool`) is.
+pub trait Sequence: Send + Sync {
+	fn has_gap_from_prev(&self, prev: &Self) -> bool;
 }
 /// most exchanges default to returning OI value in asset quantity, not quote. Exception would be Inverse on Bybit.
 /// Which actually makes sense, as same endpoints accept things like "BTCETH", where quote value would be irrelevant.

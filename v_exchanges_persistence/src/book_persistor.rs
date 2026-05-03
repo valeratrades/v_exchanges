@@ -76,7 +76,6 @@ impl BookPersistor for CatalogBookPersistor {
 		lanes.snapshots.push_snapshot(
 			ts,
 			now,
-			0,
 			lanes.monotonic,
 			shape.bids.keys().copied(),
 			shape.bids.values().copied(),
@@ -87,7 +86,7 @@ impl BookPersistor for CatalogBookPersistor {
 		lanes.snapshots.maybe_flush(catalog).expect("snapshot feather flush failed: catalog state corrupted");
 	}
 
-	fn on_delta(&mut self, pair: Pair, shape: &BookShape) {
+	fn on_delta(&mut self, pair: Pair, shape: &BookShape, gapped: bool) {
 		let ts = shape.ts_event.as_nanosecond() as i64;
 		let now = self.clock.now_ns();
 		let catalog = &self.catalog;
@@ -97,14 +96,15 @@ impl BookPersistor for CatalogBookPersistor {
 			.get_mut(&pair)
 			.unwrap_or_else(|| panic!("pair {pair} not registered with persistor for exchange {exchange}"));
 
-		// Emit one row per price level. Bids first (side=0), then asks (side=1).
+		// Emit one row per price level. Bids first (side=0), then asks (side=1). Every emitted
+		// row of one event shares the same `gapped` value — it's a per-event property.
 		for (&price, &qty) in &shape.bids {
 			lanes.monotonic += 1;
 			lanes.deltas.push_delta(BookDelta {
 				ts_event: ts,
 				ts_init: now,
-				sequence: 0,
 				monotonic_seq: lanes.monotonic,
+				gapped,
 				side: 0,
 				price_raw: price,
 				qty_raw: qty,
@@ -115,8 +115,8 @@ impl BookPersistor for CatalogBookPersistor {
 			lanes.deltas.push_delta(BookDelta {
 				ts_event: ts,
 				ts_init: now,
-				sequence: 0,
 				monotonic_seq: lanes.monotonic,
+				gapped,
 				side: 1,
 				price_raw: price,
 				qty_raw: qty,

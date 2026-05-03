@@ -10,7 +10,7 @@ use v_utils::trades::Pair;
 
 use crate::{
 	BatchTrades, BookShape, BookUpdate, ExchangeError, ExchangeStream, Instrument, PrecisionPriceQty,
-	core::{BookPersistor, InnerTrade},
+	core::{BookPersistor, InnerTrade, Sequence},
 };
 
 // trades {{{
@@ -133,6 +133,9 @@ pub struct BookConnection {
 	/// Tracks which pair the in-flight snapshot future is fetching, so we can route its result.
 	pending_snapshot_pair: Option<Pair>,
 	persistor: Option<Box<dyn BookPersistor>>,
+	/// Last delta sequence value seen per pair. Used to compute `gapped` on each subsequent delta.
+	/// REST snapshots are independent anchors and do not seed/clear this map.
+	last_seq: BTreeMap<Pair, BinanceDepthSeq>,
 }
 impl BookConnection {
 	pub fn try_new(
@@ -182,6 +185,7 @@ impl BookConnection {
 			pending_snapshot_fut: Some(pending_snapshot_fut),
 			pending_snapshot_pair,
 			persistor: None,
+			last_seq: BTreeMap::new(),
 		})
 	}
 
@@ -291,8 +295,22 @@ impl ExchangeStream for BookConnection {
 				};
 				match content_event.event_type.as_str() {
 					"depthUpdate" => {
+						let seq = match self.instrument {
+							Instrument::Perp => BinanceDepthSeq::Perp(BinancePerpSeq {
+								u_first: parsed.first_update_id,
+								u_final: parsed.final_update_id,
+								pu: parsed.previous_final_update_id.expect("Binance perp depth event missing `pu`"),
+							}),
+							Instrument::Spot | Instrument::Margin => BinanceDepthSeq::Spot(BinanceSpotSeq {
+								u_first: parsed.first_update_id,
+								u_final: parsed.final_update_id,
+							}),
+							_ => unimplemented!(),
+						};
+						let gapped = self.last_seq.get(&pair).map(|prev| seq.has_gap_from_prev(prev)).unwrap_or(false);
+						self.last_seq.insert(pair, seq);
 						if let Some(persistor) = self.persistor.as_deref_mut() {
-							persistor.on_delta(pair, &shape);
+							persistor.on_delta(pair, &shape, gapped);
 						}
 						Ok(BookUpdate::BatchDelta(shape))
 					}
@@ -303,6 +321,26 @@ impl ExchangeStream for BookConnection {
 	}
 }
 
+/// Sequence token for Binance spot diff-depth events.
+#[derive(Clone, Copy, Debug)]
+pub struct BinanceSpotSeq {
+	pub u_first: u64,
+	pub u_final: u64,
+}
+/// Sequence token for Binance USD-M perp diff-depth events.
+#[derive(Clone, Copy, Debug)]
+pub struct BinancePerpSeq {
+	pub u_first: u64,
+	pub u_final: u64,
+	pub pu: u64,
+}
+/// Single map type covering both spot and perp variants — one connection, one instrument, so all
+/// entries on a given connection are the same variant. Mismatch is a logic bug and panics.
+#[derive(Clone, Copy, Debug)]
+pub enum BinanceDepthSeq {
+	Spot(BinanceSpotSeq),
+	Perp(BinancePerpSeq),
+}
 /// Binance diff depth stream event.
 /// Spot: https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams#diff-depth-stream
 /// Futures: https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-market-streams/Diff-Book-Depth-Streams
@@ -311,6 +349,15 @@ struct DepthEvent {
 	/// Transaction time. Present on futures, absent on spot.
 	#[serde(rename = "T")]
 	transaction_time: Option<i64>,
+	/// First update id in this event.
+	#[serde(rename = "U")]
+	first_update_id: u64,
+	/// Final update id in this event.
+	#[serde(rename = "u")]
+	final_update_id: u64,
+	/// Final update id in the *previous* stream event. Perp-only.
+	#[serde(rename = "pu")]
+	previous_final_update_id: Option<u64>,
 	/// Bids: [[price, qty], ...]
 	#[serde(rename = "b")]
 	bids: Vec<(String, String)>,
@@ -318,4 +365,49 @@ struct DepthEvent {
 	#[serde(rename = "a")]
 	asks: Vec<(String, String)>,
 }
+
+impl Sequence for BinanceSpotSeq {
+	fn has_gap_from_prev(&self, prev: &Self) -> bool {
+		self.u_first != prev.u_final + 1
+	}
+}
+
+impl Sequence for BinancePerpSeq {
+	fn has_gap_from_prev(&self, prev: &Self) -> bool {
+		self.pu != prev.u_final
+	}
+}
+
+impl Sequence for BinanceDepthSeq {
+	fn has_gap_from_prev(&self, prev: &Self) -> bool {
+		match (self, prev) {
+			(Self::Spot(a), Self::Spot(b)) => a.has_gap_from_prev(b),
+			(Self::Perp(a), Self::Perp(b)) => a.has_gap_from_prev(b),
+			_ => panic!("BinanceDepthSeq variant mismatch: spot/perp on the same connection"),
+		}
+	}
+}
 //,}}}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn spot_seq_gap() {
+		let prev = BinanceSpotSeq { u_first: 10, u_final: 20 };
+		let next_ok = BinanceSpotSeq { u_first: 21, u_final: 30 };
+		let next_gap = BinanceSpotSeq { u_first: 22, u_final: 30 };
+		assert!(!next_ok.has_gap_from_prev(&prev));
+		assert!(next_gap.has_gap_from_prev(&prev));
+	}
+
+	#[test]
+	fn perp_seq_gap() {
+		let prev = BinancePerpSeq { u_first: 10, u_final: 20, pu: 5 };
+		let next_ok = BinancePerpSeq { u_first: 21, u_final: 30, pu: 20 };
+		let next_gap = BinancePerpSeq { u_first: 21, u_final: 30, pu: 19 };
+		assert!(!next_ok.has_gap_from_prev(&prev));
+		assert!(next_gap.has_gap_from_prev(&prev));
+	}
+}

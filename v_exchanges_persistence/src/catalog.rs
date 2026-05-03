@@ -201,7 +201,7 @@ fn intervals_overlap(a: (UnixNanos, UnixNanos), b: (UnixNanos, UnixNanos)) -> bo
 mod tests {
 	use std::sync::Arc;
 
-	use arrow::array::{Int32Array, Int64Array, RecordBatch, UInt8Array, UInt32Array, UInt64Array};
+	use arrow::array::{BooleanArray, Int32Array, Int64Array, RecordBatch, UInt8Array, UInt32Array, UInt64Array};
 	use tempfile::tempdir;
 	use v_exchanges_methods::Instrument;
 
@@ -231,7 +231,7 @@ mod tests {
 				Arc::new(Int64Array::from(vec![1_i64])),
 				Arc::new(Int64Array::from(vec![1_i64])),
 				Arc::new(UInt64Array::from(vec![1_u64])),
-				Arc::new(UInt64Array::from(vec![1_u64])),
+				Arc::new(BooleanArray::from(vec![false])),
 				Arc::new(UInt8Array::from(vec![0_u8])),
 				Arc::new(Int32Array::from(vec![1_i32])),
 				Arc::new(UInt32Array::from(vec![1_u32])),

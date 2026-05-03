@@ -16,7 +16,7 @@ use std::{
 };
 
 use arrow::{
-	array::{ArrayRef, BinaryBuilder, Int32Builder, Int64Builder, ListBuilder, RecordBatch, StringBuilder, UInt8Builder, UInt32Builder, UInt64Builder},
+	array::{ArrayRef, BinaryBuilder, BooleanBuilder, Int32Builder, Int64Builder, ListBuilder, RecordBatch, StringBuilder, UInt8Builder, UInt32Builder, UInt64Builder},
 	datatypes::SchemaRef,
 };
 
@@ -150,7 +150,6 @@ impl Feather {
 		&mut self,
 		ts_event: i64,
 		ts_init: i64,
-		sequence: u64,
 		monotonic_seq: u64,
 		bid_prices: impl IntoIterator<Item = i32>,
 		bid_qtys: impl IntoIterator<Item = u32>,
@@ -162,7 +161,6 @@ impl Feather {
 		};
 		b.ts_event.append_value(ts_event);
 		b.ts_init.append_value(ts_init);
-		b.sequence.append_value(sequence);
 		b.monotonic_seq.append_value(monotonic_seq);
 		let mut n_levels = 0usize;
 		for (p, q) in bid_prices.into_iter().zip(bid_qtys) {
@@ -190,8 +188,8 @@ impl Feather {
 		};
 		b.ts_event.append_value(row.ts_event);
 		b.ts_init.append_value(row.ts_init);
-		b.sequence.append_value(row.sequence);
 		b.monotonic_seq.append_value(row.monotonic_seq);
+		b.gapped.append_value(row.gapped);
 		b.side.append_value(row.side);
 		b.price_raw.append_value(row.price_raw);
 		b.qty_raw.append_value(row.qty_raw);
@@ -325,8 +323,8 @@ enum Buffer {
 struct DeltaBuilders {
 	ts_event: Int64Builder,
 	ts_init: Int64Builder,
-	sequence: UInt64Builder,
 	monotonic_seq: UInt64Builder,
+	gapped: BooleanBuilder,
 	side: UInt8Builder,
 	price_raw: Int32Builder,
 	qty_raw: UInt32Builder,
@@ -336,8 +334,8 @@ impl DeltaBuilders {
 		vec![
 			Arc::new(self.ts_event.finish()),
 			Arc::new(self.ts_init.finish()),
-			Arc::new(self.sequence.finish()),
 			Arc::new(self.monotonic_seq.finish()),
+			Arc::new(self.gapped.finish()),
 			Arc::new(self.side.finish()),
 			Arc::new(self.price_raw.finish()),
 			Arc::new(self.qty_raw.finish()),
@@ -350,8 +348,8 @@ impl Default for DeltaBuilders {
 		Self {
 			ts_event: Int64Builder::new(),
 			ts_init: Int64Builder::new(),
-			sequence: UInt64Builder::new(),
 			monotonic_seq: UInt64Builder::new(),
+			gapped: BooleanBuilder::new(),
 			side: UInt8Builder::new(),
 			price_raw: Int32Builder::new(),
 			qty_raw: UInt32Builder::new(),
@@ -362,7 +360,6 @@ impl Default for DeltaBuilders {
 struct SnapshotBuilders {
 	ts_event: Int64Builder,
 	ts_init: Int64Builder,
-	sequence: UInt64Builder,
 	monotonic_seq: UInt64Builder,
 	bid_prices: ListBuilder<Int32Builder>,
 	bid_qtys: ListBuilder<UInt32Builder>,
@@ -374,7 +371,6 @@ impl SnapshotBuilders {
 		vec![
 			Arc::new(self.ts_event.finish()),
 			Arc::new(self.ts_init.finish()),
-			Arc::new(self.sequence.finish()),
 			Arc::new(self.monotonic_seq.finish()),
 			Arc::new(self.bid_prices.finish()),
 			Arc::new(self.bid_qtys.finish()),
@@ -389,7 +385,6 @@ impl Default for SnapshotBuilders {
 		Self {
 			ts_event: Int64Builder::new(),
 			ts_init: Int64Builder::new(),
-			sequence: UInt64Builder::new(),
 			monotonic_seq: UInt64Builder::new(),
 			bid_prices: ListBuilder::new(Int32Builder::new()),
 			bid_qtys: ListBuilder::new(UInt32Builder::new()),
@@ -511,8 +506,8 @@ mod tests {
 		feather.push_delta(BookDelta {
 			ts_event: 1,
 			ts_init: 1,
-			sequence: 1,
 			monotonic_seq: 1,
+			gapped: false,
 			side: 0,
 			price_raw: 1,
 			qty_raw: 1,

@@ -197,7 +197,7 @@ mod tests {
 	/// Drives a fresh `Feather` to write a single-snapshot parquet file at exact `ts_event`.
 	fn write_snapshot(cat: &Catalog, key: LaneKey, ts: i64) {
 		let mut f = Feather::new_snapshots(key, meta(), forever());
-		f.push_snapshot(ts, ts, ts as u64, ts as u64, [100].into_iter(), [10].into_iter(), [101].into_iter(), [10].into_iter());
+		f.push_snapshot(ts, ts, ts as u64, [100].into_iter(), [10].into_iter(), [101].into_iter(), [10].into_iter());
 		f.flush(cat).unwrap();
 	}
 
@@ -211,8 +211,8 @@ mod tests {
 		BookDelta {
 			ts_event: ts,
 			ts_init: ts,
-			sequence: mseq,
 			monotonic_seq: mseq,
+			gapped: false,
 			side: 0,
 			price_raw: 0,
 			qty_raw: 0,

@@ -13,14 +13,14 @@
 use std::sync::Arc;
 
 use arrow::{
-	array::{Array, BinaryArray, Int32Array, Int64Array, ListArray, RecordBatch, StringArray, UInt8Array, UInt32Array, UInt64Array},
+	array::{Array, BinaryArray, BooleanArray, Int32Array, Int64Array, ListArray, RecordBatch, StringArray, UInt8Array, UInt32Array, UInt64Array},
 	datatypes::{DataType, Field, Schema, SchemaRef},
 };
 
 use crate::catalog::Lane;
 
 /// Format version stored in schema metadata. Bump on breaking schema changes.
-pub const SCHEMA_VERSION: &str = "1";
+pub const SCHEMA_VERSION: &str = "2";
 /// UNIX nanoseconds since epoch.
 pub type UnixNanos = i64;
 
@@ -70,7 +70,6 @@ impl Data {
 pub struct BookSnapshot {
 	pub ts_event: UnixNanos,
 	pub ts_init: UnixNanos,
-	pub sequence: u64,
 	pub monotonic_seq: u64,
 	pub bid_prices: Vec<i32>,
 	pub bid_qtys: Vec<u32>,
@@ -82,8 +81,10 @@ pub struct BookSnapshot {
 pub struct BookDelta {
 	pub ts_event: UnixNanos,
 	pub ts_init: UnixNanos,
-	pub sequence: u64,
 	pub monotonic_seq: u64,
+	/// `true` if the originating WS event broke the per-pair sequence chain (a wire-level drop
+	/// was detected). Computed at WS-parse time; see exchange `Sequence` impls.
+	pub gapped: bool,
 	/// 0 = bid, 1 = ask.
 	pub side: u8,
 	pub price_raw: i32,
@@ -142,18 +143,16 @@ impl FileMetadata {
 pub fn decode_snapshots(b: &RecordBatch) -> Vec<BookSnapshot> {
 	let ts_event = col_i64(b, 0);
 	let ts_init = col_i64(b, 1);
-	let sequence = col_u64(b, 2);
-	let monotonic = col_u64(b, 3);
-	let bid_prices = col_i32_list(b, 4);
-	let bid_qtys = col_u32_list(b, 5);
-	let ask_prices = col_i32_list(b, 6);
-	let ask_qtys = col_u32_list(b, 7);
+	let monotonic = col_u64(b, 2);
+	let bid_prices = col_i32_list(b, 3);
+	let bid_qtys = col_u32_list(b, 4);
+	let ask_prices = col_i32_list(b, 5);
+	let ask_qtys = col_u32_list(b, 6);
 
 	(0..b.num_rows())
 		.map(|i| BookSnapshot {
 			ts_event: ts_event.value(i),
 			ts_init: ts_init.value(i),
-			sequence: sequence.value(i),
 			monotonic_seq: monotonic.value(i),
 			bid_prices: bid_prices[i].clone(),
 			bid_qtys: bid_qtys[i].clone(),
@@ -165,8 +164,8 @@ pub fn decode_snapshots(b: &RecordBatch) -> Vec<BookSnapshot> {
 pub fn decode_deltas(b: &RecordBatch) -> Vec<BookDelta> {
 	let ts_event = col_i64(b, 0);
 	let ts_init = col_i64(b, 1);
-	let sequence = col_u64(b, 2);
-	let monotonic = col_u64(b, 3);
+	let monotonic = col_u64(b, 2);
+	let gapped = col_bool(b, 3);
 	let side = b.column(4).as_any().downcast_ref::<UInt8Array>().expect("u8 column");
 	let price = b.column(5).as_any().downcast_ref::<Int32Array>().expect("i32 column");
 	let qty = b.column(6).as_any().downcast_ref::<UInt32Array>().expect("u32 column");
@@ -174,8 +173,8 @@ pub fn decode_deltas(b: &RecordBatch) -> Vec<BookDelta> {
 		.map(|i| BookDelta {
 			ts_event: ts_event.value(i),
 			ts_init: ts_init.value(i),
-			sequence: sequence.value(i),
 			monotonic_seq: monotonic.value(i),
+			gapped: gapped.value(i),
 			side: side.value(i),
 			price_raw: price.value(i),
 			qty_raw: qty.value(i),
@@ -244,8 +243,8 @@ fn deltas_schema() -> SchemaRef {
 	Arc::new(Schema::new(vec![
 		Field::new("ts_event", DataType::Int64, false),
 		Field::new("ts_init", DataType::Int64, false),
-		Field::new("sequence", DataType::UInt64, false),
 		Field::new("monotonic_seq", DataType::UInt64, false),
+		Field::new("gapped", DataType::Boolean, false),
 		Field::new("side", DataType::UInt8, false),
 		Field::new("price_raw", DataType::Int32, false),
 		Field::new("qty_raw", DataType::UInt32, false),
@@ -259,7 +258,6 @@ fn snapshots_schema() -> SchemaRef {
 	Arc::new(Schema::new(vec![
 		Field::new("ts_event", DataType::Int64, false),
 		Field::new("ts_init", DataType::Int64, false),
-		Field::new("sequence", DataType::UInt64, false),
 		Field::new("monotonic_seq", DataType::UInt64, false),
 		Field::new("bid_prices", i32_list(), false),
 		Field::new("bid_qtys", u32_list(), false),
@@ -311,6 +309,10 @@ fn col_i64(b: &RecordBatch, idx: usize) -> &Int64Array {
 
 fn col_u64(b: &RecordBatch, idx: usize) -> &UInt64Array {
 	b.column(idx).as_any().downcast_ref::<UInt64Array>().expect("u64 column")
+}
+
+fn col_bool(b: &RecordBatch, idx: usize) -> &BooleanArray {
+	b.column(idx).as_any().downcast_ref::<BooleanArray>().expect("bool column")
 }
 
 fn col_i32_list(b: &RecordBatch, idx: usize) -> Vec<Vec<i32>> {
@@ -389,8 +391,8 @@ mod tests {
 	#[test]
 	fn snapshots_round_trip() {
 		let batch = round_trip(Lane::Snapshots, |f| {
-			f.push_snapshot(100, 110, 1, 1, [100, 99].into_iter(), [10, 20].into_iter(), [101, 102].into_iter(), [5, 7].into_iter());
-			f.push_snapshot(200, 210, 2, 2, std::iter::empty(), std::iter::empty(), [103].into_iter(), [1].into_iter());
+			f.push_snapshot(100, 110, 1, [100, 99].into_iter(), [10, 20].into_iter(), [101, 102].into_iter(), [5, 7].into_iter());
+			f.push_snapshot(200, 210, 2, std::iter::empty(), std::iter::empty(), [103].into_iter(), [1].into_iter());
 		});
 		let decoded = decode_snapshots(&batch);
 		assert_eq!(decoded.len(), 2);
@@ -405,8 +407,8 @@ mod tests {
 			f.push_delta(BookDelta {
 				ts_event: 1,
 				ts_init: 2,
-				sequence: 9,
 				monotonic_seq: 9,
+				gapped: true,
 				side: 0,
 				price_raw: 12345,
 				qty_raw: 0,
@@ -415,6 +417,7 @@ mod tests {
 		let decoded = decode_deltas(&batch);
 		assert_eq!(decoded[0].price_raw, 12345);
 		assert_eq!(decoded[0].qty_raw, 0);
+		assert!(decoded[0].gapped);
 	}
 
 	#[test]

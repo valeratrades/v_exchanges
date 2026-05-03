@@ -57,8 +57,8 @@ fn push_100k_deltas() {
 		f.push_delta(BookDelta {
 			ts_event: i as i64,
 			ts_init: i as i64,
-			sequence: i,
 			monotonic_seq: i,
+			gapped: false,
 			side: (i & 1) as u8,
 			price_raw: i as i32,
 			qty_raw: i as u32,
@@ -80,7 +80,6 @@ fn push_200_snapshots() {
 		f.push_snapshot(
 			i as i64,
 			i as i64,
-			i,
 			i,
 			bid_prices.iter().copied(),
 			bid_qtys.iter().copied(),
