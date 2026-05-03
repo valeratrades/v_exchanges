@@ -434,12 +434,25 @@ impl Timestamped for BookUpdate {
 pub struct BatchTrades {
 	prec: PrecisionPriceQty,
 	trades: Vec<InnerTrade>,
+	/// Exchange-provided event time of the latest trade in the batch.
+	ts_event: Timestamp,
+	/// When we first received the data backing this batch.
+	ts_init: Timestamp,
+	/// When we last appended into this batch. Equals `ts_init` for batches built from a single message.
+	ts_last: Timestamp,
 }
 
 impl BatchTrades {
-	pub(crate) fn new(prec: PrecisionPriceQty, trades: Vec<InnerTrade>) -> Self {
+	pub(crate) fn new(prec: PrecisionPriceQty, trades: Vec<InnerTrade>, ts_init: Timestamp, ts_last: Timestamp) -> Self {
 		assert!(trades.len() != 0); // this is an invariant upheld by our own implementation, so we shouldn't introduce runtime cost of checking it in release builds.
-		Self { prec, trades }
+		let ts_event = trades.last().expect("never empty").time;
+		Self {
+			prec,
+			trades,
+			ts_event,
+			ts_init,
+			ts_last,
+		}
 	}
 
 	pub fn len(&self) -> usize {
@@ -453,6 +466,20 @@ impl BatchTrades {
 	/// Iterate `(time, price_raw, qty_raw)` tuples. Precision is shared via [`Self::prec`].
 	pub fn iter(&self) -> impl Iterator<Item = (Timestamp, i32, u32)> + '_ {
 		self.trades.iter().map(|t| (t.time, t.price, t.qty))
+	}
+}
+
+impl Timestamped for BatchTrades {
+	fn ts_event(&self) -> Timestamp {
+		self.ts_event
+	}
+
+	fn ts_init(&self) -> Timestamp {
+		self.ts_init
+	}
+
+	fn ts_last(&self) -> Timestamp {
+		self.ts_last
 	}
 }
 

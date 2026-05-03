@@ -79,7 +79,8 @@ impl ExchangeStream for TradesConnection {
 				price: price_raw,
 				qty: qty_raw,
 			};
-			return Ok(BatchTrades::new(prec, vec![trade]));
+			let now = Timestamp::now();
+			return Ok(BatchTrades::new(prec, vec![trade], now, now));
 		}
 	}
 }
