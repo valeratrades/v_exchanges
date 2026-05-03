@@ -6,7 +6,7 @@
 use std::{collections::BTreeMap, str::FromStr as _, sync::Arc, time::Duration};
 
 use tempfile::tempdir;
-use v_exchanges::prelude::*;
+use v_exchanges::{ExchangeName, Symbol, prelude::*};
 use v_exchanges_adapters::binance::BinanceOption;
 use v_exchanges_persistence::{Catalog, CatalogBookPersistor, Data, LiveClock, ReplayConfig, replay};
 use v_utils::trades::Pair;
@@ -26,10 +26,11 @@ async fn main() {
 	let mut binance = Binance::default();
 	binance.update_default_option(BinanceOption::BookSnapshotFreq(Some(SNAPSHOT_FREQ)));
 
-	let conn = binance.book_connection(&[pair], Instrument::Perp).await.expect("book_connection");
-	let symbol_precisions: BTreeMap<_, _> = conn.symbol_precisions().clone();
+	let instrument = Instrument::Perp;
+	let conn = binance.book_connection(&[pair], instrument).await.expect("book_connection");
+	let pair_precisions: BTreeMap<_, _> = conn.pair_precisions().clone();
 
-	let persistor = CatalogBookPersistor::new(catalog.clone(), "binance", symbol_precisions, Arc::new(LiveClock));
+	let persistor = CatalogBookPersistor::new(catalog.clone(), ExchangeName::Binance, instrument, pair_precisions, Arc::new(LiveClock));
 	let mut conn = conn.with_persistor(Box::new(persistor));
 
 	let start_ns = jiff::Timestamp::now().as_nanosecond() as i64;
@@ -56,7 +57,7 @@ async fn main() {
 	drop(conn);
 
 	let cfg = ReplayConfig::new(start_ns, end_ns);
-	let out = replay(&catalog, "binance", &pair.to_string(), &cfg).expect("replay");
+	let out = replay(&catalog, ExchangeName::Binance, Symbol::new(pair, instrument), &cfg).expect("replay");
 	tracing::info!(rows = out.len(), "replayed rows");
 
 	assert!(snapshots >= 1, "expected at least one snapshot in 60s");

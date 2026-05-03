@@ -488,6 +488,7 @@ impl Default for CustomBuilders {
 #[cfg(test)]
 mod tests {
 	use tempfile::tempdir;
+	use v_exchanges_methods::{ExchangeName, Instrument, Symbol};
 
 	use super::*;
 
@@ -504,7 +505,8 @@ mod tests {
 	fn flush_writes_parquet() {
 		let dir = tempdir().unwrap();
 		let catalog = Catalog::new(dir.path());
-		let key = LaneKey::book(Lane::Deltas, "binance", "BTC-USDT");
+		let symbol = Symbol::new("BTC-USDT".try_into().unwrap(), Instrument::Spot);
+		let key = LaneKey::book(Lane::Deltas, ExchangeName::Binance, symbol);
 		let mut feather = Feather::new_deltas(key, meta(), RotationPolicy { max_bytes: Some(1), max_age: None });
 		feather.push_delta(BookDelta {
 			ts_event: 1,

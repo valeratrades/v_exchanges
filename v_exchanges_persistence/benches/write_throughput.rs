@@ -11,6 +11,7 @@ use std::hint::black_box;
 
 use iai_callgrind::{library_benchmark, library_benchmark_group, main};
 use tempfile::TempDir;
+use v_exchanges_methods::{ExchangeName, Instrument, Symbol};
 use v_exchanges_persistence::{
 	Catalog, Feather, RotationPolicy,
 	catalog::{Lane, LaneKey},
@@ -29,10 +30,14 @@ fn meta() -> FileMetadata {
 	}
 }
 
+fn test_symbol() -> Symbol {
+	Symbol::new("BTC-USDT".try_into().unwrap(), Instrument::Spot)
+}
+
 fn fresh_deltas() -> (TempDir, Catalog, Feather) {
 	let dir = tempfile::tempdir().unwrap();
 	let cat = Catalog::new(dir.path());
-	let key = LaneKey::book(Lane::Deltas, "binance", "BTC-USDT");
+	let key = LaneKey::book(Lane::Deltas, ExchangeName::Binance, test_symbol());
 	let f = Feather::new_deltas(key, meta(), RotationPolicy { max_bytes: None, max_age: None });
 	(dir, cat, f)
 }
@@ -40,7 +45,7 @@ fn fresh_deltas() -> (TempDir, Catalog, Feather) {
 fn fresh_snapshots() -> (TempDir, Catalog, Feather) {
 	let dir = tempfile::tempdir().unwrap();
 	let cat = Catalog::new(dir.path());
-	let key = LaneKey::book(Lane::Snapshots, "binance", "BTC-USDT");
+	let key = LaneKey::book(Lane::Snapshots, ExchangeName::Binance, test_symbol());
 	let f = Feather::new_snapshots(key, meta(), RotationPolicy { max_bytes: None, max_age: None });
 	(dir, cat, f)
 }

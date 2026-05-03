@@ -13,6 +13,8 @@
 
 use std::time::Duration;
 
+use v_exchanges_methods::{ExchangeName, Symbol};
+
 use crate::{
 	catalog::{Catalog, CatalogError, Lane, LaneKey},
 	schema::{Data, UnixNanos, decode_closes, decode_deltas, decode_snapshots, decode_trades},
@@ -36,16 +38,16 @@ impl ReplayConfig {
 	}
 }
 
-/// One pair only. Cross-pair ordering is the backtester's job.
-pub fn replay(catalog: &Catalog, exchange: &str, pair: &str, config: &ReplayConfig) -> Result<Vec<Data>, CatalogError> {
+/// One symbol only. Cross-symbol ordering is the backtester's job.
+pub fn replay(catalog: &Catalog, exchange: ExchangeName, symbol: Symbol, config: &ReplayConfig) -> Result<Vec<Data>, CatalogError> {
 	let book_lanes = [Lane::Snapshots, Lane::Deltas, Lane::Trades, Lane::Closes];
 	let mut lanes: Vec<Vec<Data>> = Vec::new();
 
-	let snapshots_key = LaneKey::book(Lane::Snapshots, exchange, pair);
+	let snapshots_key = LaneKey::book(Lane::Snapshots, exchange, symbol);
 	let anchor = pick_anchor(catalog, &snapshots_key, config)?;
 
 	for lane in book_lanes {
-		let key = LaneKey::book(lane, exchange, pair);
+		let key = LaneKey::book(lane, exchange, symbol);
 		let files = catalog.list_range(&key, config.start, config.end)?;
 		let mut rows: Vec<Data> = Vec::new();
 		for f in files {
@@ -167,12 +169,17 @@ fn pick_anchor(catalog: &Catalog, snapshots_key: &LaneKey, config: &ReplayConfig
 #[cfg(test)]
 mod tests {
 	use tempfile::tempdir;
+	use v_exchanges_methods::Instrument;
 
 	use super::*;
 	use crate::{
 		feather::{Feather, RotationPolicy},
 		schema::{BookDelta, FileMetadata},
 	};
+
+	fn test_symbol() -> Symbol {
+		Symbol::new("BTC-USDT".try_into().unwrap(), Instrument::Spot)
+	}
 
 	fn meta() -> FileMetadata {
 		FileMetadata {
@@ -216,8 +223,8 @@ mod tests {
 	fn anchor_within_window_seeds_book() {
 		let dir = tempdir().unwrap();
 		let cat = Catalog::new(dir.path());
-		let snaps_key = || LaneKey::book(Lane::Snapshots, "binance", "BTC-USDT");
-		let deltas_key = || LaneKey::book(Lane::Deltas, "binance", "BTC-USDT");
+		let snaps_key = || LaneKey::book(Lane::Snapshots, ExchangeName::Binance, test_symbol());
+		let deltas_key = || LaneKey::book(Lane::Deltas, ExchangeName::Binance, test_symbol());
 
 		// 1 ns = 1 unit. Use seconds for clarity: 1s = 1_000_000_000.
 		let s = 1_000_000_000_i64;
@@ -228,7 +235,7 @@ mod tests {
 		write_delta(&cat, deltas_key(), delta(110 * s, 1));
 
 		let cfg = ReplayConfig::new(100 * s, 200 * s); // window 15 min default
-		let out = replay(&cat, "binance", "BTC-USDT", &cfg).unwrap();
+		let out = replay(&cat, ExchangeName::Binance, test_symbol(), &cfg).unwrap();
 		// First row must be the anchor snapshot at 50s (within 15min).
 		assert!(matches!(&out[0], Data::Snapshot(s) if s.ts_event == 50 * 1_000_000_000));
 		// Second row should be the delta at 110s.
@@ -241,14 +248,14 @@ mod tests {
 	fn anchor_out_of_window_skipped() {
 		let dir = tempdir().unwrap();
 		let cat = Catalog::new(dir.path());
-		let snaps_key = || LaneKey::book(Lane::Snapshots, "binance", "BTC-USDT");
+		let snaps_key = || LaneKey::book(Lane::Snapshots, ExchangeName::Binance, test_symbol());
 		let s = 1_000_000_000_i64;
 		// Anchor 1 hour before start — outside the default 15-min window.
 		write_snapshot(&cat, snaps_key(), 0);
 		write_snapshot(&cat, snaps_key(), 120 * s);
 
 		let cfg = ReplayConfig::new(60 * 60 * s, 2 * 60 * 60 * s);
-		let out = replay(&cat, "binance", "BTC-USDT", &cfg).unwrap();
+		let out = replay(&cat, ExchangeName::Binance, test_symbol(), &cfg).unwrap();
 		// No anchor should be prepended; first row is the in-range snapshot at 120s.
 		// (which falls before start, so it's filtered too — out should be empty)
 		assert!(out.is_empty(), "got {} rows", out.len());

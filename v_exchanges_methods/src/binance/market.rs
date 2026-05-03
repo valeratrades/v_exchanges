@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
-use v_utils::trades::{Kline, Ohlc};
+use v_utils::trades::{Kline, Ohlc, Pair};
 
 use super::BinanceTimeframe;
 use crate::{
@@ -158,14 +158,14 @@ struct DepthResponse {
 	asks: Vec<(String, String)>,
 }
 
-pub(crate) async fn fetch_book_snapshot(client: &v_exchanges_adapters::Client, symbol: Symbol, prec: PrecisionPriceQty) -> Result<BookShape, ExchangeError> {
-	let (endpoint, base_url) = match symbol.instrument {
+pub(crate) async fn fetch_book_snapshot(client: &v_exchanges_adapters::Client, pair: Pair, instrument: Instrument, prec: PrecisionPriceQty) -> Result<BookShape, ExchangeError> {
+	let (endpoint, base_url) = match instrument {
 		Instrument::Spot | Instrument::Margin => ("/api/v3/depth", BinanceHttpUrl::Spot),
 		Instrument::Perp => ("/fapi/v1/depth", BinanceHttpUrl::FuturesUsdM),
 		_ => unimplemented!(),
 	};
 	let params = json!({
-		"symbol": symbol.pair.fmt_binance(),
+		"symbol": pair.fmt_binance(),
 		"limit": 1000_u32,
 	});
 	let options = vec![BinanceOption::HttpUrl(base_url)];

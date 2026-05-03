@@ -1,12 +1,12 @@
 //! Cold Parquet catalog. Filename `{ts_min}_{ts_max}.parquet` is the index — range pruning is
-//! filename-only, no manifest. Per-lane subdirectories.
+//! filename-only, no manifest.
 //!
 //! ```text
-//! {root}/data/snapshots/{exchange}_{pair}/{ts_min}_{ts_max}.parquet
-//! {root}/data/deltas/{exchange}_{pair}/{ts_min}_{ts_max}.parquet
-//! {root}/data/trades/{exchange}_{pair}/{ts_min}_{ts_max}.parquet
-//! {root}/data/closes/{exchange}_{pair}/{ts_min}_{ts_max}.parquet
-//! {root}/data/custom/{type_name}/{ts_min}_{ts_max}.parquet
+//! {root}/data/{exchange}/{symbol}/snapshots/{ts_min}_{ts_max}.parquet
+//! {root}/data/{exchange}/{symbol}/deltas/{ts_min}_{ts_max}.parquet
+//! {root}/data/{exchange}/{symbol}/trades/{ts_min}_{ts_max}.parquet
+//! {root}/data/{exchange}/{symbol}/closes/{ts_min}_{ts_max}.parquet
+//! {root}/data/_custom/{type_name}/{ts_min}_{ts_max}.parquet
 //! ```
 
 use std::{
@@ -21,6 +21,7 @@ use parquet::{
 	file::properties::WriterProperties,
 };
 use thiserror::Error;
+use v_exchanges_methods::{ExchangeName, Symbol};
 
 use crate::schema::UnixNanos;
 
@@ -67,7 +68,10 @@ impl Catalog {
 	}
 
 	pub fn lane_dir(&self, key: &LaneKey) -> PathBuf {
-		self.root.join("data").join(key.lane.dir_name()).join(&key.pair_or_type)
+		match key {
+			LaneKey::Book { lane, exchange, symbol } => self.root.join("data").join(exchange.to_string()).join(symbol.to_string()).join(lane.dir_name()),
+			LaneKey::Custom { type_name } => self.root.join("data").join("_custom").join(type_name),
+		}
 	}
 
 	/// Write a single batch to a new parquet file under `{lane_dir}/{ts_min}_{ts_max}.parquet`.
@@ -90,7 +94,7 @@ impl Catalog {
 
 		let path = dir.join(format!("{ts_min}_{ts_max}.parquet"));
 		let file = fs::File::create(&path)?;
-		let props = WriterProperties::builder().set_compression(key.lane.compression()).build();
+		let props = WriterProperties::builder().set_compression(key.lane().compression()).build();
 		let mut writer = ArrowWriter::try_new(file, batch.schema(), Some(props))?;
 		writer.write(batch)?;
 		writer.close()?;
@@ -153,30 +157,30 @@ pub enum CatalogError {
 	BadFilename(String),
 }
 
-/// Identifies a per-pair lane directory.
+/// Identifies a lane directory.
 ///
-/// For `Custom`, `pair_or_type` is the type-name string the caller chose;
-/// for the four book lanes, it's `{exchange}_{pair}`.
+/// Book lanes are scoped by `(exchange, symbol)` — directory is `data/{exchange}/{symbol}/{lane}/`.
+/// Custom is scoped by `type_name` only — directory is `data/_custom/{type_name}/`.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct LaneKey {
-	pub lane: Lane,
-	/// e.g. `binance_BTC-USDT` for book lanes, or the type name for custom.
-	pub pair_or_type: String,
+pub enum LaneKey {
+	Book { lane: Lane, exchange: ExchangeName, symbol: Symbol },
+	Custom { type_name: String },
 }
 
 impl LaneKey {
-	pub fn book(lane: Lane, exchange: &str, pair: &str) -> Self {
-		debug_assert!(!matches!(lane, Lane::Custom), "Custom lane uses type-name not exchange/pair");
-		Self {
-			lane,
-			pair_or_type: format!("{exchange}_{pair}"),
-		}
+	pub fn book(lane: Lane, exchange: ExchangeName, symbol: Symbol) -> Self {
+		debug_assert!(!matches!(lane, Lane::Custom), "Custom lane uses LaneKey::custom, not book");
+		Self::Book { lane, exchange, symbol }
 	}
 
-	pub fn custom(type_name: &str) -> Self {
-		Self {
-			lane: Lane::Custom,
-			pair_or_type: type_name.to_owned(),
+	pub fn custom(type_name: impl Into<String>) -> Self {
+		Self::Custom { type_name: type_name.into() }
+	}
+
+	pub fn lane(&self) -> Lane {
+		match self {
+			Self::Book { lane, .. } => *lane,
+			Self::Custom { .. } => Lane::Custom,
 		}
 	}
 }
@@ -199,9 +203,14 @@ mod tests {
 
 	use arrow::array::{Int32Array, Int64Array, RecordBatch, UInt8Array, UInt32Array, UInt64Array};
 	use tempfile::tempdir;
+	use v_exchanges_methods::Instrument;
 
 	use super::*;
 	use crate::schema::{FileMetadata, lane_schema, with_metadata};
+
+	fn test_symbol() -> Symbol {
+		Symbol::new("BTC-USDT".try_into().unwrap(), Instrument::Spot)
+	}
 
 	fn meta() -> FileMetadata {
 		FileMetadata {
@@ -235,7 +244,7 @@ mod tests {
 	fn write_list_read_round_trip() {
 		let dir = tempdir().unwrap();
 		let cat = Catalog::new(dir.path());
-		let key = LaneKey::book(Lane::Deltas, "binance", "BTC-USDT");
+		let key = LaneKey::book(Lane::Deltas, ExchangeName::Binance, test_symbol());
 
 		let batch = one_delta_batch();
 		let path = cat.write(&key, &batch, 110, 210).unwrap();
@@ -255,7 +264,7 @@ mod tests {
 	fn refuses_overlapping_write() {
 		let dir = tempdir().unwrap();
 		let cat = Catalog::new(dir.path());
-		let key = LaneKey::book(Lane::Deltas, "binance", "BTC-USDT");
+		let key = LaneKey::book(Lane::Deltas, ExchangeName::Binance, test_symbol());
 		let batch = one_delta_batch();
 		cat.write(&key, &batch, 100, 200).unwrap();
 		let err = cat.write(&key, &batch, 150, 250).unwrap_err();
@@ -266,7 +275,7 @@ mod tests {
 	fn list_range_prunes() {
 		let dir = tempdir().unwrap();
 		let cat = Catalog::new(dir.path());
-		let key = LaneKey::book(Lane::Deltas, "binance", "BTC-USDT");
+		let key = LaneKey::book(Lane::Deltas, ExchangeName::Binance, test_symbol());
 		let batch = one_delta_batch();
 		cat.write(&key, &batch, 100, 200).unwrap();
 		cat.write(&key, &batch, 300, 400).unwrap();

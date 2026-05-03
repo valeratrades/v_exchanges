@@ -342,6 +342,7 @@ fn col_u32_list(b: &RecordBatch, idx: usize) -> Vec<Vec<u32>> {
 #[cfg(test)]
 mod tests {
 	use tempfile::tempdir;
+	use v_exchanges_methods::{ExchangeName, Instrument, Symbol};
 
 	use super::*;
 	use crate::{
@@ -368,7 +369,8 @@ mod tests {
 		let key = if lane == Lane::Custom {
 			LaneKey::custom("test")
 		} else {
-			LaneKey::book(lane, "binance", "BTC-USDT")
+			let symbol = Symbol::new("BTC-USDT".try_into().unwrap(), Instrument::Spot);
+			LaneKey::book(lane, ExchangeName::Binance, symbol)
 		};
 		let mut f = match lane {
 			Lane::Snapshots => Feather::new_snapshots(key, meta(), forever()),

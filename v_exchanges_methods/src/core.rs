@@ -58,8 +58,8 @@ pub trait SubscribeOrder {
 /// invokes `on_snapshot`/`on_delta` synchronously on every event, before returning from `next()`.
 /// Implementations are expected to be cheap; heavy I/O should be batched internally.
 pub trait BookPersistor: Send + Sync {
-	fn on_snapshot(&mut self, symbol: Symbol, shape: &BookShape);
-	fn on_delta(&mut self, symbol: Symbol, shape: &BookShape);
+	fn on_snapshot(&mut self, pair: Pair, shape: &BookShape);
+	fn on_delta(&mut self, pair: Pair, shape: &BookShape);
 	/// Flush any in-memory buffers immediately. Called by callers at shutdown to avoid losing rows.
 	fn flush(&mut self) {}
 }
@@ -314,7 +314,7 @@ pub struct Ticker {
 	pub symbol: Symbol,
 	pub exchange_name: ExchangeName,
 }
-#[derive(Clone, Copy, Debug, Default, serde::Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Serialize, derive_new::new)]
+#[derive(Clone, Copy, Debug, Default, serde::Deserialize, Eq, Hash, PartialEq, serde::Serialize, derive_new::new)]
 pub struct Symbol {
 	pub pair: Pair,
 	pub instrument: Instrument,
