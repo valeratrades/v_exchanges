@@ -66,7 +66,7 @@ struct PairLanes {
 
 impl BookPersistor for CatalogBookPersistor {
 	fn on_snapshot(&mut self, pair: Pair, shape: &BookShape) {
-		let ts = shape.time.as_nanosecond() as i64;
+		let ts = shape.ts_event.as_nanosecond() as i64;
 		let now = self.clock.now_ns();
 		let catalog = &self.catalog;
 		let lanes = self.pairs.get_mut(&pair).unwrap_or_else(|| panic!("pair {pair} not registered with persistor"));
@@ -88,7 +88,7 @@ impl BookPersistor for CatalogBookPersistor {
 	}
 
 	fn on_delta(&mut self, pair: Pair, shape: &BookShape) {
-		let ts = shape.time.as_nanosecond() as i64;
+		let ts = shape.ts_event.as_nanosecond() as i64;
 		let now = self.clock.now_ns();
 		let catalog = &self.catalog;
 		let exchange = &self.exchange;

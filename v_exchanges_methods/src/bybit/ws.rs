@@ -5,6 +5,7 @@ use adapters::{
 	bybit::{BybitOption, BybitWsHandler, BybitWsUrlBase},
 	generics::ws::{WsConnection, WsError},
 };
+use jiff::Timestamp;
 use v_utils::trades::Pair;
 
 use crate::{BookShape, BookUpdate, ExchangeStream, Instrument, PrecisionPriceQty};
@@ -45,8 +46,11 @@ impl ExchangeStream for BookConnection {
 		let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
 
 		let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.parse_price(&p), prec.parse_qty(&q)) };
+		let now = Timestamp::now();
 		let shape = BookShape {
-			time: content_event.time,
+			ts_event: content_event.time,
+			ts_init: now,
+			ts_last: now,
 			prec,
 			bids: parsed.b.into_iter().map(parse_level).collect(),
 			asks: parsed.a.into_iter().map(parse_level).collect(),

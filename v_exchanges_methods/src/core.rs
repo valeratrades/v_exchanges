@@ -8,7 +8,7 @@ use derive_more::{Deref, DerefMut};
 use jiff::Timestamp;
 use secrecy::SecretString;
 use serde_json::json;
-use v_exchanges_core::Price;
+use v_exchanges_core::{Price, Timestamped};
 use v_utils::{
 	prelude::*,
 	trades::{Asset, Kline, Pair, Timeframe, Usd},
@@ -374,10 +374,29 @@ impl PrecisionPriceQty {
 /// Both BTreeMaps are ascending; consumers reverse `bids` for best-bid.
 #[derive(Clone, Debug, Default)]
 pub struct BookShape {
-	pub time: Timestamp,
+	/// Exchange-provided event time.
+	pub ts_event: Timestamp,
+	/// When we first received the data backing this shape.
+	pub ts_init: Timestamp,
+	/// When we last wrote into this shape. Equals `ts_init` for shapes built from a single message.
+	pub ts_last: Timestamp,
 	pub prec: PrecisionPriceQty,
 	pub asks: BTreeMap<i32, u32>,
 	pub bids: BTreeMap<i32, u32>,
+}
+
+impl Timestamped for BookShape {
+	fn ts_event(&self) -> Timestamp {
+		self.ts_event
+	}
+
+	fn ts_init(&self) -> Timestamp {
+		self.ts_init
+	}
+
+	fn ts_last(&self) -> Timestamp {
+		self.ts_last
+	}
 }
 
 /// Distinguishes full snapshots from incremental deltas.
@@ -386,6 +405,28 @@ pub struct BookShape {
 pub enum BookUpdate {
 	Snapshot(BookShape),
 	BatchDelta(BookShape),
+}
+
+impl BookUpdate {
+	pub fn shape(&self) -> &BookShape {
+		match self {
+			Self::Snapshot(s) | Self::BatchDelta(s) => s,
+		}
+	}
+}
+
+impl Timestamped for BookUpdate {
+	fn ts_event(&self) -> Timestamp {
+		self.shape().ts_event
+	}
+
+	fn ts_init(&self) -> Timestamp {
+		self.shape().ts_init
+	}
+
+	fn ts_last(&self) -> Timestamp {
+		self.shape().ts_last
+	}
 }
 
 /// Batched trade stream event. All trades share `prec`.

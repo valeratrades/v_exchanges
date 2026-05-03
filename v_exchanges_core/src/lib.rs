@@ -1,4 +1,23 @@
 #![feature(default_field_values)]
+use jiff::Timestamp;
+
+/// Three timestamps describing a piece of data's lifecycle.
+///
+/// - `ts_event`: when the exchange says the event happened.
+/// - `ts_init`: when we first received the data (reception time of the very first
+///   contributing message for batched/merged containers).
+/// - `ts_last`: when we last wrote into the container (reception time of the very
+///   last contributing message; equals `ts_init` for trivial single-event containers).
+///
+/// All three are required: they are semantically distinct, and a default that
+/// silently substituted one for another would mask real bugs (network latency,
+/// missed batch-merge bookkeeping).
+pub trait Timestamped {
+	fn ts_event(&self) -> Timestamp;
+	fn ts_init(&self) -> Timestamp;
+	fn ts_last(&self) -> Timestamp;
+}
+
 /// Fixed-point quantity. Non-negative. raw = value × 10^precision
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, derive_new::new)]
 pub struct Qty {

@@ -10,6 +10,7 @@ repository = "https://github.com/valeratrades/v_exchanges"
 [dependencies]
 ahash = { workspace = true, features = ["serde"] }
 derive-new.workspace = true
+jiff.workspace = true
 
 [lints]
 workspace = true

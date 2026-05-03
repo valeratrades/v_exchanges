@@ -265,10 +265,11 @@ impl ExchangeStream for BookConnection {
 			Branch::Delta(r) => {
 				let content_event = r?;
 				let parsed: DepthEvent = serde_json::from_value(content_event.data.clone()).expect("Exchange responded with invalid depth event");
-				let time = parsed
+				let ts_event = parsed
 					.transaction_time
 					.map(|ts| Timestamp::from_millisecond(ts).expect("Exchange responded with invalid timestamp"))
 					.unwrap_or(content_event.time);
+				let now = Timestamp::now();
 
 				// topic: "btcusdt@depth@100ms" → take before first '@' → uppercase → pair
 				let pair_str = content_event.topic.split('@').next().expect("Binance depth topic always contains '@'").to_uppercase();
@@ -280,7 +281,9 @@ impl ExchangeStream for BookConnection {
 
 				let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.parse_price(&p), prec.parse_qty(&q)) };
 				let shape = BookShape {
-					time,
+					ts_event,
+					ts_init: now,
+					ts_last: now,
 					prec,
 					bids: parsed.bids.into_iter().map(parse_level).collect(),
 					asks: parsed.asks.into_iter().map(parse_level).collect(),

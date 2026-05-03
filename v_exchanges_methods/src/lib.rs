@@ -7,7 +7,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub extern crate v_exchanges_adapters as adapters;
-pub use v_exchanges_core::{Price, Qty};
+pub use v_exchanges_core::{Price, Qty, Timestamped};
 
 pub mod core;
 // false positive: derive_new generates assignments that rustc thinks are dead, but fields are read by thiserror/Display
@@ -36,7 +36,7 @@ pub mod prelude {
 	pub use crate::mexc::Mexc;
 	#[cfg(feature = "data")]
 	pub use crate::yahoo::*;
-	pub use crate::{Price, Qty, core::*, error::*, orders::*, other_types::*};
+	pub use crate::{Price, Qty, Timestamped, core::*, error::*, orders::*, other_types::*};
 }
 #[cfg(feature = "binance")]
 #[cfg_attr(docsrs, doc(cfg(feature = "binance")))]
