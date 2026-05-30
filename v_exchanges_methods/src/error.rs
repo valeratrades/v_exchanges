@@ -4,8 +4,8 @@ use adapters::generics::{
 	http::{ApiError, AuthError, HandleError, IpError, RequestError},
 	ws::WsError,
 };
+use eyre::Report;
 use v_utils::{
-	prelude::*,
 	trades::{Pair, Timeframe},
 	utils::{Sysexit, SysexitCode},
 };

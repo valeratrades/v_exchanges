@@ -5,16 +5,12 @@ use adapters::{
 	mexc::{MexcHttpUrl, MexcOption},
 };
 use jiff::Timestamp;
-use serde_json::json;
-use v_utils::{
-	prelude::*,
-	trades::{Kline, Ohlc},
-};
 
 use crate::{
 	ExchangeResult, RequestRange, Symbol,
 	core::{ExchangeInfo, Klines, PairInfo},
 	mexc::MexcTimeframe,
+	prelude::*,
 };
 
 pub(super) async fn price(client: &Client, pair: Pair) -> ExchangeResult<f64> {

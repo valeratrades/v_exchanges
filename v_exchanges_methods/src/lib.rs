@@ -14,9 +14,25 @@ pub mod core;
 #[allow(unused_assignments)]
 pub mod error;
 pub mod prelude {
-	pub use std::str::FromStr as _; // it's very annoying to have to manually bring it into the scope every single time. Putting this into preludes of all libraries with any exposed `FromStr` impls at this point.
+	pub use std::{
+		collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+		fmt::Write as _,
+		pin::Pin,
+		str::FromStr as _, // it's very annoying to have to manually bring it into the scope every single time. Putting this into preludes of all libraries with any exposed `FromStr` impls at this point.
+		sync::{Arc, Mutex, RwLock},
+	};
 
 	pub use adapters::generics::RetryConfig;
+	pub use eyre::{OptionExt as _, Report, Result, WrapErr as _, bail, eyre};
+	pub use futures_util::future::join_all;
+	pub use serde::{
+		Deserialize, Serialize, Serializer,
+		de::{DeserializeOwned, Deserializer},
+	};
+	pub use serde_json::{Value, json};
+	pub use thiserror::Error;
+	pub use tracing::{Span, debug, error, field::Empty, info, instrument, trace, warn};
+	pub use v_utils::trades::*;
 
 	#[cfg(feature = "binance")]
 	pub use crate::binance::Binance;

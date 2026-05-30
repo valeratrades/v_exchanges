@@ -9,13 +9,12 @@ use jiff::Timestamp;
 use secrecy::SecretString;
 use serde_json::json;
 use v_exchanges_core::{Price, Timestamped};
-use v_utils::{
-	prelude::*,
-	trades::{Asset, Kline, Pair, Timeframe, Usd},
-	utils::filter_nulls,
-};
+use v_utils::utils::filter_nulls;
 
-use crate::error::{ExchangeError, ExchangeResult, MethodError, OutOfRangeError, RequestRangeError};
+use crate::{
+	error::{ExchangeError, ExchangeResult, MethodError, OutOfRangeError, RequestRangeError},
+	prelude::*,
+};
 
 const MAX_RECV_WINDOW: std::time::Duration = std::time::Duration::from_secs(10 * 60); // 10 minutes
 

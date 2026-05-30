@@ -4,9 +4,8 @@ use adapters::Client;
 //HACK: Methods should be implemented on the central interface struct, following <https://github.com/wisespace-io/binance-rs>.
 use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
-use v_utils::prelude::*;
 
-use crate::ExchangeResult;
+use crate::{ExchangeResult, prelude::*};
 
 pub async fn prices(client: &Client, pairs: Option<Vec<Pair>>) -> ExchangeResult<BTreeMap<Pair, f64>> {
 	let options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)];

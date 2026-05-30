@@ -38,6 +38,7 @@ derive-new.workspace = true
 derive_more.workspace = true
 enum_dispatch.workspace = true
 eyre.workspace = true
+futures-util.workspace = true
 jiff.workspace = true
 miette.workspace = true
 reqwest = { workspace = true, optional = true }
