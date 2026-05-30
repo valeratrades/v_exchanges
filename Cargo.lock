@@ -3870,7 +3870,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges"
-version = "0.18.0"
+version = "0.18.1"
 dependencies = [
  "color-eyre",
  "insta",
@@ -3889,7 +3889,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_adapters"
-version = "0.18.0"
+version = "0.18.1"
 dependencies = [
  "ahash 0.8.12",
  "base64",
@@ -3917,7 +3917,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_api_generics"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "ahash 0.8.12",
  "bytes",
@@ -3946,7 +3946,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_book"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "url",
  "v_exchanges_methods",
@@ -3954,7 +3954,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "ahash 0.8.12",
  "derive-new",
@@ -3963,7 +3963,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_methods"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ahash 0.8.12",
  "arrayvec",
@@ -3996,7 +3996,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_persistence"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ahash 0.8.12",
  "arrow",
