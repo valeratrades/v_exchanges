@@ -54,7 +54,7 @@ async fn test_private_ws(pubkey: String, secret: String) {
 	let max_messages = 5;
 
 	while message_count < max_messages {
-		match ws_connection.next().await {
+		match ws_connection.next_single().await {
 			Ok(event) => {
 				message_count += 1;
 				println!("\n=== Message {} ===", message_count);

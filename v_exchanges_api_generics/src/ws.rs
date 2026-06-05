@@ -141,7 +141,8 @@ impl<H: WsHandler> WsConnection<H> {
 	}
 
 	/// The main interface. All ws operations are hidden, only thing getting through are the content messages or the lack thereof.
-	pub async fn next(&mut self) -> Result<ContentEvent, WsError> {
+	#[deprecated(since = "1.0.0", note = "to be switched to batched version")]
+	pub async fn next_single(&mut self) -> Result<ContentEvent, WsError> {
 		// Cancel-safe backoff: if a previous connection attempt failed, sleep until the backoff
 		// period expires. Stored as an Instant so cancellation (e.g. by tokio::select!) preserves
 		// the target time — next call resumes the remaining wait rather than restarting it.
