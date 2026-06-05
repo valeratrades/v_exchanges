@@ -44,7 +44,6 @@
         github = v_flakes.github {
           inherit pkgs pname rs;
           enable = true;
-          excalidraw."docs/arch.excalidraw".standalone = true;
           lastSupportedVersion = "nightly-2025-10-12";
           jobs = {
             default = true;
@@ -55,7 +54,7 @@
           };
         };
         readme = v_flakes.readme-fw { inherit pkgs pname; defaults = true; lastSupportedVersion = "nightly-1.92"; rootDir = ./.; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; };
-        combined = v_flakes.utils.combine [ rs github readme ];
+        combined = v_flakes.utils.combine { inherit rust; modules = [ rs github readme ]; };
       in
       {
         packages =

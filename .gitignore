@@ -41,6 +41,11 @@ result
 .venv/
 env/
 venv/
+.env.*
+!**/*.env.example
+./*/.env
+./*/.env.*
+
 
 ## VS Code
 .vscode/*
@@ -57,6 +62,7 @@ venv/
 
 ## Web
 **/*.sass-cache/
+./*/node_modules/
 
 ## Other Tools
 .codeviz/
