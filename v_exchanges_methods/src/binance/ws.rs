@@ -44,7 +44,7 @@ impl ExchangeStream for TradesConnection {
 
 	async fn next(&mut self) -> Result<Self::Item, WsError> {
 		loop {
-			let content_event = self.connection.next().await?;
+			let content_event = self.connection.next_single().await?;
 			let (pair_str, timestamp, qty_asset_str, price_str) = match self.instrument {
 				Instrument::Perp => {
 					let parsed = serde_json::from_value::<TradeEventPerp>(content_event.data.clone()).expect("Exchange responded with invalid trade event");
@@ -251,7 +251,7 @@ impl ExchangeStream for BookConnection {
 			tokio::select! {
 				biased;
 				r = pending => Branch::Snapshot(r),
-				r = connection.next() => Branch::Delta(r),
+				r = connection.next_single() => Branch::Delta(r),
 			}
 		};
 

@@ -50,6 +50,9 @@ v_utils.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
+# `net` (TcpListener) for the hermetic in-process WS server in `ws.rs` tests; not enabled in the
+# wasm-safe workspace `tokio` feature set, so opted in only for tests here.
+tokio = { workspace = true, features = ["net", "macros", "rt-multi-thread", "time", "io-util"] }
 
 [lints]
 workspace = true

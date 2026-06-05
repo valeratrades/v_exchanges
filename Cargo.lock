@@ -4017,7 +4017,7 @@ dependencies = [
 
 [[package]]
 name = "v_utils"
-version = "2.15.47"
+version = "2.15.48"
 dependencies = [
  "ahash 0.8.12",
  "bon",
@@ -4050,7 +4050,7 @@ dependencies = [
 
 [[package]]
 name = "v_utils_macros"
-version = "2.11.48"
+version = "2.11.49"
 dependencies = [
  "eyre",
  "heck",

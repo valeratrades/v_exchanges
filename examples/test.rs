@@ -31,7 +31,7 @@ async fn run() {
 		.unwrap();
 
 	loop {
-		let v = ws_connection.next().await.unwrap();
+		let v = ws_connection.next_single().await.unwrap();
 		println!("{v:#?}");
 	}
 }

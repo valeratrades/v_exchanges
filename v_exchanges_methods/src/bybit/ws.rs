@@ -42,7 +42,7 @@ impl ExchangeStream for BookConnection {
 	type Item = BookUpdate;
 
 	async fn next(&mut self) -> Result<Self::Item, WsError> {
-		let content_event = self.connection.next().await?;
+		let content_event = self.connection.next_single().await?;
 		let parsed: BybitBookData = serde_json::from_value(content_event.data.clone()).expect("Exchange responded with invalid book event");
 
 		// topic: "orderbook.1000.BTCUSDT" → last '.'-segment → "BTCUSDT"
