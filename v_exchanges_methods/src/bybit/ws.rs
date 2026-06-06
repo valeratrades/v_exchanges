@@ -41,41 +41,45 @@ impl BookConnection {
 impl ExchangeStream for BookConnection {
 	type Item = BookUpdate;
 
-	async fn next(&mut self) -> Result<Self::Item, WsError> {
-		let content_event = self.connection.next_single().await?;
-		let parsed: BybitBookData = serde_json::from_value(content_event.data.clone()).expect("Exchange responded with invalid book event");
+	async fn next(&mut self) -> Result<Vec<Self::Item>, WsError> {
+		let batch = self.connection.next().await?;
+		let mut out = Vec::with_capacity(batch.len());
+		for content_event in batch {
+			let parsed: BybitBookData = serde_json::from_value(content_event.data.clone()).expect("Exchange responded with invalid book event");
 
-		// topic: "orderbook.1000.BTCUSDT" → last '.'-segment → "BTCUSDT"
-		let pair_str = content_event.topic.rsplit('.').next().expect("Bybit orderbook topic always contains '.'");
-		let pair: Pair = pair_str
-			.try_into()
-			.unwrap_or_else(|_| panic!("failed to parse pair from orderbook topic: {}", content_event.topic));
-		let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
+			// topic: "orderbook.1000.BTCUSDT" → last '.'-segment → "BTCUSDT"
+			let pair_str = content_event.topic.rsplit('.').next().expect("Bybit orderbook topic always contains '.'");
+			let pair: Pair = pair_str
+				.try_into()
+				.unwrap_or_else(|_| panic!("failed to parse pair from orderbook topic: {}", content_event.topic));
+			let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
 
-		let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.parse_price(&p), prec.parse_qty(&q)) };
-		let now = Timestamp::now();
-		let is_snapshot = match content_event.event_type.as_str() {
-			"snapshot" => true,
-			"delta" => false,
-			other => panic!("Bybit sent unexpected book event type: {other}"),
-		};
-		let seq = BybitSeq { u: parsed.u, is_snapshot };
-		if let Some(prev) = self.last_seq.get(&pair)
-			&& seq.has_gap_from_prev(prev)
-		{
-			tracing::warn!(pair = %pair, prev_u = prev.u, next_u = seq.u, "Bybit orderbook gap detected on delta chain");
+			let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.parse_price(&p), prec.parse_qty(&q)) };
+			let now = Timestamp::now();
+			let is_snapshot = match content_event.event_type.as_str() {
+				"snapshot" => true,
+				"delta" => false,
+				other => panic!("Bybit sent unexpected book event type: {other}"),
+			};
+			let seq = BybitSeq { u: parsed.u, is_snapshot };
+			if let Some(prev) = self.last_seq.get(&pair)
+				&& seq.has_gap_from_prev(prev)
+			{
+				tracing::warn!(pair = %pair, prev_u = prev.u, next_u = seq.u, "Bybit orderbook gap detected on delta chain");
+			}
+			self.last_seq.insert(pair, seq);
+
+			let shape = BookShape {
+				ts_event: content_event.time,
+				ts_init: now,
+				ts_last: now,
+				prec,
+				bids: parsed.b.into_iter().map(parse_level).collect(),
+				asks: parsed.a.into_iter().map(parse_level).collect(),
+			};
+			out.push(if is_snapshot { BookUpdate::Snapshot(shape) } else { BookUpdate::BatchDelta(shape) });
 		}
-		self.last_seq.insert(pair, seq);
-
-		let shape = BookShape {
-			ts_event: content_event.time,
-			ts_init: now,
-			ts_last: now,
-			prec,
-			bids: parsed.b.into_iter().map(parse_level).collect(),
-			asks: parsed.a.into_iter().map(parse_level).collect(),
-		};
-		if is_snapshot { Ok(BookUpdate::Snapshot(shape)) } else { Ok(BookUpdate::BatchDelta(shape)) }
+		Ok(out)
 	}
 }
 

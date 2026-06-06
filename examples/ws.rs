@@ -17,8 +17,10 @@ async fn main() {
 
 async fn across_an_await_point(mut binance: Binance, pairs: Vec<Pair>, instrument: Instrument) {
 	let mut trades_connection = binance.ws_trades(&pairs, instrument).await.unwrap();
-	while let Ok(trade_event) = trades_connection.next().await {
-		dbg!(&trade_event);
+	while let Ok(batch) = trades_connection.next().await {
+		for trade_event in batch {
+			dbg!(&trade_event);
+		}
 	}
 	unreachable!();
 }

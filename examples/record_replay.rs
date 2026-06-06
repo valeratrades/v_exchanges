@@ -43,10 +43,12 @@ async fn main() {
 		tokio::select! {
 			biased;
 			_ = tokio::time::sleep_until(deadline) => break,
-			res = conn.next() => match res.expect("ws stream errored") {
-				BookUpdate::Snapshot(_) => snapshots += 1,
-				BookUpdate::BatchDelta(_) => deltas += 1,
-			}
+			res = conn.next() => { for update in res.expect("ws stream errored") {
+				match update {
+					BookUpdate::Snapshot(_) => snapshots += 1,
+					BookUpdate::BatchDelta(_) => deltas += 1,
+				}
+			} }
 		}
 	}
 	let end_ns = jiff::Timestamp::now().as_nanosecond() as i64;

@@ -54,31 +54,35 @@ async fn test_private_ws(pubkey: String, secret: String) {
 	let max_messages = 5;
 
 	while message_count < max_messages {
-		match ws_connection.next_single().await {
-			Ok(event) => {
-				message_count += 1;
-				println!("\n=== Message {} ===", message_count);
-				println!("Topic: {}", event.topic);
-				println!("Event Type: {}", event.event_type);
-				println!("Timestamp: {}", event.time);
-				println!("Data: {}", serde_json::to_string_pretty(&event.data).unwrap());
+		match ws_connection.next().await {
+			Ok(batch) =>
+				for event in batch {
+					message_count += 1;
+					println!("\n=== Message {} ===", message_count);
+					println!("Topic: {}", event.topic);
+					println!("Event Type: {}", event.event_type);
+					println!("Timestamp: {}", event.time);
+					println!("Data: {}", serde_json::to_string_pretty(&event.data).unwrap());
 
-				// Try to parse the balance data
-				if event.topic == "wallet" {
-					if let Some(coins) = event.data.get("coin").and_then(|c: &serde_json::Value| c.as_array()) {
-						println!("\nParsed Balance Information:");
-						for coin in coins {
-							if let (Some(coin_name), Some(wallet_balance), Some(usd_value)) = (
-								coin.get("coin").and_then(|c: &serde_json::Value| c.as_str()),
-								coin.get("walletBalance").and_then(|b: &serde_json::Value| b.as_str()),
-								coin.get("usdValue").and_then(|u: &serde_json::Value| u.as_str()),
-							) {
-								println!("  {} - Balance: {} (USD: {})", coin_name, wallet_balance, usd_value);
+					// Try to parse the balance data
+					if event.topic == "wallet" {
+						if let Some(coins) = event.data.get("coin").and_then(|c: &serde_json::Value| c.as_array()) {
+							println!("\nParsed Balance Information:");
+							for coin in coins {
+								if let (Some(coin_name), Some(wallet_balance), Some(usd_value)) = (
+									coin.get("coin").and_then(|c: &serde_json::Value| c.as_str()),
+									coin.get("walletBalance").and_then(|b: &serde_json::Value| b.as_str()),
+									coin.get("usdValue").and_then(|u: &serde_json::Value| u.as_str()),
+								) {
+									println!("  {} - Balance: {} (USD: {})", coin_name, wallet_balance, usd_value);
+								}
 							}
 						}
 					}
-				}
-			}
+					if message_count >= max_messages {
+						break;
+					}
+				},
 			Err(e) => {
 				eprintln!("Error receiving message: {:?}", e);
 				break;
