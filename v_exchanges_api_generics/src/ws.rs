@@ -1,12 +1,12 @@
 use std::{
+	future::Future,
+	pin::Pin,
 	time::{Duration, SystemTime},
 	vec,
 };
 
 use ahash::AHashSet;
 use eyre::{Result, bail};
-use std::{future::Future, pin::Pin};
-
 use futures_util::{
 	FutureExt as _, SinkExt as _, StreamExt as _,
 	stream::{FuturesUnordered, SplitSink, SplitStream},
@@ -190,7 +190,7 @@ pub struct WsConnection<H: WsHandler> {
 	///
 	/// Note we do NOT queue Pongs here: tungstenite auto-answers inbound Pings with a Pong carrying
 	/// the exact payload (`tungstenite::protocol::WebSocket`, flushed on the next read/write), which
-	/// already satisfies Binance's exact-echo requirement. Manually ponging would duplicate it.
+	/// already satisfies eg Binance's exact-echo requirement. Manually ponging would duplicate it.
 	outbox: Vec<Message>,
 	/// `None` == disconnected (replaces the old `stream.is_none()` check). `Some` holds the instant
 	/// the live connection started, for `refresh_after`.
@@ -264,13 +264,13 @@ impl<H: WsHandler> WsConnection<H> {
 		}
 	}
 
-	/// The main interface. All connection upkeep (ping/pong, JRPC control replies, reconnect, refresh)
-	/// is hidden; a call blocks until the socket buffer has something, then drains **all** immediately-
-	/// available frames and returns every content event from them in one batch.
-	///
-	/// Cancel-safe: any path with non-empty collected content returns *before* the next `.await`, so a
-	/// cancellation can only land on `self.fu.next().await` — where the half-read reader future still
-	/// lives on `self.fu`, losing nothing. Deferred reconnect/upkeep is picked up on the next call.
+	/**
+	The main interface.
+	All connection upkeep (ping/pong, JRPC control replies, reconnect, refresh) is hidden; a call blocks until the socket buffer has something, then drains **all** immediately-available frames and returns every content event from them in one batch.
+
+	cancel-safe: any path with non-empty collected content returns *before* the next `.await`, so a cancellation can only land on `self.fu.next().await` — where the half-read reader future still lives on `self.fu`, losing nothing.
+	Deferred reconnect/upkeep is picked up on the next call.
+	**/
 	pub async fn next(&mut self) -> Result<Vec<ContentEvent>, WsError> {
 		// Cancel-safe backoff: a previous failed attempt parked a target Instant; resume the wait.
 		if let Some(until) = self.reconnect_after.take() {
@@ -364,8 +364,8 @@ impl<H: WsHandler> WsConnection<H> {
 								}
 							}
 							// tungstenite already queued a Pong with this exact payload (auto-answered on read,
-							// flushed on the next read/write) — satisfying Binance's exact-echo rule. We must
-							// NOT pong ourselves or the server receives two Pongs per Ping.
+							// flushed on the next read/write), — (satisfying even Binance's exact-echo rule). No need
+							// to pong ourselves or the server receives two Pongs per Ping.
 							Ok(Message::Ping(_)) => tracing::trace!("Received ping (tungstenite auto-pongs)"),
 							Ok(Message::Pong(_)) => tracing::trace!("Received pong"),
 							Ok(Message::Close(maybe_reason)) => {
@@ -500,6 +500,311 @@ impl<H: WsHandler> WsConnection<H> {
 		self.connect().await
 	}
 }
+
+// legacy WsConnection {{{1
+/// Verbatim snapshot of the pre-batch `WsConnection`, kept side-by-side purely so the original
+/// single-frame `next_single` (and its `send`/`connect`/`reconnect` plumbing over a whole
+/// [WsStream], without the split sink/reader + [FuturesUnordered](futures_util::stream::FuturesUnordered))
+/// can be compared against the new batched design. Not wired into any adapter; delete the whole
+/// module once the batched path is fully trusted.
+#[deprecated(since = "1.0.0", note = "here for ref. Remove when certain that the new batched design is solid.")]
+mod legacy {
+	use super::*;
+
+	/// See the [module docs](self).
+	#[derive(Debug)]
+	pub struct WsConnectionLegacy<H: WsHandler> {
+		url: Url,
+		config: WsConfig,
+		handler: H,
+		stream: Option<WsConnectionStream>,
+		backoff: ExponentialBackoff,
+		/// When set, `next()` will sleep until this instant before attempting to connect.
+		/// Only set on actual connection failure (not on cancellation), making `next()` cancel-safe.
+		reconnect_after: Option<tokio::time::Instant>,
+	}
+	impl<H: WsHandler> WsConnectionLegacy<H> {
+		#[allow(missing_docs)]
+		pub fn try_new(url_suffix: &str, handler: H) -> Result<Self, WsError> {
+			let config = handler.config()?;
+			let url = match &config.base_url {
+				Some(base_url) => base_url.join(url_suffix).map_err(UrlError::Parse)?,
+				None => Url::parse(url_suffix).map_err(UrlError::Parse)?,
+			};
+			let backoff = ExponentialBackoff::try_from(&config.reconnect).map_err(|e| WsError::Other(eyre::eyre!("Invalid reconnect backoff configuration: {e}")))?;
+
+			Ok(Self {
+				url,
+				config,
+				handler,
+				stream: None,
+				backoff,
+				reconnect_after: None,
+			})
+		}
+
+		/// The main interface. All ws operations are hidden, only thing getting through are the content messages or the lack thereof.
+		pub async fn next_single(&mut self) -> Result<ContentEvent, WsError> {
+			// Cancel-safe backoff: if a previous connection attempt failed, sleep until the backoff
+			// period expires. Stored as an Instant so cancellation (e.g. by tokio::select!) preserves
+			// the target time — next call resumes the remaining wait rather than restarting it.
+			if let Some(until) = self.reconnect_after {
+				tokio::time::sleep_until(until).await;
+				self.reconnect_after = None;
+			}
+
+			if let Some(inner) = &self.stream
+				&& inner.connected_since + self.config.refresh_after < SystemTime::now()
+			{
+				tracing::info!("Refreshing connection, as `refresh_after` specified in WsConfig has elapsed ({:?})", self.config.refresh_after);
+				self.reconnect().await?;
+			}
+			if self.stream.is_none() {
+				self.connect().await?;
+			}
+			//- at this point self.inner is Some
+
+			// loop until we get actual content
+			let json_rpc_value = loop {
+				// force a response out of the server.
+				let resp = {
+					let timeout = match self.stream.as_ref() {
+						Some(stream) => match stream.last_unanswered_communication {
+							Some(last_unanswered) => {
+								let now = SystemTime::now();
+								match last_unanswered + self.config.response_timeout > now {
+									true => self.config.response_timeout,
+									false => {
+										tracing::error!(
+											"Timeout for last unanswered communication ended before `.next()` was called. This likely indicates an implementation error on the clientside."
+										);
+										self.reconnect().await?;
+										continue;
+									}
+								}
+							}
+							None => self.config.message_timeout,
+						},
+						None => {
+							tracing::error!(
+								"UNEXPECTED: Stream is None at ws.rs:172 despite guard at line 163. \
+							Possible causes: (1) system hibernation/sleep caused stale state, \
+							(2) memory corruption, (3) logic bug in reconnection flow, \
+							(4) async cancellation. \
+							Backoff current delay: {:?}. Attempting to reconnect...",
+								self.backoff.current_delay()
+							);
+							self.connect().await?;
+							continue;
+						}
+					};
+
+					let timeout_handle = tokio::time::timeout(timeout, {
+						let stream = self.stream.as_mut().unwrap();
+						stream.next()
+					});
+					match timeout_handle.await {
+						Ok(Some(resp)) => {
+							self.stream.as_mut().unwrap().last_unanswered_communication = None;
+							resp
+						}
+						Ok(None) => {
+							tracing::warn!("tungstenite couldn't read from the stream. Restarting.");
+							self.reconnect().await?;
+							continue;
+						}
+						Err(timeout_error) => {
+							tracing::warn!("Message reception timed out after {timeout:?} seconds. // {timeout_error}");
+							{
+								let stream = self.stream.as_mut().unwrap();
+								match stream.last_unanswered_communication.is_some() {
+									true => self.reconnect().await?,
+									false => {
+										// Reached standard message_timeout (one for messages sent when we're not forcing communication). So let's force it.
+										self.send(tungstenite::Message::Ping(Bytes::default())).await?;
+										continue;
+									}
+								}
+							}
+							continue;
+						}
+					}
+				};
+
+				// some response received, handle it
+				match resp {
+					Ok(succ_resp) => match succ_resp {
+						tungstenite::Message::Text(text) => {
+							let value: serde_json::Value =
+								serde_json::from_str(&text).expect("API sent invalid JSON, which is completely unexpected. Disappointment is immeasurable and the day is ruined.");
+							tracing::trace!("{value:#?}"); // only log it after the `handle_message` has ran, as we're assuming that if it takes any actions, it will handle logging itself. (and that will likely be at a different level of important too)
+							break match { self.handler.handle_jrpc(value)? } {
+								ResponseOrContent::Response(messages) => {
+									self.send_all(messages).await?;
+									continue; // only need to send responses when it's not yet the desired content.
+								}
+								ResponseOrContent::Content(content) => content,
+							};
+						}
+						tungstenite::Message::Binary(_) => {
+							panic!("Received binary. But exchanges are not smart enough to send this, what is happening");
+						}
+						tungstenite::Message::Ping(bytes) => {
+							self.send(tungstenite::Message::Pong(bytes)).await?; // Binance specifically requires the exact ping's payload to be returned here: https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams
+							tracing::debug!("ponged");
+							continue;
+						}
+						// in most cases these are not seen, as it's sufficient to just answer to their [pings](tungstenite::Message::Ping). Our own pings are sent only when we haven't heard from the exchange for a while, in which case it's likely that it will not [pong](tungstenite::Message::Pong) back either.
+						tungstenite::Message::Pong(_) => {
+							tracing::info!("Received pong");
+							continue;
+						}
+						tungstenite::Message::Close(maybe_reason) => {
+							match maybe_reason {
+								Some(close_frame) => {
+									//Q: maybe need to expose def of this for ind exchanges (so we can interpret the codes)
+									tracing::info!("Server closed connection; reason: {close_frame:?}");
+								}
+								None => {
+									tracing::info!("Server closed connection; no reason specified.");
+								}
+							}
+							self.stream = None;
+							self.reconnect().await?;
+							continue;
+						}
+						tungstenite::Message::Frame(_) => {
+							unreachable!("Can't get from reading");
+						}
+					},
+					Err(err) => match err {
+						tungstenite::Error::ConnectionClosed => {
+							tracing::error!("received `tungstenite::Error::ConnectionClosed` on polling. Will reconnect");
+							self.stream = None;
+							continue;
+						}
+						tungstenite::Error::AlreadyClosed => {
+							tracing::error!("received `tungstenite::Error::AlreadyClosed` from polling. Will reconnect");
+							self.stream = None;
+							continue;
+						}
+						tungstenite::Error::Io(e) => {
+							tracing::error!("received `tungstenite::Error::Io` from polling: {e:?}. Atm don't know valid cases of this happening given intact application state...");
+							self.stream = None;
+							continue;
+						}
+						tungstenite::Error::Tls(_tls_error) => todo!(),
+						tungstenite::Error::Capacity(capacity_error) => {
+							tracing::warn!("received `tungstenite::Error::Capacity` from polling: {capacity_error:?}. Skipping.");
+							continue;
+						}
+						tungstenite::Error::Protocol(protocol_error) => {
+							tracing::warn!("received `tungstenite::Error::Protocol` from polling: {protocol_error:?}. Will reconnect");
+							self.stream = None;
+							continue;
+						}
+						tungstenite::Error::WriteBufferFull(_) => unreachable!("can only get from writing"),
+						tungstenite::Error::Utf8(e) => panic!("received `tungstenite::Error::Utf8` from polling: {e:?}. Exchange is going crazy, aborting"),
+						tungstenite::Error::AttackAttempt => {
+							tracing::warn!("received `tungstenite::Error::AttackAttempt` from polling. Don't have a reason to trust detection 100%, so just reconnecting.");
+							self.stream = None;
+							continue;
+						}
+						tungstenite::Error::Url(_url_error) => todo!(),
+						tungstenite::Error::Http(_response) => todo!(),
+						tungstenite::Error::HttpFormat(_error) => todo!(),
+					},
+				}
+			};
+			Ok(json_rpc_value)
+		}
+
+		#[tracing::instrument(skip_all)]
+		async fn send_all(&mut self, messages: Vec<tungstenite::Message>) -> Result<(), tungstenite::Error> {
+			if let Some(inner) = &mut self.stream {
+				match messages.len() {
+					0 => return Ok(()),
+					1 => {
+						tracing::debug!("sending to server: {:#?}", &messages[0]);
+						inner.send(messages.into_iter().next().unwrap()).await?;
+						inner.last_unanswered_communication = Some(SystemTime::now());
+					}
+					_ => {
+						tracing::debug!("sending to server: {messages:#?}");
+						let mut message_stream = futures_util::stream::iter(messages).map(Ok);
+						inner.send_all(&mut message_stream).await?;
+						inner.last_unanswered_communication = Some(SystemTime::now());
+					}
+				};
+				Ok(())
+			} else {
+				Err(tungstenite::Error::ConnectionClosed)
+			}
+		}
+
+		async fn send(&mut self, message: tungstenite::Message) -> Result<(), tungstenite::Error> {
+			self.send_all(vec![message]).await // Vec cost is negligible
+		}
+
+		async fn connect(&mut self) -> Result<(), WsError> {
+			tracing::info!("Connecting to {}...", self.url);
+
+			let (stream, http_resp) = match tokio_tungstenite::connect_async(self.url.as_str()).await {
+				Ok(result) => result,
+				Err(e) => {
+					let delay = self.backoff.next_duration();
+					if !delay.is_zero() {
+						tracing::warn!(delay_ms = delay.as_millis(), "Connection failed, backing off before retry.");
+						self.reconnect_after = Some(tokio::time::Instant::now() + delay);
+					}
+					return Err(e.into());
+				}
+			};
+			tracing::debug!("Ws handshake with server: {http_resp:#?}");
+
+			let now = SystemTime::now();
+			self.stream = Some(WsConnectionStream::new(stream, now));
+
+			let auth_messages = self.handler.handle_auth()?;
+			self.send_all(auth_messages).await?;
+			self.reconnect_after = None;
+			self.backoff.reset();
+			Ok(())
+		}
+
+		/// Sends the existing connection (if any) a `Close` message, and then simply drops it, opening a new one.
+		///
+		/// `pub` for testing only, does not {have to || is expected to} be exposed in any wrappers.
+		pub async fn reconnect(&mut self) -> Result<(), WsError> {
+			// Clear any pending backoff — a server-initiated reconnect should be attempted immediately.
+			// If the new connection fails, `connect()` will set a fresh backoff.
+			self.reconnect_after = None;
+			if let Some(stream) = self.stream.as_mut() {
+				tracing::info!("Dropping old connection before reconnecting...");
+				// Best-effort close - ignore errors since the connection may already be broken
+				if let Err(e) = stream.send(tungstenite::Message::Close(None)).await {
+					tracing::debug!("Failed to send Close frame (connection likely already dead): {e}");
+				}
+				self.stream = None;
+			}
+			self.connect().await
+		}
+	}
+
+	/// State for the legacy [WsConnectionLegacy] only: the whole [WsStream] behind a `Deref`, plus the
+	/// connection-age / unanswered-communication bookkeeping the batched path now keeps inline on the
+	/// connection itself.
+	#[derive(Debug, derive_more::Deref, derive_more::DerefMut, derive_new::new)]
+	struct WsConnectionStream {
+		#[deref_mut]
+		#[deref]
+		stream: WsStream,
+		connected_since: SystemTime,
+		#[new(default)]
+		last_unanswered_communication: Option<SystemTime>,
+	}
+}
+//,}}}1
 
 /// Configuration for [WsHandler].
 ///
@@ -642,9 +947,11 @@ mod tests {
 			c.set_response_timout(Duration::from_millis(200)).expect("non-zero literal");
 			Ok(c)
 		}
+
 		fn handle_subscribe(&mut self, _topics: AHashSet<Topic>) -> Result<Vec<Message>, WsError> {
 			Ok(vec![])
 		}
+
 		fn handle_jrpc(&mut self, jrpc: serde_json::Value) -> Result<ResponseOrContent, WsError> {
 			Ok(ResponseOrContent::Content(ContentEvent {
 				data: jrpc.clone(),
