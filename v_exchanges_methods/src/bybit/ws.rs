@@ -44,8 +44,11 @@ impl ExchangeStream for BookConnection {
 	async fn next(&mut self) -> Result<Vec<Self::Item>, WsError> {
 		let batch = self.connection.next().await?;
 		let mut out = Vec::with_capacity(batch.len());
+		// One `now` for the whole batch: every event here was drained from the same socket read, so
+		// they share a receive time. Per-event `Timestamp::now()` would only add scheduling noise.
+		let now = Timestamp::now();
 		for content_event in batch {
-			let parsed: BybitBookData = serde_json::from_value(content_event.data.clone()).expect("Exchange responded with invalid book event");
+			let parsed: BybitBookData = serde_json::from_value(content_event.data).expect("Exchange responded with invalid book event");
 
 			// topic: "orderbook.1000.BTCUSDT" → last '.'-segment → "BTCUSDT"
 			let pair_str = content_event.topic.rsplit('.').next().expect("Bybit orderbook topic always contains '.'");
@@ -55,7 +58,6 @@ impl ExchangeStream for BookConnection {
 			let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
 
 			let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.parse_price(&p), prec.parse_qty(&q)) };
-			let now = Timestamp::now();
 			let is_snapshot = match content_event.event_type.as_str() {
 				"snapshot" => true,
 				"delta" => false,

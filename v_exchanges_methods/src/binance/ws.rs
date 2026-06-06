@@ -46,16 +46,23 @@ impl ExchangeStream for TradesConnection {
 		let batch = self.connection.next().await?;
 		// One `@trade` connection subscribes many pairs, so a drained batch can carry trades for
 		// multiple pairs. `BatchTrades` shares one `prec`, so we group per pair — one `BatchTrades`
-		// each. `BTreeMap` insertion preserves arrival order within a pair (`ts_event` stays latest).
+		// each. The per-pair `BTreeMap` groups by `Pair` key (not arrival order), but trades within a
+		// pair stay in arrival order, so `ts_event` stays latest.
 		let mut by_pair: BTreeMap<Pair, (PrecisionPriceQty, Vec<InnerTrade>)> = BTreeMap::new();
 		for content_event in batch {
+			// Read `data` for the zero-skip diagnostic up front so the typed parse below can *move* it
+			// (no clone). The `X` field only exists on the perp payload; spot has no `X` (its "NA"
+			// branch never fires) so a missing `X` reads as the benign "NA" default. Cheap `get` — the
+			// full `raw_json` render stays inside the rare warn branch, off the hot path.
+			let is_na_artifact = content_event.data.get("X").and_then(|x| x.as_str()).unwrap_or("NA") == "NA";
+
 			let (pair_str, timestamp, qty_asset_str, price_str) = match self.instrument {
 				Instrument::Perp => {
-					let parsed = serde_json::from_value::<TradeEventPerp>(content_event.data.clone()).expect("Exchange responded with invalid trade event");
+					let parsed = serde_json::from_value::<TradeEventPerp>(content_event.data).expect("Exchange responded with invalid trade event");
 					(parsed.pair, parsed.timestamp, parsed.qty_asset, parsed.price)
 				}
 				Instrument::Spot | Instrument::Margin => {
-					let parsed = serde_json::from_value::<TradeEventSpot>(content_event.data.clone()).expect("Exchange responded with invalid trade event");
+					let parsed = serde_json::from_value::<TradeEventSpot>(content_event.data).expect("Exchange responded with invalid trade event");
 					(parsed.pair, parsed.timestamp, parsed.qty_asset, parsed.price)
 				}
 				_ => unimplemented!(),
@@ -66,9 +73,11 @@ impl ExchangeStream for TradesConnection {
 			let price_raw = prec.parse_price(&price_str);
 			let qty_raw = prec.parse_qty(&qty_asset_str);
 			if price_raw == 0 || qty_raw == 0 {
-				if content_event.data.get("X").unwrap().as_str().unwrap() != "NA" {
+				if !is_na_artifact {
 					tracing::warn!(
-						raw_json = %content_event.data,
+						pair = %pair_str,
+						price = %price_str,
+						qty = %qty_asset_str,
 						topic = %content_event.topic,
 						event_type = %content_event.event_type,
 						event_time = %content_event.time,
@@ -277,13 +286,15 @@ impl ExchangeStream for BookConnection {
 			Branch::Delta(r) => {
 				let batch = r?;
 				let mut out = Vec::with_capacity(batch.len());
+				// One `now` for the whole batch: every event here was drained from the same socket read,
+				// so they share a receive time. Per-event `now()` would only add scheduling noise.
+				let now = Timestamp::now();
 				for content_event in batch {
-					let parsed: DepthEvent = serde_json::from_value(content_event.data.clone()).expect("Exchange responded with invalid depth event");
+					let parsed: DepthEvent = serde_json::from_value(content_event.data).expect("Exchange responded with invalid depth event");
 					let ts_event = parsed
 						.transaction_time
 						.map(|ts| Timestamp::from_millisecond(ts).expect("Exchange responded with invalid timestamp"))
 						.unwrap_or(content_event.time);
-					let now = Timestamp::now();
 
 					// topic: "btcusdt@depth@100ms" → take before first '@' → uppercase → pair
 					let pair_str = content_event.topic.split('@').next().expect("Binance depth topic always contains '@'").to_uppercase();
