@@ -1,7 +1,7 @@
 //! A module for communicating with the [Bybit API](https://bybit-exchange.github.io/docs/spot/v3/#t-introduction).
 //! For example usages, see files in the examples/ directory.
 
-use std::{borrow::Cow, marker::PhantomData, time::SystemTime, vec};
+use std::{borrow::Cow, marker::PhantomData, time::Duration, time::SystemTime, vec};
 
 use ahash::AHashSet;
 use eyre::{WrapErr as _, eyre};
@@ -535,6 +535,9 @@ impl WsHandler for BybitWsHandler {
 			}
 		}
 		config.topics = config.topics.union(&self.options.ws_topics).cloned().collect();
+		// Bybit drops a connection that doesn't receive a client `{"op":"ping"}` within 20s, regardless
+		// of inbound traffic. Fire well inside that window. `.expect`: literal is non-zero.
+		config.set_active_ping_freq(Duration::from_secs(18)).expect("non-zero literal");
 		Ok(config)
 	}
 
@@ -564,6 +567,11 @@ impl WsHandler for BybitWsHandler {
 			}
 			false => self.handle_subscribe(self.options.ws_topics.iter().cloned().map(Topic::String).collect()),
 		}
+	}
+
+	fn active_ping(&self) -> Vec<tungstenite::Message> {
+		// Bybit's app-level heartbeat. Docs: https://bybit-exchange.github.io/docs/v5/ws/connect#how-to-send-the-heartbeat-packet
+		vec![tungstenite::Message::Text(json!({ "op": "ping" }).to_string().into())]
 	}
 
 	fn handle_subscribe(&mut self, topics: AHashSet<Topic>) -> Result<Vec<tungstenite::Message>, WsError> {
