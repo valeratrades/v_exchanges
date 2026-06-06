@@ -45,7 +45,7 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 pub trait ExchangeStream: std::fmt::Debug + Send + Sync {
 	type Item;
 
-	async fn next(&mut self) -> eyre::Result<Self::Item, WsError>;
+	async fn next(&mut self) -> eyre::Result<Vec<Self::Item>, WsError>;
 }
 #[async_trait::async_trait]
 pub trait SubscribeOrder {

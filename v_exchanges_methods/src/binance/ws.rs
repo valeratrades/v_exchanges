@@ -42,9 +42,13 @@ impl TradesConnection {
 impl ExchangeStream for TradesConnection {
 	type Item = BatchTrades;
 
-	async fn next(&mut self) -> Result<Self::Item, WsError> {
-		loop {
-			let content_event = self.connection.next_single().await?;
+	async fn next(&mut self) -> Result<Vec<Self::Item>, WsError> {
+		let batch = self.connection.next().await?;
+		// One `@trade` connection subscribes many pairs, so a drained batch can carry trades for
+		// multiple pairs. `BatchTrades` shares one `prec`, so we group per pair — one `BatchTrades`
+		// each. `BTreeMap` insertion preserves arrival order within a pair (`ts_event` stays latest).
+		let mut by_pair: BTreeMap<Pair, (PrecisionPriceQty, Vec<InnerTrade>)> = BTreeMap::new();
+		for content_event in batch {
 			let (pair_str, timestamp, qty_asset_str, price_str) = match self.instrument {
 				Instrument::Perp => {
 					let parsed = serde_json::from_value::<TradeEventPerp>(content_event.data.clone()).expect("Exchange responded with invalid trade event");
@@ -79,9 +83,12 @@ impl ExchangeStream for TradesConnection {
 				price: price_raw,
 				qty: qty_raw,
 			};
-			let now = Timestamp::now();
-			return Ok(BatchTrades::new(prec, vec![trade], now, now));
+			by_pair.entry(pair).or_insert((prec, Vec::new())).1.push(trade);
 		}
+		// Only non-empty groups are emitted, so `BatchTrades::new`'s non-empty assert holds. An
+		// all-zero-skip batch yields `Ok(vec![])` — a no-op `for` for consumers.
+		let now = Timestamp::now();
+		Ok(by_pair.into_iter().map(|(_, (prec, trades))| BatchTrades::new(prec, trades, now, now)).collect())
 	}
 }
 
@@ -237,10 +244,10 @@ impl std::fmt::Debug for BookConnection {
 impl ExchangeStream for BookConnection {
 	type Item = BookUpdate;
 
-	async fn next(&mut self) -> Result<Self::Item, WsError> {
+	async fn next(&mut self) -> Result<Vec<Self::Item>, WsError> {
 		enum Branch {
 			Snapshot(Result<BookShape, ExchangeError>),
-			Delta(Result<adapters::generics::ws::ContentEvent, WsError>),
+			Delta(Result<Vec<adapters::generics::ws::ContentEvent>, WsError>),
 		}
 
 		let branch = {
@@ -251,7 +258,7 @@ impl ExchangeStream for BookConnection {
 			tokio::select! {
 				biased;
 				r = pending => Branch::Snapshot(r),
-				r = connection.next_single() => Branch::Delta(r),
+				r = connection.next() => Branch::Delta(r),
 			}
 		};
 
@@ -265,57 +272,61 @@ impl ExchangeStream for BookConnection {
 				if let (Some(p), Some(persistor)) = (snapshot_pair, self.persistor.as_deref_mut()) {
 					persistor.on_snapshot(p, &shape);
 				}
-				Ok(BookUpdate::Snapshot(shape))
+				Ok(vec![BookUpdate::Snapshot(shape)])
 			}
 			Branch::Delta(r) => {
-				let content_event = r?;
-				let parsed: DepthEvent = serde_json::from_value(content_event.data.clone()).expect("Exchange responded with invalid depth event");
-				let ts_event = parsed
-					.transaction_time
-					.map(|ts| Timestamp::from_millisecond(ts).expect("Exchange responded with invalid timestamp"))
-					.unwrap_or(content_event.time);
-				let now = Timestamp::now();
+				let batch = r?;
+				let mut out = Vec::with_capacity(batch.len());
+				for content_event in batch {
+					let parsed: DepthEvent = serde_json::from_value(content_event.data.clone()).expect("Exchange responded with invalid depth event");
+					let ts_event = parsed
+						.transaction_time
+						.map(|ts| Timestamp::from_millisecond(ts).expect("Exchange responded with invalid timestamp"))
+						.unwrap_or(content_event.time);
+					let now = Timestamp::now();
 
-				// topic: "btcusdt@depth@100ms" → take before first '@' → uppercase → pair
-				let pair_str = content_event.topic.split('@').next().expect("Binance depth topic always contains '@'").to_uppercase();
-				let pair: Pair = pair_str
-					.as_str()
-					.try_into()
-					.unwrap_or_else(|_| panic!("failed to parse pair from depth topic: {}", content_event.topic));
-				let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
+					// topic: "btcusdt@depth@100ms" → take before first '@' → uppercase → pair
+					let pair_str = content_event.topic.split('@').next().expect("Binance depth topic always contains '@'").to_uppercase();
+					let pair: Pair = pair_str
+						.as_str()
+						.try_into()
+						.unwrap_or_else(|_| panic!("failed to parse pair from depth topic: {}", content_event.topic));
+					let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
 
-				let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.parse_price(&p), prec.parse_qty(&q)) };
-				let shape = BookShape {
-					ts_event,
-					ts_init: now,
-					ts_last: now,
-					prec,
-					bids: parsed.bids.into_iter().map(parse_level).collect(),
-					asks: parsed.asks.into_iter().map(parse_level).collect(),
-				};
-				match content_event.event_type.as_str() {
-					"depthUpdate" => {
-						let seq = match self.instrument {
-							Instrument::Perp => BinanceDepthSeq::Perp(BinancePerpSeq {
-								u_first: parsed.first_update_id,
-								u_final: parsed.final_update_id,
-								pu: parsed.previous_final_update_id.expect("Binance perp depth event missing `pu`"),
-							}),
-							Instrument::Spot | Instrument::Margin => BinanceDepthSeq::Spot(BinanceSpotSeq {
-								u_first: parsed.first_update_id,
-								u_final: parsed.final_update_id,
-							}),
-							_ => unimplemented!(),
-						};
-						let gapped = self.last_seq.get(&pair).map(|prev| seq.has_gap_from_prev(prev)).unwrap_or(false);
-						self.last_seq.insert(pair, seq);
-						if let Some(persistor) = self.persistor.as_deref_mut() {
-							persistor.on_delta(pair, &shape, gapped);
+					let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.parse_price(&p), prec.parse_qty(&q)) };
+					let shape = BookShape {
+						ts_event,
+						ts_init: now,
+						ts_last: now,
+						prec,
+						bids: parsed.bids.into_iter().map(parse_level).collect(),
+						asks: parsed.asks.into_iter().map(parse_level).collect(),
+					};
+					match content_event.event_type.as_str() {
+						"depthUpdate" => {
+							let seq = match self.instrument {
+								Instrument::Perp => BinanceDepthSeq::Perp(BinancePerpSeq {
+									u_first: parsed.first_update_id,
+									u_final: parsed.final_update_id,
+									pu: parsed.previous_final_update_id.expect("Binance perp depth event missing `pu`"),
+								}),
+								Instrument::Spot | Instrument::Margin => BinanceDepthSeq::Spot(BinanceSpotSeq {
+									u_first: parsed.first_update_id,
+									u_final: parsed.final_update_id,
+								}),
+								_ => unimplemented!(),
+							};
+							let gapped = self.last_seq.get(&pair).map(|prev| seq.has_gap_from_prev(prev)).unwrap_or(false);
+							self.last_seq.insert(pair, seq);
+							if let Some(persistor) = self.persistor.as_deref_mut() {
+								persistor.on_delta(pair, &shape, gapped);
+							}
+							out.push(BookUpdate::BatchDelta(shape));
 						}
-						Ok(BookUpdate::BatchDelta(shape))
+						other => panic!("Binance sent unexpected book event type: {other}"),
 					}
-					other => panic!("Binance sent unexpected book event type: {other}"),
 				}
+				Ok(out)
 			}
 		}
 	}
