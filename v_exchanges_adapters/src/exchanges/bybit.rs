@@ -1,7 +1,12 @@
 //! A module for communicating with the [Bybit API](https://bybit-exchange.github.io/docs/spot/v3/#t-introduction).
 //! For example usages, see files in the examples/ directory.
 
-use std::{borrow::Cow, marker::PhantomData, time::Duration, time::SystemTime, vec};
+use std::{
+	borrow::Cow,
+	marker::PhantomData,
+	time::{Duration, SystemTime},
+	vec,
+};
 
 use ahash::AHashSet;
 use eyre::{WrapErr as _, eyre};
@@ -52,7 +57,7 @@ pub enum BybitOption {
 }
 
 /// A `struct` that represents a set of [BybitOption] s.
-#[derive(Clone, derive_more::Debug, Default)]
+#[derive(Clone, derive_more::Debug, smart_default::SmartDefault)]
 pub struct BybitOptions {
 	/// see [BybitOption::Key]
 	pub pubkey: Option<String>,
@@ -72,11 +77,13 @@ pub struct BybitOptions {
 	/// see [BybitOption::WsAuth]
 	pub ws_auth: bool,
 	/// see [BybitOption::WsConfig]
+	// Bybit recommends a client `{"op":"ping"}` every 20s to keep the connection alive (the real
+	// server cut-off is larger, but 20s is the documented heartbeat interval).
+	#[default(bybit_ws_config())]
 	pub ws_config: WsConfig,
 	/// see [BybitOption::WsTopics]
 	pub ws_topics: AHashSet<String>,
 }
-
 /// A `enum` that represents the base url of the Bybit REST API.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum BybitHttpUrl {
@@ -88,24 +95,6 @@ pub enum BybitHttpUrl {
 	/// The url will not be modified by [BybitRequestHandler]
 	None,
 }
-impl EndpointUrl for BybitHttpUrl {
-	fn url_mainnet(&self) -> Url {
-		match self {
-			Self::Bybit => Url::parse("https://api.bybit.com").unwrap(),
-			Self::Bytick => Url::parse("https://api.bytick.com").unwrap(),
-			Self::None => Url::parse("").unwrap(),
-		}
-	}
-
-	fn url_testnet(&self) -> Option<Url> {
-		match self {
-			Self::Bybit => Some(Url::parse("https://api-testnet.bybit.com").unwrap()),
-			Self::Bytick => None, //HACK: maybe it has it, idk, needs checking
-			Self::None => Some(Url::parse("").unwrap()),
-		}
-	}
-}
-
 /// Represents the auth type.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum BybitHttpAuth {
@@ -124,7 +113,6 @@ pub enum BybitHttpAuth {
 	#[default]
 	None,
 }
-
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum BybitHandlerError {
@@ -132,7 +120,6 @@ pub enum BybitHandlerError {
 	IpBan(serde_json::Value),
 	ParseError,
 }
-
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(from = "i32", into = "i32")]
@@ -373,6 +360,31 @@ pub enum BybitWsUrlBase {
 	/// The url will not be modified by [BybitWsHandler]
 	None,
 }
+/// [WsConfig::default] with Bybit's 20s active-ping interval seeded in.
+fn bybit_ws_config() -> WsConfig {
+	let mut config = WsConfig::default();
+	config.set_active_ping_freq(Duration::from_secs(20)).expect("non-zero literal");
+	config
+}
+
+impl EndpointUrl for BybitHttpUrl {
+	fn url_mainnet(&self) -> Url {
+		match self {
+			Self::Bybit => Url::parse("https://api.bybit.com").unwrap(),
+			Self::Bytick => Url::parse("https://api.bytick.com").unwrap(),
+			Self::None => Url::parse("").unwrap(),
+		}
+	}
+
+	fn url_testnet(&self) -> Option<Url> {
+		match self {
+			Self::Bybit => Some(Url::parse("https://api-testnet.bybit.com").unwrap()),
+			Self::Bytick => None, //HACK: maybe it has it, idk, needs checking
+			Self::None => Some(Url::parse("").unwrap()),
+		}
+	}
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 struct BybitError {
 	code: BybitErrorCode,
@@ -535,9 +547,6 @@ impl WsHandler for BybitWsHandler {
 			}
 		}
 		config.topics = config.topics.union(&self.options.ws_topics).cloned().collect();
-		// Bybit drops a connection that doesn't receive a client `{"op":"ping"}` within 20s, regardless
-		// of inbound traffic. Fire well inside that window. `.expect`: literal is non-zero.
-		config.set_active_ping_freq(Duration::from_secs(18)).expect("non-zero literal");
 		Ok(config)
 	}
 

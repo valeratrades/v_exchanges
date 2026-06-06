@@ -292,6 +292,7 @@ impl<H: WsHandler> WsConnection<H> {
 
 					let mut terminal = false; // saw Close / a reconnecting error
 					for frame in batch {
+						let __pong_ack = || tracing::trace!("Received app-level pong (active-ping ack)");
 						match frame {
 							Ok(Message::Text(text)) => {
 								let value: serde_json::Value =
@@ -299,7 +300,7 @@ impl<H: WsHandler> WsConnection<H> {
 								// App-level heartbeat ack to our active-ping (Bybit et al. answer `{"op":"ping"}` with a text-frame `{"op":"pong"}` / `{"ret_msg":"pong"}`, NOT a protocol Pong).
 								// It carries no content and needs no reply — drop it before it reaches the handler, whose strict response parse doesn't model a pong.
 								if value["op"] == "pong" || value["ret_msg"] == "pong" {
-									tracing::trace!("Received app-level pong (active-ping ack)");
+									__pong_ack();
 									continue;
 								}
 								tracing::trace!("{value:#?}");
@@ -311,7 +312,7 @@ impl<H: WsHandler> WsConnection<H> {
 							// tungstenite already queued a Pong with this exact payload (auto-answered on read, flushed on the next read/write), — (satisfying even Binance's exact-echo rule).
 							// No need to pong ourselves or the server receives two Pongs per Ping.
 							Ok(Message::Ping(_)) => tracing::trace!("Received ping (tungstenite auto-pongs)"),
-							Ok(Message::Pong(_)) => tracing::trace!("Received pong"),
+							Ok(Message::Pong(_)) => __pong_ack(),
 							Ok(Message::Close(maybe_reason)) => {
 								match maybe_reason {
 									Some(close_frame) => tracing::info!("Server closed connection; reason: {close_frame:?}"),
@@ -1019,6 +1020,40 @@ mod tests {
 		}
 	}
 
+	/// Like [EchoHandler] but with a fast active-ping configured, emitting Bybit-style `{"op":"ping"}`.
+	/// Used to exercise the standing `PingDue` timer and the upstream pong-ack drop.
+	#[derive(Debug)]
+	struct PingHandler;
+	impl WsHandler for PingHandler {
+		fn config(&self) -> Result<WsConfig, UrlError> {
+			let mut c = WsConfig::default();
+			// Fire the active-ping fast; keep read timeouts long so the test ends by our own logic, not a
+			// message_timeout. `.expect`: literals are non-zero.
+			c.set_active_ping_freq(Duration::from_millis(80)).expect("non-zero literal");
+			c.set_message_timeout(Duration::from_secs(5)).expect("non-zero literal");
+			c.set_response_timout(Duration::from_secs(5)).expect("non-zero literal");
+			Ok(c)
+		}
+
+		fn active_ping(&self) -> Vec<Message> {
+			vec![Message::Text("{\"op\":\"ping\"}".into())]
+		}
+
+		// Would wrongly surface ANY text as content — so a pong-ack reaching here fails the drop test.
+		fn handle_subscribe(&mut self, _topics: AHashSet<Topic>) -> Result<Vec<Message>, WsError> {
+			Ok(vec![])
+		}
+
+		fn handle_jrpc(&mut self, jrpc: serde_json::Value) -> Result<ResponseOrContent, WsError> {
+			Ok(ResponseOrContent::Content(ContentEvent {
+				data: jrpc,
+				topic: "test".to_owned(),
+				time: Timestamp::UNIX_EPOCH,
+				event_type: "test".to_owned(),
+			}))
+		}
+	}
+
 	/// Bind an ephemeral loopback port, returning `(listener, "ws://127.0.0.1:<port>")`.
 	async fn bind() -> (TcpListener, String) {
 		let listener = TcpListener::bind("127.0.0.1:0").await.expect("loopback bind");
@@ -1130,6 +1165,59 @@ mod tests {
 		// Next call reconnects (pending_reconnect was set) and yields the second connection's frame.
 		let second = conn.next().await.expect("next 2 after reconnect");
 		assert_eq!(second.len(), 1, "after reconnect we receive the new connection's frame");
+		handle.abort();
+	}
+
+	/// Active-ping: with `active_ping_freq` set, the client must proactively send the handler's
+	/// `{"op":"ping"}` payload on a quiet connection (no inbound traffic), within the configured window.
+	#[tokio::test]
+	async fn sends_active_ping_on_quiet_connection() {
+		let (listener, url) = bind().await;
+
+		let server = async move {
+			let (tcp, _) = listener.accept().await.expect("accept");
+			let mut ws = accept_async(tcp).await.expect("handshake");
+			// Stay silent; just wait for the client's first app-level ping text frame.
+			loop {
+				match ws.next().await {
+					Some(Ok(Message::Text(t))) if t.contains("\"op\":\"ping\"") => return true,
+					Some(Ok(_)) => continue, // ignore protocol pings/pongs etc.
+					_ => return false,       // closed/errored before any app ping
+				}
+			}
+		};
+		let handle = tokio::spawn(server);
+
+		let mut conn = WsConnection::try_new(&url, PingHandler).expect("try_new");
+		// Drive `next()` long enough for the 80ms ping timer to fire and flush; it returns no content
+		// (only the ping flies), so the timeout-elapsed result is expected and discarded.
+		let _drove_ping = tokio::time::timeout(Duration::from_millis(400), conn.next()).await;
+		let saw_ping = tokio::time::timeout(Duration::from_secs(1), handle).await.expect("server join timeout").expect("server task");
+		assert!(saw_ping, "client must send an app-level `{{\"op\":\"ping\"}}` on a quiet connection");
+	}
+
+	/// Pong-ack drop: a text-frame `{"op":"pong"}` (the heartbeat reply some exchanges send instead of a
+	/// protocol Pong) must be swallowed upstream — never surfaced as content, even though `PingHandler`
+	/// would wrongly turn any text into content if it ever reached `handle_jrpc`.
+	#[tokio::test]
+	async fn drops_app_level_pong_ack() {
+		let (listener, url) = bind().await;
+
+		let server = async move {
+			let (tcp, _) = listener.accept().await.expect("accept");
+			let mut ws = accept_async(tcp).await.expect("handshake");
+			// A pong-ack, then a real content frame. Only the latter may surface to the caller.
+			ws.feed(Message::Text("{\"op\":\"pong\"}".into())).await.expect("feed pong");
+			ws.feed(Message::Text("{\"n\":1}".into())).await.expect("feed content");
+			ws.flush().await.expect("flush");
+			tokio::time::sleep(Duration::from_secs(2)).await;
+		};
+		let handle = tokio::spawn(server);
+
+		let mut conn = WsConnection::try_new(&url, PingHandler).expect("try_new");
+		let batch = conn.next().await.expect("next");
+		assert_eq!(batch.len(), 1, "pong-ack dropped upstream; only the real content frame surfaces");
+		assert_eq!(batch[0].data["n"], 1, "the surviving event is the content frame, not the pong");
 		handle.abort();
 	}
 }

@@ -3906,6 +3906,7 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "sha2",
+ "smart-default",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
