@@ -1,4 +1,5 @@
 use std::{
+	collections::VecDeque,
 	future::Future,
 	pin::Pin,
 	time::{Duration, SystemTime},
@@ -27,60 +28,6 @@ type WsRead = SplitStream<WsStream>;
 /// `Send + Sync` boxed FU member. `Sync` (vs the stock `BoxFuture`, which is `Send`-only) is required
 /// because [WsConnection] is exposed through `ExchangeStream: Sync` downstream.
 type BoxedFu = Pin<Box<dyn Future<Output = FuEvent> + Send + Sync>>;
-
-/// Homogeneous [FuturesUnordered] members for [WsConnection]; both own their resources, so each
-/// future is `'static` and holds no `&self` borrow — letting it live on the struct across `next()`
-/// calls (which is what makes the draining `next()` cancel-safe).
-enum FuEvent {
-	/// The permanent standing reader: blocks for the first frame, then drains all immediately-
-	/// available ones. `batch` empty == EOF sentinel.
-	Read { reader: WsRead, batch: Vec<Result<Message, tungstenite::Error>> },
-	/// A transient writer (0..=1 in flight): owned the sink + queued messages, sent them, hands the
-	/// sink back via this event.
-	Write { sink: WsSink, result: Result<(), tungstenite::Error> },
-}
-
-/// Block for the first frame, then drain everything already buffered without blocking.
-///
-/// `now_or_never` polls the RAW reader once with a no-op waker: `Some(frame)` -> keep & continue,
-/// `None` -> nothing immediately ready -> stop. Safe because a raw `reader.next()` is cancel-safe at
-/// the frame boundary (a `Pending` poll consumes no frame, loses nothing). This is NOT a kernel
-/// "read all" call (tungstenite / `futures::Stream` expose no such API and one can't exist cleanly);
-/// it drains what's cheaply available — tungstenite's parsed `in_buffer` plus whatever one chunk-read
-/// pulled (~1 syscall for many frames). Any straggler still in the kernel simply becomes the first
-/// frame of the next `next()` call, which is what we want (don't block to chase stragglers).
-async fn read_future(mut reader: WsRead) -> FuEvent {
-	let mut batch = Vec::new();
-	if let Some(first) = reader.next().await {
-		batch.push(first);
-		while let Some(Some(m)) = reader.next().now_or_never() {
-			batch.push(m);
-		}
-	} // else: empty batch == EOF sentinel
-	FuEvent::Read { reader, batch }
-}
-
-/// Send every queued message, then hand the sink back via the returned event.
-async fn write_future(mut sink: WsSink, msgs: Vec<Message>) -> FuEvent {
-	let mut s = futures_util::stream::iter(msgs).map(Ok);
-	let result = sink.send_all(&mut s).await;
-	FuEvent::Write { sink, result }
-}
-
-/// Whether a polling error from tungstenite warrants tearing down & reconnecting.
-///
-/// Folds the per-variant arms of the old single-frame `next()` match: the connection-fatal classes
-/// reconnect; `Capacity` is skippable (false); `Utf8` panics at the call site; the TLS/URL/HTTP
-/// classes are still `todo!()` as before; the write-only variants are unreachable on a read.
-fn is_reconnecting(err: &tungstenite::Error) -> bool {
-	match err {
-		tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed | tungstenite::Error::Io(_) | tungstenite::Error::Protocol(_) | tungstenite::Error::AttackAttempt => true,
-		tungstenite::Error::Capacity(_) => false,
-		tungstenite::Error::Utf8(e) => panic!("received `tungstenite::Error::Utf8` from polling: {e:?}. Exchange is going crazy, aborting"),
-		tungstenite::Error::WriteBufferFull(_) => unreachable!("can only get from writing"),
-		tungstenite::Error::Tls(_) | tungstenite::Error::Url(_) | tungstenite::Error::Http(_) | tungstenite::Error::HttpFormat(_) => todo!(),
-	}
-}
 
 /// handle exchange-level events on the [WsConnection].
 pub trait WsHandler: std::fmt::Debug {
@@ -122,6 +69,14 @@ pub trait WsHandler: std::fmt::Debug {
 	#[allow(unused_variables)]
 	fn handle_subscribe(&mut self, topics: AHashSet<Topic>) -> Result<Vec<tungstenite::Message>, WsError>;
 
+	/// Active-heartbeat payload, sent every [WsConfig::active_ping_freq] when that is `Some`. Some
+	/// exchanges (eg Bybit) require the *client* to proactively keep the connection alive with an
+	/// app-level message (`{"op":"ping"}`) rather than relying on the WebSocket protocol's ping/pong
+	/// — for those, return that message here and set `active_ping_freq`. Default: no active ping.
+	fn active_ping(&self) -> Vec<tungstenite::Message> {
+		vec![]
+	}
+
 	/// Called when the [WsConnection] received a JSON-RPC value, returns messages to be sent to the server or the content with parsed event name. If not the desired content and no respose is to be sent (like after a confirmation for a subscription), return a Response with an empty Vec.
 	#[allow(unused_variables)]
 	fn handle_jrpc(&mut self, jrpc: serde_json::Value) -> Result<ResponseOrContent, WsError>;
@@ -137,7 +92,6 @@ pub trait WsHandler: std::fmt::Debug {
 	//	Ok(None)
 	//}
 }
-
 #[derive(Clone, Debug)]
 pub enum ResponseOrContent {
 	/// Response to a message sent to the server.
@@ -152,7 +106,6 @@ pub struct ContentEvent {
 	pub time: Timestamp,
 	pub event_type: String,
 }
-
 #[derive(Clone, Debug, Eq)]
 pub struct TopicInterpreter<T> {
 	/// Only one interpreter for this name is allowed to exist // enforced through `Hash` impl defined over `event_name` only
@@ -160,17 +113,6 @@ pub struct TopicInterpreter<T> {
 	/// When name matches, interpretation should succeed.
 	pub interpret: fn(&serde_json::Value) -> Result<T, WsError>,
 }
-impl<T> std::hash::Hash for TopicInterpreter<T> {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		self.event_name.hash(state);
-	}
-}
-impl<T> PartialEq for TopicInterpreter<T> {
-	fn eq(&self, other: &Self) -> bool {
-		self.event_name == other.event_name
-	}
-}
-
 /// Main way to interact with the WebSocket APIs.
 //REVIEW: manual `Debug` (was derived) — the `fu`/`sink` I/O futures aren't `Debug`; we skip them.
 pub struct WsConnection<H: WsHandler> {
@@ -204,22 +146,11 @@ pub struct WsConnection<H: WsHandler> {
 	/// Surplus events from a drained batch, held so the deprecated [next_single](Self::next_single)
 	/// bridge can yield one-at-a-time over the batched `next()` without dropping frames. Removed in
 	/// phase 2 together with `next_single`.
-	single_buffer: std::collections::VecDeque<ContentEvent>,
-}
-impl<H: WsHandler> std::fmt::Debug for WsConnection<H> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("WsConnection")
-			.field("url", &self.url)
-			.field("config", &self.config)
-			.field("handler", &self.handler)
-			.field("backoff", &self.backoff)
-			.field("reconnect_after", &self.reconnect_after)
-			.field("connected_since", &self.connected_since)
-			.field("last_unanswered_communication", &self.last_unanswered_communication)
-			.field("pending_reconnect", &self.pending_reconnect)
-			.field("outbox_len", &self.outbox.len())
-			.finish_non_exhaustive()
-	}
+	single_buffer: VecDeque<ContentEvent>,
+	/// How often to fire the standing active-ping timer (`PingDue`), enqueueing the handler's
+	/// [active_ping](WsHandler::active_ping) payload. `None` == no active ping (rely on inbound traffic
+	/// + protocol pong, as Binance does). Copied from [WsConfig::active_ping_freq] at construction.
+	active_ping_freq: Option<Duration>,
 }
 impl<H: WsHandler> WsConnection<H> {
 	#[allow(missing_docs)]
@@ -230,6 +161,7 @@ impl<H: WsHandler> WsConnection<H> {
 			None => Url::parse(url_suffix).map_err(UrlError::Parse)?,
 		};
 		let backoff = ExponentialBackoff::try_from(&config.reconnect).map_err(|e| WsError::Other(eyre::eyre!("Invalid reconnect backoff configuration: {e}")))?;
+		let active_ping_freq = config.active_ping_freq;
 
 		Ok(Self {
 			url,
@@ -243,7 +175,8 @@ impl<H: WsHandler> WsConnection<H> {
 			connected_since: None,
 			last_unanswered_communication: None,
 			pending_reconnect: false,
-			single_buffer: std::collections::VecDeque::new(),
+			single_buffer: VecDeque::new(),
+			active_ping_freq,
 		})
 	}
 
@@ -314,8 +247,7 @@ impl<H: WsHandler> WsConnection<H> {
 						tracing::warn!("Response to a forced communication timed out after {timeout:?}. Reconnecting.");
 						self.reconnect().await?;
 					} else {
-						// Standard message_timeout elapsed with nothing pending — force life out of the
-						// server with our own Ping (queued; flushed on the next loop's `try_flush_outbox`).
+						// Standard message_timeout elapsed with nothing pending, — force life out of the server with our own Ping (queued; flushed on the next loop's `try_flush_outbox`).
 						self.outbox.push(Message::Ping(Bytes::default()));
 					}
 					continue;
@@ -336,6 +268,13 @@ impl<H: WsHandler> WsConnection<H> {
 					}
 					continue; // a write is never content
 				}
+				Ok(Some(FuEvent::PingDue)) => {
+					// Active heartbeat fell due: queue the handler's ping payload (flushed by the next loop's `try_flush_outbox`) and re-arm the standing timer.
+					// Treated like any other outbound action — it sets `last_unanswered_communication` on flush, so a missed reply trips the response-timeout reconnect just as a self-Ping would.
+					self.outbox.extend(self.handler.active_ping());
+					self.arm_ping();
+					continue; // a ping is never content
+				}
 				Ok(Some(FuEvent::Read { reader, batch })) => {
 					if batch.is_empty() {
 						// EOF.
@@ -353,21 +292,27 @@ impl<H: WsHandler> WsConnection<H> {
 
 					let mut terminal = false; // saw Close / a reconnecting error
 					for frame in batch {
+						let __pong_ack = || tracing::trace!("Received app-level pong (active-ping ack)");
 						match frame {
 							Ok(Message::Text(text)) => {
 								let value: serde_json::Value =
 									serde_json::from_str(&text).expect("API sent invalid JSON, which is completely unexpected. Disappointment is immeasurable and the day is ruined.");
+								// App-level heartbeat ack to our active-ping (Bybit et al. answer `{"op":"ping"}` with a text-frame `{"op":"pong"}` / `{"ret_msg":"pong"}`, NOT a protocol Pong).
+								// It carries no content and needs no reply — drop it before it reaches the handler, whose strict response parse doesn't model a pong.
+								if value["op"] == "pong" || value["ret_msg"] == "pong" {
+									__pong_ack();
+									continue;
+								}
 								tracing::trace!("{value:#?}");
 								match self.handler.handle_jrpc(value)? {
 									ResponseOrContent::Response(messages) => self.outbox.extend(messages),
 									ResponseOrContent::Content(c) => content.push(c),
 								}
 							}
-							// tungstenite already queued a Pong with this exact payload (auto-answered on read,
-							// flushed on the next read/write), — (satisfying even Binance's exact-echo rule). No need
-							// to pong ourselves or the server receives two Pongs per Ping.
+							// tungstenite already queued a Pong with this exact payload (auto-answered on read, flushed on the next read/write), — (satisfying even Binance's exact-echo rule).
+							// No need to pong ourselves or the server receives two Pongs per Ping.
 							Ok(Message::Ping(_)) => tracing::trace!("Received ping (tungstenite auto-pongs)"),
-							Ok(Message::Pong(_)) => tracing::trace!("Received pong"),
+							Ok(Message::Pong(_)) => __pong_ack(),
 							Ok(Message::Close(maybe_reason)) => {
 								match maybe_reason {
 									Some(close_frame) => tracing::info!("Server closed connection; reason: {close_frame:?}"),
@@ -383,8 +328,7 @@ impl<H: WsHandler> WsConnection<H> {
 								terminal = true;
 								break;
 							}
-							// Non-reconnecting class: `is_reconnecting` already panicked on Utf8 / unreachable on
-							// the write-only variant. The remainder (Capacity) is skippable.
+							// Non-reconnecting class: `is_reconnecting` already panicked on Utf8 / unreachable on the write-only variant. The remainder (Capacity) is skippable.
 							Err(e) => {
 								debug_assert!(!is_reconnecting(&e));
 								tracing::warn!("Skipping non-fatal polling error: {e:?}");
@@ -414,6 +358,14 @@ impl<H: WsHandler> WsConnection<H> {
 	/// Push the permanent standing reader future onto the FU.
 	fn arm_reader(&mut self, reader: WsRead) {
 		self.fu.push(Box::pin(read_future(reader)));
+	}
+
+	/// Push the standing active-ping timer onto the FU, IF one is configured. No-op when
+	/// `active_ping_freq` is `None` (no heartbeat needed — the reader stays the only standing member).
+	fn arm_ping(&mut self) {
+		if let Some(freq) = self.active_ping_freq {
+			self.fu.push(Box::pin(ping_future(freq)));
+		}
 	}
 
 	/// Launch a writer-future IF the sink is parked and there's queued work. Does nothing if a writer
@@ -464,12 +416,12 @@ impl<H: WsHandler> WsConnection<H> {
 		self.fu = FuturesUnordered::new();
 		self.sink = Some(sink);
 		self.arm_reader(reader);
+		self.arm_ping(); // standing heartbeat timer (no-op if `active_ping_freq` is None)
 		self.outbox.clear();
 		self.last_unanswered_communication = None;
 		self.connected_since = Some(SystemTime::now());
 
-		// Auth/subscribe messages are *enqueued*, not inline-sent: the flush flies on the FU like any
-		// other write, concurrently with the standing read.
+		// Auth/subscribe messages are *enqueued*, not inline-sent: the flush flies on the FU like any other write, concurrently with the standing read.
 		let auth_messages = self.handler.handle_auth()?;
 		self.outbox.extend(auth_messages);
 		self.try_flush_outbox();
@@ -498,6 +450,196 @@ impl<H: WsHandler> WsConnection<H> {
 		self.fu = FuturesUnordered::new(); // drops the reader/writer futures + the old split halves
 		self.connected_since = None;
 		self.connect().await
+	}
+}
+
+/// Configuration for [WsHandler].
+///
+/// Should be returned by [WsHandler::ws_config()].
+#[derive(Clone, Debug)]
+pub struct WsConfig {
+	/// Whether the connection should be authenticated. Normally implemented through a "listen key"
+	pub auth: bool,
+	/// Prefix which will be used for connections that started using this `WebSocketConfig`.
+	///
+	/// Ex: `"wss://example.com"`
+	pub base_url: Option<Url>,
+	/// Backoff configuration for reconnect attempts.
+	pub reconnect: RetryConfig,
+	/// The [WebSocketConnection] will automatically reconnect when `refresh_after` has elapsed since the last connection started.
+	refresh_after: Duration,
+	/// A reconnection will be triggered if no messages are received within this amount of time.
+	message_timeout: Duration,
+	/// Timeout for the response to a message sent to the server.
+	///
+	/// Difference from the [message_timeout](Self::message_timeout) is that here we directly request communication. Eg: sending a Ping or attempting to auth.
+	response_timeout: Duration,
+	/// The topics that will be subscribed to on creation of the connection. Note that we don't allow for passing anything that changes state here like [Trade](Topic::Trade) payloads, thus submissions are limited to [String]s
+	pub topics: AHashSet<String>,
+	/// How often the [WsConnection] proactively sends the handler's [active_ping](WsHandler::active_ping)
+	/// payload. `None` (default) == no active ping: rely on inbound traffic + protocol pong (Binance).
+	/// `Some(d)` == fire every `d` regardless of inbound traffic — required by exchanges like Bybit that
+	/// drop a connection unless the *client* sends an app-level `{"op":"ping"}` within a fixed window.
+	active_ping_freq: Option<Duration>,
+}
+impl WsConfig {
+	pub fn set_reconnect(&mut self, reconnect: RetryConfig) {
+		self.reconnect = reconnect;
+	}
+
+	pub fn set_refresh_after(&mut self, refresh_after: Duration) -> Result<()> {
+		if refresh_after.is_zero() {
+			bail!("refresh_after must be greater than 0");
+		}
+		self.refresh_after = refresh_after;
+		Ok(())
+	}
+
+	pub fn set_message_timeout(&mut self, message_timeout: Duration) -> Result<()> {
+		if message_timeout.is_zero() {
+			bail!("message_timeout must be greater than 0");
+		}
+		self.message_timeout = message_timeout;
+		Ok(())
+	}
+
+	pub fn set_response_timout(&mut self, response_timeout: Duration) -> Result<()> {
+		if response_timeout.is_zero() {
+			bail!("response_timeout must be greater than 0");
+		}
+		self.response_timeout = response_timeout;
+		Ok(())
+	}
+
+	pub fn set_active_ping_freq(&mut self, active_ping_freq: Duration) -> Result<()> {
+		if active_ping_freq.is_zero() {
+			bail!("active_ping_freq must be greater than 0");
+		}
+		self.active_ping_freq = Some(active_ping_freq);
+		Ok(())
+	}
+}
+
+#[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error, derive_more::From)]
+pub enum WsError {
+	#[diagnostic(transparent)]
+	Definition(WsDefinitionError),
+	#[diagnostic(code(v_exchanges::ws::tungstenite), help("WebSocket protocol error. The connection may need to be reestablished."))]
+	Tungstenite(tungstenite::Error),
+	#[diagnostic(transparent)]
+	Auth(ConstructAuthError),
+	#[diagnostic(code(v_exchanges::ws::parse), help("Failed to parse WebSocket message. Check if the exchange API has changed."))]
+	Parse(serde_json::Error),
+	#[diagnostic(code(v_exchanges::ws::subscription))]
+	Subscription(String),
+	#[diagnostic(code(v_exchanges::ws::network), help("Network connection failed. Check your internet connection."))]
+	NetworkConnection,
+	#[diagnostic(transparent)]
+	Url(UrlError),
+	#[diagnostic(code(v_exchanges::ws::unexpected_event), help("Received an unexpected event from the WebSocket. This may indicate an API change."))]
+	UnexpectedEvent(serde_json::Value),
+	#[error(transparent)]
+	Other(eyre::Report),
+}
+#[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error)]
+pub enum WsDefinitionError {
+	#[diagnostic(code(v_exchanges::ws::definition::missing_url), help("WebSocket base URL must be configured in WsConfig."))]
+	MissingUrl,
+}
+#[derive(Clone, Debug, derive_more::Display, Eq, Hash, PartialEq, serde::Serialize)]
+pub enum Topic {
+	String(String),
+	Order(serde_json::Value),
+}
+/// Homogeneous [FuturesUnordered] members for [WsConnection]; both own their resources, so each
+/// future is `'static` and holds no `&self` borrow — letting it live on the struct across `next()`
+/// calls (which is what makes the draining `next()` cancel-safe).
+enum FuEvent {
+	/// The permanent standing reader: blocks for the first frame, then drains all immediately-
+	/// available ones. `batch` empty == EOF sentinel.
+	Read { reader: WsRead, batch: Vec<Result<Message, tungstenite::Error>> },
+	/// A transient writer (0..=1 in flight): owned the sink + queued messages, sent them, hands the
+	/// sink back via this event.
+	Write { sink: WsSink, result: Result<(), tungstenite::Error> },
+	/// The (optional) standing active-ping timer: sleeps `active_ping_freq`, then fires. Re-armed on
+	/// every fire, so it ticks for the whole connection lifetime. Carries no resources — the handler
+	/// supplies the actual ping payload when it fires.
+	PingDue,
+}
+
+/// Block for the first frame, then drain everything already buffered without blocking.
+///
+/// `now_or_never` polls the RAW reader once with a no-op waker: `Some(frame)` -> keep & continue,
+/// `None` -> nothing immediately ready -> stop. Safe because a raw `reader.next()` is cancel-safe at
+/// the frame boundary (a `Pending` poll consumes no frame, loses nothing). This is NOT a kernel
+/// "read all" call (tungstenite / `futures::Stream` expose no such API and one can't exist cleanly);
+/// it drains what's cheaply available — tungstenite's parsed `in_buffer` plus whatever one chunk-read
+/// pulled (~1 syscall for many frames). Any straggler still in the kernel simply becomes the first
+/// frame of the next `next()` call, which is what we want (don't block to chase stragglers).
+async fn read_future(mut reader: WsRead) -> FuEvent {
+	let mut batch = Vec::new();
+	if let Some(first) = reader.next().await {
+		batch.push(first);
+		while let Some(Some(m)) = reader.next().now_or_never() {
+			batch.push(m);
+		}
+	} // else: empty batch == EOF sentinel
+	FuEvent::Read { reader, batch }
+}
+
+/// Send every queued message, then hand the sink back via the returned event.
+async fn write_future(mut sink: WsSink, msgs: Vec<Message>) -> FuEvent {
+	let mut s = futures_util::stream::iter(msgs).map(Ok);
+	let result = sink.send_all(&mut s).await;
+	FuEvent::Write { sink, result }
+}
+
+/// Sleep one active-ping interval, then fire. Owns no resources — re-armed by the caller on each fire.
+async fn ping_future(freq: Duration) -> FuEvent {
+	tokio::time::sleep(freq).await;
+	FuEvent::PingDue
+}
+
+/// Whether a polling error from tungstenite warrants tearing down & reconnecting.
+///
+/// Folds the per-variant arms of the old single-frame `next()` match: the connection-fatal classes
+/// reconnect; `Capacity` is skippable (false); `Utf8` panics at the call site; the TLS/URL/HTTP
+/// classes are still `todo!()` as before; the write-only variants are unreachable on a read.
+fn is_reconnecting(err: &tungstenite::Error) -> bool {
+	match err {
+		tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed | tungstenite::Error::Io(_) | tungstenite::Error::Protocol(_) | tungstenite::Error::AttackAttempt => true,
+		tungstenite::Error::Capacity(_) => false,
+		tungstenite::Error::Utf8(e) => panic!("received `tungstenite::Error::Utf8` from polling: {e:?}. Exchange is going crazy, aborting"),
+		tungstenite::Error::WriteBufferFull(_) => unreachable!("can only get from writing"),
+		tungstenite::Error::Tls(_) | tungstenite::Error::Url(_) | tungstenite::Error::Http(_) | tungstenite::Error::HttpFormat(_) => todo!(),
+	}
+}
+
+impl<T> std::hash::Hash for TopicInterpreter<T> {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.event_name.hash(state);
+	}
+}
+impl<T> PartialEq for TopicInterpreter<T> {
+	fn eq(&self, other: &Self) -> bool {
+		self.event_name == other.event_name
+	}
+}
+
+impl<H: WsHandler> std::fmt::Debug for WsConnection<H> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("WsConnection")
+			.field("url", &self.url)
+			.field("config", &self.config)
+			.field("handler", &self.handler)
+			.field("backoff", &self.backoff)
+			.field("reconnect_after", &self.reconnect_after)
+			.field("connected_since", &self.connected_since)
+			.field("last_unanswered_communication", &self.last_unanswered_communication)
+			.field("pending_reconnect", &self.pending_reconnect)
+			.field("outbox_len", &self.outbox.len())
+			.field("active_ping_freq", &self.active_ping_freq)
+			.finish_non_exhaustive()
 	}
 }
 
@@ -806,91 +948,6 @@ mod legacy {
 }
 //,}}}1
 
-/// Configuration for [WsHandler].
-///
-/// Should be returned by [WsHandler::ws_config()].
-#[derive(Clone, Debug)]
-pub struct WsConfig {
-	/// Whether the connection should be authenticated. Normally implemented through a "listen key"
-	pub auth: bool,
-	/// Prefix which will be used for connections that started using this `WebSocketConfig`.
-	///
-	/// Ex: `"wss://example.com"`
-	pub base_url: Option<Url>,
-	/// Backoff configuration for reconnect attempts.
-	pub reconnect: RetryConfig,
-	/// The [WebSocketConnection] will automatically reconnect when `refresh_after` has elapsed since the last connection started.
-	refresh_after: Duration,
-	/// A reconnection will be triggered if no messages are received within this amount of time.
-	message_timeout: Duration,
-	/// Timeout for the response to a message sent to the server.
-	///
-	/// Difference from the [message_timeout](Self::message_timeout) is that here we directly request communication. Eg: sending a Ping or attempting to auth.
-	response_timeout: Duration,
-	/// The topics that will be subscribed to on creation of the connection. Note that we don't allow for passing anything that changes state here like [Trade](Topic::Trade) payloads, thus submissions are limited to [String]s
-	pub topics: AHashSet<String>,
-}
-impl WsConfig {
-	pub fn set_reconnect(&mut self, reconnect: RetryConfig) {
-		self.reconnect = reconnect;
-	}
-
-	pub fn set_refresh_after(&mut self, refresh_after: Duration) -> Result<()> {
-		if refresh_after.is_zero() {
-			bail!("refresh_after must be greater than 0");
-		}
-		self.refresh_after = refresh_after;
-		Ok(())
-	}
-
-	pub fn set_message_timeout(&mut self, message_timeout: Duration) -> Result<()> {
-		if message_timeout.is_zero() {
-			bail!("message_timeout must be greater than 0");
-		}
-		self.message_timeout = message_timeout;
-		Ok(())
-	}
-
-	pub fn set_response_timout(&mut self, response_timeout: Duration) -> Result<()> {
-		if response_timeout.is_zero() {
-			bail!("response_timeout must be greater than 0");
-		}
-		self.response_timeout = response_timeout;
-		Ok(())
-	}
-}
-
-#[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error, derive_more::From)]
-pub enum WsError {
-	#[diagnostic(transparent)]
-	Definition(WsDefinitionError),
-	#[diagnostic(code(v_exchanges::ws::tungstenite), help("WebSocket protocol error. The connection may need to be reestablished."))]
-	Tungstenite(tungstenite::Error),
-	#[diagnostic(transparent)]
-	Auth(ConstructAuthError),
-	#[diagnostic(code(v_exchanges::ws::parse), help("Failed to parse WebSocket message. Check if the exchange API has changed."))]
-	Parse(serde_json::Error),
-	#[diagnostic(code(v_exchanges::ws::subscription))]
-	Subscription(String),
-	#[diagnostic(code(v_exchanges::ws::network), help("Network connection failed. Check your internet connection."))]
-	NetworkConnection,
-	#[diagnostic(transparent)]
-	Url(UrlError),
-	#[diagnostic(code(v_exchanges::ws::unexpected_event), help("Received an unexpected event from the WebSocket. This may indicate an API change."))]
-	UnexpectedEvent(serde_json::Value),
-	#[error(transparent)]
-	Other(eyre::Report),
-}
-#[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error)]
-pub enum WsDefinitionError {
-	#[diagnostic(code(v_exchanges::ws::definition::missing_url), help("WebSocket base URL must be configured in WsConfig."))]
-	MissingUrl,
-}
-#[derive(Clone, Debug, derive_more::Display, Eq, Hash, PartialEq, serde::Serialize)]
-pub enum Topic {
-	String(String),
-	Order(serde_json::Value),
-}
 impl Default for WsConfig {
 	fn default() -> Self {
 		Self {
@@ -909,6 +966,7 @@ impl Default for WsConfig {
 			message_timeout: Duration::from_mins(16),
 			response_timeout: Duration::from_mins(2),
 			topics: AHashSet::new(),
+			active_ping_freq: None,
 		}
 	}
 }
@@ -955,6 +1013,40 @@ mod tests {
 		fn handle_jrpc(&mut self, jrpc: serde_json::Value) -> Result<ResponseOrContent, WsError> {
 			Ok(ResponseOrContent::Content(ContentEvent {
 				data: jrpc.clone(),
+				topic: "test".to_owned(),
+				time: Timestamp::UNIX_EPOCH,
+				event_type: "test".to_owned(),
+			}))
+		}
+	}
+
+	/// Like [EchoHandler] but with a fast active-ping configured, emitting Bybit-style `{"op":"ping"}`.
+	/// Used to exercise the standing `PingDue` timer and the upstream pong-ack drop.
+	#[derive(Debug)]
+	struct PingHandler;
+	impl WsHandler for PingHandler {
+		fn config(&self) -> Result<WsConfig, UrlError> {
+			let mut c = WsConfig::default();
+			// Fire the active-ping fast; keep read timeouts long so the test ends by our own logic, not a
+			// message_timeout. `.expect`: literals are non-zero.
+			c.set_active_ping_freq(Duration::from_millis(80)).expect("non-zero literal");
+			c.set_message_timeout(Duration::from_secs(5)).expect("non-zero literal");
+			c.set_response_timout(Duration::from_secs(5)).expect("non-zero literal");
+			Ok(c)
+		}
+
+		fn active_ping(&self) -> Vec<Message> {
+			vec![Message::Text("{\"op\":\"ping\"}".into())]
+		}
+
+		// Would wrongly surface ANY text as content — so a pong-ack reaching here fails the drop test.
+		fn handle_subscribe(&mut self, _topics: AHashSet<Topic>) -> Result<Vec<Message>, WsError> {
+			Ok(vec![])
+		}
+
+		fn handle_jrpc(&mut self, jrpc: serde_json::Value) -> Result<ResponseOrContent, WsError> {
+			Ok(ResponseOrContent::Content(ContentEvent {
+				data: jrpc,
 				topic: "test".to_owned(),
 				time: Timestamp::UNIX_EPOCH,
 				event_type: "test".to_owned(),
@@ -1073,6 +1165,59 @@ mod tests {
 		// Next call reconnects (pending_reconnect was set) and yields the second connection's frame.
 		let second = conn.next().await.expect("next 2 after reconnect");
 		assert_eq!(second.len(), 1, "after reconnect we receive the new connection's frame");
+		handle.abort();
+	}
+
+	/// Active-ping: with `active_ping_freq` set, the client must proactively send the handler's
+	/// `{"op":"ping"}` payload on a quiet connection (no inbound traffic), within the configured window.
+	#[tokio::test]
+	async fn sends_active_ping_on_quiet_connection() {
+		let (listener, url) = bind().await;
+
+		let server = async move {
+			let (tcp, _) = listener.accept().await.expect("accept");
+			let mut ws = accept_async(tcp).await.expect("handshake");
+			// Stay silent; just wait for the client's first app-level ping text frame.
+			loop {
+				match ws.next().await {
+					Some(Ok(Message::Text(t))) if t.contains("\"op\":\"ping\"") => return true,
+					Some(Ok(_)) => continue, // ignore protocol pings/pongs etc.
+					_ => return false,       // closed/errored before any app ping
+				}
+			}
+		};
+		let handle = tokio::spawn(server);
+
+		let mut conn = WsConnection::try_new(&url, PingHandler).expect("try_new");
+		// Drive `next()` long enough for the 80ms ping timer to fire and flush; it returns no content
+		// (only the ping flies), so the timeout-elapsed result is expected and discarded.
+		let _drove_ping = tokio::time::timeout(Duration::from_millis(400), conn.next()).await;
+		let saw_ping = tokio::time::timeout(Duration::from_secs(1), handle).await.expect("server join timeout").expect("server task");
+		assert!(saw_ping, "client must send an app-level `{{\"op\":\"ping\"}}` on a quiet connection");
+	}
+
+	/// Pong-ack drop: a text-frame `{"op":"pong"}` (the heartbeat reply some exchanges send instead of a
+	/// protocol Pong) must be swallowed upstream — never surfaced as content, even though `PingHandler`
+	/// would wrongly turn any text into content if it ever reached `handle_jrpc`.
+	#[tokio::test]
+	async fn drops_app_level_pong_ack() {
+		let (listener, url) = bind().await;
+
+		let server = async move {
+			let (tcp, _) = listener.accept().await.expect("accept");
+			let mut ws = accept_async(tcp).await.expect("handshake");
+			// A pong-ack, then a real content frame. Only the latter may surface to the caller.
+			ws.feed(Message::Text("{\"op\":\"pong\"}".into())).await.expect("feed pong");
+			ws.feed(Message::Text("{\"n\":1}".into())).await.expect("feed content");
+			ws.flush().await.expect("flush");
+			tokio::time::sleep(Duration::from_secs(2)).await;
+		};
+		let handle = tokio::spawn(server);
+
+		let mut conn = WsConnection::try_new(&url, PingHandler).expect("try_new");
+		let batch = conn.next().await.expect("next");
+		assert_eq!(batch.len(), 1, "pong-ack dropped upstream; only the real content frame surfaces");
+		assert_eq!(batch[0].data["n"], 1, "the surviving event is the content frame, not the pong");
 		handle.abort();
 	}
 }
