@@ -8,8 +8,8 @@ use derive_more::{Deref, DerefMut};
 use jiff::Timestamp;
 use secrecy::SecretString;
 use serde_json::json;
-use v_exchanges_core::{Price, Timestamped};
-use v_utils::utils::filter_nulls;
+use v_exchanges_core::Price;
+use v_utils::{trades::Timestamped, utils::filter_nulls};
 
 use crate::{
 	error::{ExchangeError, ExchangeResult, MethodError, OutOfRangeError, RequestRangeError},

@@ -74,3 +74,7 @@ v_exchanges_book = { version = "0.1.3", path = "v_exchanges_book" }
 v_exchanges_core = { version = "0.2.3", path = "v_exchanges_core" }
 v_exchanges_methods = { version = "0.1.3", path = "v_exchanges_methods", default-features = false }
 v_exchanges_persistence = { version = "0.1.3", path = "v_exchanges_persistence" }
+
+# TEMP: `Timestamped` was moved into v_utils (trades module); consume the local checkout until a v_utils release carries it, then drop this patch and bump the dep.
+[patch.crates-io]
+v_utils = { path = "../v_utils/v_utils" }

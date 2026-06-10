@@ -7,7 +7,8 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub extern crate v_exchanges_adapters as adapters;
-pub use v_exchanges_core::{Price, Qty, Timestamped};
+pub use v_exchanges_core::{Price, Qty};
+pub use v_utils::trades::Timestamped;
 
 pub mod core;
 // false positive: derive_new generates assignments that rustc thinks are dead, but fields are read by thiserror/Display
