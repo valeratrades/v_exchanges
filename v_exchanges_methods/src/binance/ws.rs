@@ -81,7 +81,7 @@ impl ExchangeStream for TradesConnection {
 						topic = %content_event.topic,
 						event_type = %content_event.event_type,
 						event_time = %content_event.time,
-						"Binance sent a zero-valued trade. Normally it will have X = NA, meaning bookkeeping artifact). But we hit it for something else. I heard X=ADL or X=INSURANCE_FUND could fall here, but not certain. Gotta study if happens..",
+						"Binance sent a zero-valued trade we're discarding. Per the official docs this is NOT RPI (Retail Price Improvement) — RPI fills carry their real qty in `q` with no tag; only `nq` excludes them, and RPI only zeroes levels on the @depth stream, never @trade. It's also NOT the perp/options `X` trade-type enum (X=NA/ADL/INSURANCE_FUND lives on options `<underlyingAsset>@trade` and futures simply *exclude* insurance-fund/ADL from aggTrade — neither applies to this spot @trade socket). The one documented spot mechanism that zeroes fill fields is Self-Trade Prevention (executionReport x=TRADE_PREVENTION, fields pl/pL/pY), but those true values are emitted ONLY on the authenticated user-data stream of the account involved — they are intentionally absent from this public market tap, so we *could* scrape them via user-data but currently don't. Remaining possibility: a control/combined-stream frame mis-mapped onto the trade struct. To disambiguate, capture the raw frame's t (trade id), m, M.",
 					)
 				}
 				continue;
