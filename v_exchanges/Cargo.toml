@@ -93,6 +93,11 @@ required-features = ["binance"]
 path = "../examples/binance/market_perp.rs"
 
 [[example]]
+name = "net_change_selfheal"
+required-features = ["binance"]
+path = "../examples/net_change_selfheal.rs"
+
+[[example]]
 name = "binance_market_spot"
 required-features = ["binance"]
 path = "../examples/binance/market_spot.rs"

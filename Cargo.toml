@@ -20,6 +20,7 @@ get_last_with_len = "allow"
 # avoid setting patch versions, - remember that we are a lib. If behavior didn't change, we should not bump the dep version.
 [workspace.dependencies]
 ahash = { version = "^0.8", features = ["serde"] }
+arc-swap = "^1"
 arrayvec = "^0.7"
 async-trait = "^0.1"
 base64 = "^0.22"
@@ -33,6 +34,7 @@ hex = "^0.4"
 hmac = "^0.13"
 jiff = "^0.2"
 miette = { version = "^7.6", features = ["fancy"] }
+netwatcher = "^0.7"
 nonzero_ext = "^0.3"
 rand = "^0.10"
 reqwest = { version = "^0.13", features = ["blocking", "json", "query"] }

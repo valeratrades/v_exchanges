@@ -26,6 +26,7 @@ rustls-tls-webpki-roots = ["reqwest/rustls", "tokio-tungstenite/rustls-tls-webpk
 
 [dependencies]
 ahash = { workspace = true, features = ["serde"] }
+arc-swap.workspace = true
 bytes.workspace = true
 dashmap.workspace = true
 derive-new.workspace = true
@@ -34,6 +35,7 @@ eyre.workspace = true
 futures-util.workspace = true
 jiff.workspace = true
 miette.workspace = true
+netwatcher.workspace = true
 nonzero_ext.workspace = true
 rand.workspace = true
 reqwest.workspace = true

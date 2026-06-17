@@ -1,10 +1,14 @@
 use std::{
 	fmt::Debug,
 	path::PathBuf,
-	sync::{Arc, OnceLock},
+	sync::{
+		Arc, OnceLock,
+		atomic::{AtomicBool, Ordering},
+	},
 	time::Duration,
 };
 
+use arc_swap::ArcSwap;
 pub use bytes::Bytes;
 use eyre::{Report, eyre};
 use jiff::Timestamp;
@@ -30,11 +34,63 @@ pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_P
 ///
 /// When making a HTTP request or starting a websocket connection with this client,
 /// a handler that implements [RequestHandler] is required.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone)]
 pub struct Client {
-	client: reqwest::Client,
+	/// Swappable so the stale connection pool can be dropped wholesale on a host
+	/// network-identity change. `Arc<ArcSwap<_>>` (not bare `ArcSwap`): `ArcSwap` is not
+	/// `Clone`, but `Client` must stay `Clone` (cloned into WS snapshot futures and held by
+	/// every adapter), and all clones must share the SAME cell so one swap heals them all.
+	client: Arc<ArcSwap<reqwest::Client>>,
+	/// Set by netwatcher's callback when host interface addresses change; checked-and-cleared
+	/// at the top of `request()`. Shared across clones (Arc) so the single watch serves all.
+	net_dirty: Arc<AtomicBool>,
+	/// Keeps the single netwatcher subscription alive for the lifetime of the client graph;
+	/// dropping it stops the watch. Shared across clones via Arc. The `Mutex` is solely to
+	/// gain `Sync` (the handle's drop-time `mpsc::Receiver` is `!Sync`, so `Arc<WatchHandle>`
+	/// alone would not be `Send`, but `Client` must be `Send`); it is never locked — the
+	/// handle is only ever dropped, once, when the last clone goes away.
+	_net_watch: Arc<std::sync::Mutex<netwatcher::WatchHandle>>,
 	pub config: RequestConfig,
 	pub rate_limiter: Option<Arc<RateLimiter<Ustr, MonotonicClock>>>,
+}
+
+// Manual `Debug`: `netwatcher::WatchHandle` is not `Debug`, so we skip it — mirrors the
+// `ws.rs` "manual Debug, skip non-Debug fields" precedent.
+impl Debug for Client {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Client")
+			.field("client", &self.client)
+			.field("net_dirty", &self.net_dirty)
+			.field("config", &self.config)
+			.field("rate_limiter", &self.rate_limiter)
+			.finish_non_exhaustive()
+	}
+}
+
+/// Centralizes inner-client construction so `Default` and the network-change rebuild can never drift.
+fn build_reqwest_client() -> reqwest::Client {
+	reqwest::Client::new()
+}
+
+impl Default for Client {
+	fn default() -> Self {
+		let net_dirty = Arc::new(AtomicBool::new(false));
+		let flag = Arc::clone(&net_dirty);
+		// `is_initial` fires synchronously here; ignore it (nothing stale at startup).
+		let watch = netwatcher::watch_interfaces_with_callback(move |u: netwatcher::Update| {
+			if !u.is_initial {
+				flag.store(true, Ordering::Relaxed);
+			}
+		})
+		.expect("netwatcher: failed to subscribe to host network change events");
+		Self {
+			client: Arc::new(ArcSwap::from_pointee(build_reqwest_client())),
+			net_dirty,
+			_net_watch: Arc::new(std::sync::Mutex::new(watch)),
+			config: RequestConfig::default(),
+			rate_limiter: None,
+		}
+	}
 }
 
 impl Client {
@@ -49,6 +105,13 @@ impl Client {
 	where
 		Q: Serialize + ?Sized + std::fmt::Debug,
 		H: RequestHandler<B>, {
+		// Drop the stale connection pool if the host network identity changed since last call.
+		if self.net_dirty.swap(false, Ordering::Relaxed) {
+			self.client.store(Arc::new(build_reqwest_client()));
+			info!("host network change observed; rebuilt HTTP connection pool");
+		}
+		let reqwest_client = self.client.load();
+
 		let config = &self.config;
 		let base_url = handler.base_url(config.use_testnet)?;
 		let url = base_url.join(url).map_err(|_| RequestError::Other(eyre!("Failed to parse provided URL")))?;
@@ -99,7 +162,7 @@ impl Client {
 		loop {
 			let attempt_num = attempt + 1;
 			//HACK: hate to create a new request every time, but I haven't yet figured out how to provide by reference
-			let mut request_builder = self.client.request(method.clone(), url.clone()).timeout(config.timeout);
+			let mut request_builder = reqwest_client.request(method.clone(), url.clone()).timeout(config.timeout);
 			if let Some(query) = query {
 				request_builder = request_builder.query(query);
 			}
@@ -125,7 +188,7 @@ impl Client {
 			}
 
 			let request = handler.build_request(request_builder, &body, attempt_num as u8).map_err(RequestError::BuildRequest)?;
-			match self.client.execute(request).await {
+			match reqwest_client.execute(request).await {
 				Ok(mut response) => {
 					let status = response.status();
 					let headers = std::mem::take(response.headers_mut());
