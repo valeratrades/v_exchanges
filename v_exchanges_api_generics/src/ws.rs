@@ -635,8 +635,9 @@ impl Default for WsConfig {
 				max_elapsed_ms: None,
 			},
 			refresh_after: Duration::from_hours(12),
-			message_timeout: Duration::from_mins(16),
-			response_timeout: Duration::from_mins(2),
+			// A dead-but-open socket is caught in `message_timeout + response_timeout`. These stay short because the probe is a protocol Ping/Pong liveness check (see `next`), not a data-rate assumption: a healthy quiet connection just answers the Ping, so it never false-reconnects.
+			message_timeout: Duration::from_secs(32),
+			response_timeout: Duration::from_secs(8),
 			topics: AHashSet::new(),
 			active_ping_freq: None,
 		}
