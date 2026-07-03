@@ -4065,7 +4065,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_methods"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "ahash 0.8.12",
  "arrayvec",
@@ -4119,7 +4119,9 @@ dependencies = [
 
 [[package]]
 name = "v_utils"
-version = "2.15.52"
+version = "2.15.54"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed6d1d8e1af7ad0627d0779c79983b7e22cb1d37ce21d19a9b3eaf281d446391"
 dependencies = [
  "ahash 0.8.12",
  "bon",
@@ -4152,7 +4154,9 @@ dependencies = [
 
 [[package]]
 name = "v_utils_macros"
-version = "2.11.53"
+version = "2.11.55"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "648ee541454fdda24f567feffaf37e4c887fa18fea5d1d04c7224fbc82e68f88"
 dependencies = [
  "eyre",
  "heck",
