@@ -1,19 +1,14 @@
 use adapters::binance::{BinanceHttpUrl, BinanceOption};
 use derive_more::{Display, FromStr};
 use jiff::Timestamp;
-use serde::Deserialize;
-use serde_json::json;
-use v_utils::{
-	Percent,
-	prelude::*,
-	trades::{Pair, Timeframe},
-};
+use v_utils::Percent;
 
 use super::Binance;
 use crate::{
 	ExchangeError, ExchangeName,
 	core::RequestRange,
 	other_types::{Lsr, Lsrs},
+	prelude::*,
 	utils::join_params,
 };
 

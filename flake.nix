@@ -2,9 +2,13 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
     pre-commit-hooks.url = "github:cachix/git-hooks.nix";
+    pre-commit-hooks.inputs.nixpkgs.follows = "nixpkgs";
     v_flakes.url = "github:valeratrades/v_flakes?ref=v1.6";
+    v_flakes.inputs.nixpkgs.follows = "nixpkgs";
+    v_flakes.inputs.rust-overlay.follows = "rust-overlay";
   };
 
   outputs = { self, nixpkgs, rust-overlay, flake-utils, pre-commit-hooks, v_flakes }:
@@ -44,7 +48,6 @@
         github = v_flakes.github {
           inherit pkgs pname rs;
           enable = true;
-          excalidraw."docs/arch.excalidraw".standalone = true;
           lastSupportedVersion = "nightly-2025-10-12";
           jobs = {
             default = true;
@@ -55,7 +58,7 @@
           };
         };
         readme = v_flakes.readme-fw { inherit pkgs pname; defaults = true; lastSupportedVersion = "nightly-1.92"; rootDir = ./.; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; };
-        combined = v_flakes.utils.combine [ rs github readme ];
+        combined = v_flakes.utils.combine { inherit rust; modules = [ rs github readme ]; };
       in
       {
         packages =
@@ -97,6 +100,7 @@
             openssl
             pkg-config
             rust
+            valgrind # iai-based microbenches in v_exchanges_persistence
             (writeShellScriptBin "test_all" "cargo t && cargo t --examples")
             (writeShellScriptBin "examples" "cargo -Zscript -q scripts/list_examples.rs")
           ] ++ pre-commit-check.enabledPackages ++ combined.enabledPackages;

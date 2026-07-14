@@ -1,6 +1,7 @@
+use eyre::{Result, eyre};
 use jiff::Timestamp;
-use serde::Deserialize;
-use v_utils::{Percent, prelude::*, trades::Pair};
+use serde::{Deserialize, Serialize};
+use v_utils::{NowThen, Percent, trades::Pair};
 
 #[derive(Clone, Copy, Debug, Default, derive_more::Deref, derive_more::DerefMut, Deserialize, Serialize)]
 pub struct Lsr {

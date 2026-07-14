@@ -1,4 +1,5 @@
 #![feature(default_field_values)]
+
 /// Fixed-point quantity. Non-negative. raw = value × 10^precision
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, derive_new::new)]
 pub struct Qty {

@@ -2,11 +2,11 @@ use adapters::{
 	Client,
 	mexc::{MexcAuth, MexcHttpUrl, MexcOption},
 };
-use v_utils::prelude::*;
 
 use crate::{
 	AssetBalance, Balances, ExchangeResult,
 	core::{ApiKeyInfo, PersonalInfo},
+	prelude::*,
 };
 
 pub(super) async fn personal_info(client: &Client, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {

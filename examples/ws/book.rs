@@ -19,18 +19,18 @@ async fn main() {
 
 	loop {
 		tokio::select! {
-			Ok(update) = binance_spot.next() => {
-				print_update("binance:spot", &update);
-			}
-			Ok(update) = binance_perp.next() => {
-				print_update("binance:perp", &update);
-			}
-			Ok(update) = bybit_spot.next() => {
-				print_update("bybit:spot", &update);
-			}
-			Ok(update) = bybit_perp.next() => {
-				print_update("bybit:perp", &update);
-			}
+			Ok(batch) = binance_spot.next() => { for update in &batch {
+				print_update("binance:spot", update);
+			} }
+			Ok(batch) = binance_perp.next() => { for update in &batch {
+				print_update("binance:perp", update);
+			} }
+			Ok(batch) = bybit_spot.next() => { for update in &batch {
+				print_update("bybit:spot", update);
+			} }
+			Ok(batch) = bybit_perp.next() => { for update in &batch {
+				print_update("bybit:perp", update);
+			} }
 		}
 	}
 }
@@ -54,6 +54,6 @@ fn print_update(source: &str, update: &BookUpdate) {
 		shape.asks.len(),
 		best_bid.map_or("-".to_string(), |p| p.to_string()),
 		best_ask.map_or("-".to_string(), |p| p.to_string()),
-		shape.time,
+		shape.ts_event,
 	);
 }

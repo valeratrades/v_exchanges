@@ -1,3 +1,5 @@
+use std::collections::{BTreeMap, btree_map::Entry};
+
 use adapters::binance::{BinanceHttpUrl, BinanceOption};
 use eyre::Result;
 use jiff::Timestamp;
@@ -32,17 +34,27 @@ pub struct BinanceExchangeFutures {
 
 impl From<BinanceExchangeFutures> for ExchangeInfo {
 	fn from(v: BinanceExchangeFutures) -> Self {
-		Self {
-			server_time: Timestamp::from_millisecond(v.server_time).unwrap(),
-			pairs: v
-				.symbols
-				.into_iter()
-				.map(|s| {
-					let pair: Pair = s.symbol.clone().try_into().expect("We assume v_utils is able to handle translating all Binance symbols");
-					(pair, PairInfo::from(s))
-				})
-				.collect(),
+		let server_time = Timestamp::from_millisecond(v.server_time).unwrap();
+		let mut pairs = BTreeMap::new();
+		for s in v.symbols {
+			if s.status != "TRADING" {
+				continue;
+			}
+			// symbol strings aren't reliably splittable (eg `BTCU` perp took the service down), so key off the authoritative asset fields
+			let pair = Pair::new(s.base_asset.as_str(), s.quote_asset.as_str());
+			let info = PairInfo::from(s);
+			match pairs.entry(pair) {
+				Entry::Vacant(e) => {
+					e.insert(info);
+				}
+				// delivery contracts share base/quote with their perpetual; perpetual wins the key
+				Entry::Occupied(mut e) =>
+					if e.get().delivery_date.is_some() && info.delivery_date.is_none() {
+						e.insert(info);
+					},
+			}
 		}
+		Self { server_time, pairs }
 	}
 }
 impl From<FuturesSymbol> for PairInfo {
@@ -110,6 +122,7 @@ pub struct FuturesSymbol {
 	pub delivery_date: i64,
 	pub onboard_date: i64,
 	//TODO: filter based on asset being active, don't return those that aren't.
+	//REVIEW: `From<BinanceExchangeFutures> for ExchangeInfo` now skips non-TRADING symbols
 	pub status: String,
 	pub base_asset: String,
 	pub quote_asset: String,

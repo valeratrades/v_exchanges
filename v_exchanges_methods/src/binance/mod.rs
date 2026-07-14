@@ -3,7 +3,7 @@ pub mod perp; // public for accessing order placement and income history functio
 use std::collections::BTreeMap;
 mod market;
 mod spot;
-mod ws;
+pub mod ws;
 use adapters::{
 	Client, GetOptions,
 	binance::{BinanceOption, BinanceOptions},
@@ -24,6 +24,44 @@ pub struct Binance {
 	pub info_cache: BTreeMap<Instrument, ExchangeInfo>,
 }
 impl Binance {
+	/// Concrete-typed counterpart to [`ExchangeImpl::ws_book`]. Lets callers attach a
+	/// [`crate::core::BookPersistor`] via [`ws::BookConnection::with_persistor`] before boxing.
+	pub async fn book_connection(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<ws::BookConnection> {
+		match instrument {
+			Instrument::Perp | Instrument::Spot | Instrument::Margin => {
+				if !self.info_cache.contains_key(&instrument) {
+					let info = ExchangeImpl::exchange_info(&*self, instrument).await?;
+					self.info_cache.insert(instrument, info);
+				}
+				let exchange = self.name();
+				let pair_precisions: BTreeMap<Pair, PrecisionPriceQty> = {
+					let info = self.info_cache.get(&instrument).expect("just inserted or was present");
+					pairs
+						.iter()
+						.map(|pair| {
+							info.pairs
+								.get(pair)
+								.ok_or_else(|| ExchangeError::Method(MethodError::new_pair_not_listed(exchange, instrument, *pair)))
+								.map(|pi| {
+									(
+										*pair,
+										PrecisionPriceQty {
+											price: pi.price_precision,
+											qty: pi.qty_precision,
+										},
+									)
+								})
+						})
+						.collect::<ExchangeResult<_>>()?
+				};
+				let book_snapshot_freq = GetOptions::<BinanceOptions>::default_options(&self.client).book_snapshot_freq;
+				let connection = ws::BookConnection::try_new(self.client.clone(), pairs.to_vec(), instrument, pair_precisions, book_snapshot_freq)?;
+				Ok(connection)
+			}
+			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), instrument))),
+		}
+	}
+
 	pub async fn book_snapshot(&mut self, pair: Pair, instrument: Instrument) -> ExchangeResult<BookShape> {
 		if !self.info_cache.contains_key(&instrument) {
 			let info = ExchangeImpl::exchange_info(&*self, instrument).await?;
@@ -146,39 +184,7 @@ impl ExchangeImpl for Binance {
 	}
 
 	async fn ws_book(&mut self, pairs: &[Pair], instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = BookUpdate>>, ExchangeError> {
-		match instrument {
-			Instrument::Perp | Instrument::Spot | Instrument::Margin => {
-				if !self.info_cache.contains_key(&instrument) {
-					let info = ExchangeImpl::exchange_info(&*self, instrument).await?;
-					self.info_cache.insert(instrument, info);
-				}
-				let exchange = self.name();
-				let pair_precisions: BTreeMap<Pair, PrecisionPriceQty> = {
-					let info = self.info_cache.get(&instrument).expect("just inserted or was present");
-					pairs
-						.iter()
-						.map(|pair| {
-							info.pairs
-								.get(pair)
-								.ok_or_else(|| ExchangeError::Method(MethodError::new_pair_not_listed(exchange, instrument, *pair)))
-								.map(|pi| {
-									(
-										*pair,
-										PrecisionPriceQty {
-											price: pi.price_precision,
-											qty: pi.qty_precision,
-										},
-									)
-								})
-						})
-						.collect::<ExchangeResult<_>>()?
-				};
-				let book_snapshot_freq = GetOptions::<BinanceOptions>::default_options(&self.client).book_snapshot_freq;
-				let connection = ws::BookConnection::try_new(self.client.clone(), pairs.to_vec(), instrument, pair_precisions, book_snapshot_freq)?;
-				Ok(Box::new(connection))
-			}
-			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), instrument))),
-		}
+		Ok(Box::new(self.book_connection(pairs, instrument).await?))
 	}
 }
 

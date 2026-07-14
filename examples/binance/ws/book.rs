@@ -19,12 +19,12 @@ async fn main() {
 
 	loop {
 		tokio::select! {
-			Ok(update) = spot.next() => {
-				print_update("binance:spot", &update);
-			}
-			Ok(update) = perp.next() => {
-				print_update("binance:perp", &update);
-			}
+			Ok(batch) = spot.next() => { for update in &batch {
+				print_update("binance:spot", update);
+			} }
+			Ok(batch) = perp.next() => { for update in &batch {
+				print_update("binance:perp", update);
+			} }
 		}
 	}
 }
@@ -48,6 +48,6 @@ fn print_update(source: &str, update: &BookUpdate) {
 		shape.asks.len(),
 		best_bid.map_or("-".to_string(), |p| p.to_string()),
 		best_ask.map_or("-".to_string(), |p| p.to_string()),
-		shape.time,
+		shape.ts_event,
 	);
 }

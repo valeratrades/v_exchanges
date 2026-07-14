@@ -171,10 +171,12 @@ pub(crate) async fn fetch_book_snapshot(client: &v_exchanges_adapters::Client, p
 	let options = vec![BinanceOption::HttpUrl(base_url)];
 	let response: DepthResponse = client.get(endpoint, &params, options).await?;
 
-	let time = Timestamp::now();
+	let now = Timestamp::now();
 	let parse_level = |(p, q): (String, String)| (prec.parse_price(&p), prec.parse_qty(&q));
 	Ok(BookShape {
-		time,
+		ts_event: now,
+		ts_init: now,
+		ts_last: now,
 		prec,
 		bids: response.bids.into_iter().map(parse_level).collect(),
 		asks: response.asks.into_iter().map(parse_level).collect(),

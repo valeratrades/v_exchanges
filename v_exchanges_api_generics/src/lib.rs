@@ -27,7 +27,6 @@ pub mod retry;
 pub mod ws;
 
 pub use ratelimiter::{RateLimiter, quota::Quota};
-
 pub use retry::{ExponentialBackoff, RetryConfig, RetryManager};
 pub extern crate reqwest;
 pub extern crate tokio_tungstenite;

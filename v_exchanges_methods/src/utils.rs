@@ -1,4 +1,4 @@
-use v_utils::prelude::*;
+use serde_json::Value;
 
 /// # Panics
 /// Fine, because given prospected usages, theoretically only developer will see it.

@@ -1,11 +1,16 @@
 use std::{
 	fmt::Debug,
 	path::PathBuf,
-	sync::{Arc, OnceLock},
+	sync::{
+		Arc, OnceLock,
+		atomic::{AtomicBool, Ordering},
+	},
 	time::Duration,
 };
 
+use arc_swap::ArcSwap;
 pub use bytes::Bytes;
+use dashmap::DashMap;
 use eyre::{Report, eyre};
 use jiff::Timestamp;
 use reqwest::Url;
@@ -30,11 +35,68 @@ pub static USER_AGENT: &str = concat!("v_exchanges_api_generics/", env!("CARGO_P
 ///
 /// When making a HTTP request or starting a websocket connection with this client,
 /// a handler that implements [RequestHandler] is required.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone)]
 pub struct Client {
-	client: reqwest::Client,
+	/// Swappable so the stale connection pool can be dropped wholesale on a host
+	/// network-identity change. `Arc<ArcSwap<_>>` (not bare `ArcSwap`): `ArcSwap` is not
+	/// `Clone`, but `Client` must stay `Clone` (cloned into WS snapshot futures and held by
+	/// every adapter), and all clones must share the SAME cell so one swap heals them all.
+	client: Arc<ArcSwap<reqwest::Client>>,
+	/// Set by netwatcher's callback when host interface addresses change; checked-and-cleared
+	/// at the top of `request()`. Shared across clones (Arc) so the single watch serves all.
+	net_dirty: Arc<AtomicBool>,
+	/// Keeps the single netwatcher subscription alive for the lifetime of the client graph;
+	/// dropping it stops the watch. Shared across clones via Arc. The `Mutex` is solely to
+	/// gain `Sync` (the handle's drop-time `mpsc::Receiver` is `!Sync`, so `Arc<WatchHandle>`
+	/// alone would not be `Send`, but `Client` must be `Send`); it is never locked — the
+	/// handle is only ever dropped, once, when the last clone goes away.
+	_net_watch: Arc<std::sync::Mutex<netwatcher::WatchHandle>>,
 	pub config: RequestConfig,
 	pub rate_limiter: Option<Arc<RateLimiter<Ustr, MonotonicClock>>>,
+	/// Per-bucket unban time. Once an exchange reports a ban (`IpError::Timeout`), the bucket is
+	/// short-circuited until this instant instead of re-hitting the API (which renews/escalates the
+	/// ban). Keyed by the same bucket as `rate_limiter`; shared across clones (Arc) like it.
+	banned_until: Arc<DashMap<Ustr, Timestamp>>,
+}
+
+// Manual `Debug`: `netwatcher::WatchHandle` is not `Debug`, so we skip it — mirrors the
+// `ws.rs` "manual Debug, skip non-Debug fields" precedent.
+impl Debug for Client {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Client")
+			.field("client", &self.client)
+			.field("net_dirty", &self.net_dirty)
+			.field("config", &self.config)
+			.field("rate_limiter", &self.rate_limiter)
+			.finish_non_exhaustive()
+	}
+}
+
+/// Centralizes inner-client construction so `Default` and the network-change rebuild can never drift.
+fn build_reqwest_client() -> reqwest::Client {
+	reqwest::Client::new()
+}
+
+impl Default for Client {
+	fn default() -> Self {
+		let net_dirty = Arc::new(AtomicBool::new(false));
+		let flag = Arc::clone(&net_dirty);
+		// `is_initial` fires synchronously here; ignore it (nothing stale at startup).
+		let watch = netwatcher::watch_interfaces_with_callback(move |u: netwatcher::Update| {
+			if !u.is_initial {
+				flag.store(true, Ordering::Relaxed);
+			}
+		})
+		.expect("netwatcher: failed to subscribe to host network change events");
+		Self {
+			client: Arc::new(ArcSwap::from_pointee(build_reqwest_client())),
+			net_dirty,
+			_net_watch: Arc::new(std::sync::Mutex::new(watch)),
+			config: RequestConfig::default(),
+			rate_limiter: None,
+			banned_until: Arc::new(DashMap::new()),
+		}
+	}
 }
 
 impl Client {
@@ -49,6 +111,13 @@ impl Client {
 	where
 		Q: Serialize + ?Sized + std::fmt::Debug,
 		H: RequestHandler<B>, {
+		// Drop the stale connection pool if the host network identity changed since last call.
+		if self.net_dirty.swap(false, Ordering::Relaxed) {
+			self.client.store(Arc::new(build_reqwest_client()));
+			info!("host network change observed; rebuilt HTTP connection pool");
+		}
+		let reqwest_client = self.client.load();
+
 		let config = &self.config;
 		let base_url = handler.base_url(config.use_testnet)?;
 		let url = base_url.join(url).map_err(|_| RequestError::Other(eyre!("Failed to parse provided URL")))?;
@@ -72,24 +141,36 @@ impl Client {
 			return handler.handle_response(status, headers, body).map_err(RequestError::HandleResponse);
 		}
 
-		if let Some(rl) = &self.rate_limiter {
-			let bucket = {
-				// Segment 1: always "ip"
-				// Segment 2: exchange name — second-level domain of the request host (e.g. "binance" from "api.binance.com")
-				// Segment 3: credential name — truncated hash of pubkey, present only if handler carries one
-				let exchange = url.host_str().and_then(|h| {
-					let parts: Vec<&str> = h.split('.').collect();
-					// SLD is second-from-last for normal domains, last for single-label (localhost etc.)
-					parts.len().checked_sub(2).map(|i| parts[i])
-				});
-				let key_name = handler.rate_limit_key_name();
-				let s = match (exchange, key_name.as_deref()) {
-					(Some(ex), Some(kn)) => format!("ip.{ex}.{kn}"),
-					(Some(ex), None) => format!("ip.{ex}"),
-					(None, _) => "ip".to_owned(),
-				};
-				Ustr::from(&s)
+		let bucket: Ustr = {
+			// Segment 1: always "ip"
+			// Segment 2: exchange name — second-level domain of the request host (e.g. "binance" from "api.binance.com")
+			// Segment 3: credential name — truncated hash of pubkey, present only if handler carries one
+			let exchange = url.host_str().and_then(|h| {
+				let parts: Vec<&str> = h.split('.').collect();
+				// SLD is second-from-last for normal domains, last for single-label (localhost etc.)
+				parts.len().checked_sub(2).map(|i| parts[i])
+			});
+			let key_name = handler.rate_limit_key_name();
+			let s = match (exchange, key_name.as_deref()) {
+				(Some(ex), Some(kn)) => format!("ip.{ex}.{kn}"),
+				(Some(ex), None) => format!("ip.{ex}"),
+				(None, _) => "ip".to_owned(),
 			};
+			Ustr::from(&s)
+		};
+
+		// Ban gate: while the exchange says we're banned on this bucket, refuse to send (re-hitting
+		// the API renews/escalates the ban). Copy the timestamp out before any `remove` to drop the `Ref`.
+		let banned = self.banned_until.get(&bucket).map(|r| *r);
+		if let Some(until) = banned {
+			if Timestamp::now() < until {
+				warn!(%bucket, ?until, "IP banned; short-circuiting request until unban time");
+				return Err(RequestError::HandleResponse(HandleError::Api(ApiError::Ip(IpError::Timeout { until: Some(until) }))));
+			}
+			self.banned_until.remove(&bucket);
+		}
+
+		if let Some(rl) = &self.rate_limiter {
 			rl.until_key_ready_n(&bucket, 1).await;
 		}
 
@@ -99,7 +180,7 @@ impl Client {
 		loop {
 			let attempt_num = attempt + 1;
 			//HACK: hate to create a new request every time, but I haven't yet figured out how to provide by reference
-			let mut request_builder = self.client.request(method.clone(), url.clone()).timeout(config.timeout);
+			let mut request_builder = reqwest_client.request(method.clone(), url.clone()).timeout(config.timeout);
 			if let Some(query) = query {
 				request_builder = request_builder.query(query);
 			}
@@ -125,7 +206,7 @@ impl Client {
 			}
 
 			let request = handler.build_request(request_builder, &body, attempt_num as u8).map_err(RequestError::BuildRequest)?;
-			match self.client.execute(request).await {
+			match reqwest_client.execute(request).await {
 				Ok(mut response) => {
 					let status = response.status();
 					let headers = std::mem::take(response.headers_mut());
@@ -161,7 +242,13 @@ impl Client {
 							return Ok(handled);
 						}
 						false => {
-							return handler.handle_response(status, headers.clone(), body.clone()).map_err(|e| {
+							let handled = handler.handle_response(status, headers.clone(), body.clone());
+							if let Err(HandleError::Api(ApiError::Ip(IpError::Timeout { until }))) = &handled {
+								let until = until.unwrap_or_else(|| Timestamp::now() + config.ban_cooldown);
+								warn!(%bucket, ?until, "exchange reported IP ban; gating bucket until unban time");
+								self.banned_until.insert(bucket, until);
+							}
+							return handled.map_err(|e| {
 								error!(?status, ?headers, body = ?v_utils::utils::truncate_msg(std::str::from_utf8(&body).unwrap_or("<invalid utf8>")), "Failed to handle response");
 								RequestError::HandleResponse(e)
 							});
@@ -332,6 +419,9 @@ pub struct RequestConfig {
 	/// When set, responses are cached under this directory. On cache hit (< 30 days old), the cached response is returned without making a network request.
 	/// On cache miss or stale cache, the real request is made, the response is persisted, then returned.
 	pub mock_cache_dir: Option<PathBuf>,
+
+	/// Fallback ban duration when the exchange reports a ban without an unban time (e.g. Bybit).
+	pub ban_cooldown: Duration = Duration::from_secs(300),
 }
 
 /// Error type encompassing all the failure modes of [RequestHandler::handle_response()].
@@ -480,4 +570,91 @@ fn mock_cache_path(cache_dir: &PathBuf, url: &Url) -> PathBuf {
 	let host = url.host_str().unwrap_or("unknown");
 	let path = url.path().trim_start_matches('/');
 	cache_dir.join(host).join(path)
+}
+
+#[cfg(test)]
+mod tests {
+	use std::sync::atomic::{AtomicBool, Ordering};
+
+	use jiff::SignedDuration;
+	use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+	use super::*;
+
+	/// Records whether the network path (`build_request`) was reached, and always maps the response
+	/// to an `IpError::Timeout` so the record path can be exercised.
+	struct BanHandler {
+		base: Url,
+		network_ran: AtomicBool,
+	}
+	impl RequestHandler<()> for BanHandler {
+		type Successful = ();
+
+		fn base_url(&self, _is_test: bool) -> Result<Url, UrlError> {
+			Ok(self.base.clone())
+		}
+
+		fn build_request(&self, builder: RequestBuilder, _body: &Option<()>, _attempt: u8) -> Result<Request, BuildError> {
+			self.network_ran.store(true, Ordering::SeqCst);
+			builder.build().map_err(|e| BuildError::Other(eyre!(e)))
+		}
+
+		fn handle_response(&self, _status: StatusCode, _headers: HeaderMap, _body: Bytes) -> Result<(), HandleError> {
+			Err(HandleError::Api(ApiError::Ip(IpError::Timeout { until: None })))
+		}
+	}
+
+	#[tokio::test]
+	async fn banned_bucket_short_circuits_then_recovers() {
+		let mut client = Client::default();
+		client.config.retry.max_retries = 0; // fail fast once the gate is passed
+		let handler = BanHandler {
+			base: Url::parse("https://api.testex.com/").unwrap(),
+			network_ran: AtomicBool::new(false),
+		};
+		let bucket = Ustr::from("ip.testex");
+
+		// Still banned: must short-circuit before touching the network.
+		client.banned_until.insert(bucket, Timestamp::now() + SignedDuration::from_secs(60));
+		let err = client.get_no_query("", &handler).await.unwrap_err();
+		assert!(matches!(err, RequestError::HandleResponse(HandleError::Api(ApiError::Ip(IpError::Timeout { .. })))));
+		assert!(!handler.network_ran.load(Ordering::SeqCst), "banned bucket hit the network");
+
+		// Ban expired: entry is evicted and the request proceeds to the network.
+		client.banned_until.insert(bucket, Timestamp::now() - SignedDuration::from_secs(60));
+		let _ = client.get_no_query("", &handler).await;
+		assert!(handler.network_ran.load(Ordering::SeqCst), "expired ban did not proceed");
+		assert!(!client.banned_until.contains_key(&bucket), "expired ban was not evicted");
+	}
+
+	#[tokio::test]
+	async fn ban_recorded_with_cooldown_fallback() {
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let addr = listener.local_addr().unwrap();
+
+		let server = async {
+			let (mut sock, _) = listener.accept().await.unwrap();
+			let mut buf = [0u8; 1024];
+			let _ = sock.read(&mut buf).await;
+			sock.write_all(b"HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\n\r\n").await.unwrap();
+		};
+
+		let client = Client::default();
+		let handler = BanHandler {
+			base: Url::parse(&format!("http://{addr}/")).unwrap(),
+			network_ran: AtomicBool::new(false),
+		};
+		let before = Timestamp::now();
+		let (_, res) = tokio::join!(server, client.get_no_query("", &handler));
+
+		assert!(matches!(res, Err(RequestError::HandleResponse(HandleError::Api(ApiError::Ip(IpError::Timeout { until: None }))))));
+		let bucket = Ustr::from("ip.0"); // 127.0.0.1 -> SLD segment "0"
+		let until = *client.banned_until.get(&bucket).expect("ban recorded");
+		// `until: None` from the handler falls back to now + ban_cooldown (300s default).
+		let expected = before + client.config.ban_cooldown;
+		assert!(
+			until.duration_since(expected).abs() < SignedDuration::from_secs(2),
+			"recorded unban {until} far from expected {expected}"
+		);
+	}
 }

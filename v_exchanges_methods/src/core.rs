@@ -9,13 +9,12 @@ use jiff::Timestamp;
 use secrecy::SecretString;
 use serde_json::json;
 use v_exchanges_core::Price;
-use v_utils::{
-	prelude::*,
-	trades::{Asset, Kline, Pair, Timeframe, Usd},
-	utils::filter_nulls,
-};
+use v_utils::{trades::Timestamped, utils::filter_nulls};
 
-use crate::error::{ExchangeError, ExchangeResult, MethodError, OutOfRangeError, RequestRangeError};
+use crate::{
+	error::{ExchangeError, ExchangeResult, MethodError, OutOfRangeError, RequestRangeError},
+	prelude::*,
+};
 
 const MAX_RECV_WINDOW: std::time::Duration = std::time::Duration::from_secs(10 * 60); // 10 minutes
 
@@ -46,13 +45,28 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 pub trait ExchangeStream: std::fmt::Debug + Send + Sync {
 	type Item;
 
-	async fn next(&mut self) -> eyre::Result<Self::Item, WsError>;
+	async fn next(&mut self) -> eyre::Result<Vec<Self::Item>, WsError>;
 }
 #[async_trait::async_trait]
 pub trait SubscribeOrder {
 	type Order;
 
 	async fn place_and_subscribe(&mut self, topics: Vec<Self::Order>) -> Result<(), WsError>;
+}
+/// Pluggable sink that captures book updates as they fly through the WS connection. The connection
+/// invokes `on_snapshot`/`on_delta` synchronously on every event, before returning from `next()`.
+/// Implementations are expected to be cheap; heavy I/O should be batched internally.
+pub trait BookPersistor: Send + Sync {
+	fn on_snapshot(&mut self, pair: Pair, shape: &BookShape);
+	fn on_delta(&mut self, pair: Pair, shape: &BookShape, gapped: bool);
+	/// Flush any in-memory buffers immediately. Called by callers at shutdown to avoid losing rows.
+	fn flush(&mut self) {}
+}
+
+/// Per-exchange book-event ordering token. Used internally by the WS connection to detect gaps
+/// in the per-pair delta chain. Not persisted; the *result* (`gapped: bool`) is.
+pub trait Sequence: Send + Sync {
+	fn has_gap_from_prev(&self, prev: &Self) -> bool;
 }
 /// most exchanges default to returning OI value in asset quantity, not quote. Exception would be Inverse on Bybit.
 /// Which actually makes sense, as same endpoints accept things like "BTCETH", where quote value would be irrelevant.
@@ -318,21 +332,36 @@ pub struct PrecisionPriceQty {
 }
 
 impl PrecisionPriceQty {
-	/// Strip the decimal point from a string, asserting it has at most `expected_precision` decimals.
-	/// Returns the raw digit string ready to parse.
+	/// Strip the decimal point from a string and right-pad to `expected_precision` decimals.
+	/// Trailing zeros beyond `expected_precision` are ignored (Binance pads `.24` to `.24000000`);
+	/// any non-zero digit beyond `expected_precision` is a bug and panics.
 	fn digits(s: &str, expected_precision: u8) -> String {
 		match s.find('.') {
 			Some(dot) => {
-				let decimals = (s.len() - dot - 1) as u8;
+				let int_part = &s[..dot];
+				let frac_part = &s[dot + 1..];
+				let frac_significant = frac_part.trim_end_matches('0');
+				let significant_decimals = frac_significant.len() as u8;
 				assert!(
-					decimals <= expected_precision,
-					"string {s:?} has {decimals} decimal places, expected at most {expected_precision}"
+					significant_decimals <= expected_precision,
+					"string {s:?} has {significant_decimals} significant decimal places, expected at most {expected_precision}"
 				);
-				[&s[..dot], &s[dot + 1..]].concat()
+				let pad = expected_precision as usize - frac_significant.len();
+				let mut out = String::with_capacity(int_part.len() + expected_precision as usize);
+				out.push_str(int_part);
+				out.push_str(frac_significant);
+				for _ in 0..pad {
+					out.push('0');
+				}
+				out
 			}
 			None => {
-				// Some exchanges send bare values for exactly round values
-				s.to_owned()
+				let mut out = String::with_capacity(s.len() + expected_precision as usize);
+				out.push_str(s);
+				for _ in 0..expected_precision {
+					out.push('0');
+				}
+				out
 			}
 		}
 	}
@@ -350,10 +379,29 @@ impl PrecisionPriceQty {
 /// Both BTreeMaps are ascending; consumers reverse `bids` for best-bid.
 #[derive(Clone, Debug, Default)]
 pub struct BookShape {
-	pub time: Timestamp,
+	/// Exchange-provided event time.
+	pub ts_event: Timestamp,
+	/// When we first received the data backing this shape.
+	pub ts_init: Timestamp,
+	/// When we last wrote into this shape. Equals `ts_init` for shapes built from a single message.
+	pub ts_last: Timestamp,
 	pub prec: PrecisionPriceQty,
 	pub asks: BTreeMap<i32, u32>,
 	pub bids: BTreeMap<i32, u32>,
+}
+
+impl Timestamped for BookShape {
+	fn ts_event(&self) -> Timestamp {
+		self.ts_event
+	}
+
+	fn ts_init(&self) -> Timestamp {
+		self.ts_init
+	}
+
+	fn ts_last(&self) -> Timestamp {
+		self.ts_last
+	}
 }
 
 /// Distinguishes full snapshots from incremental deltas.
@@ -364,17 +412,52 @@ pub enum BookUpdate {
 	BatchDelta(BookShape),
 }
 
+impl BookUpdate {
+	pub fn shape(&self) -> &BookShape {
+		match self {
+			Self::Snapshot(s) | Self::BatchDelta(s) => s,
+		}
+	}
+}
+
+impl Timestamped for BookUpdate {
+	fn ts_event(&self) -> Timestamp {
+		self.shape().ts_event
+	}
+
+	fn ts_init(&self) -> Timestamp {
+		self.shape().ts_init
+	}
+
+	fn ts_last(&self) -> Timestamp {
+		self.shape().ts_last
+	}
+}
+
 /// Batched trade stream event. All trades share `prec`.
 #[derive(Clone, Debug, Default)]
 pub struct BatchTrades {
 	prec: PrecisionPriceQty,
 	trades: Vec<InnerTrade>,
+	/// Exchange-provided event time of the latest trade in the batch.
+	ts_event: Timestamp,
+	/// When we first received the data backing this batch.
+	ts_init: Timestamp,
+	/// When we last appended into this batch. Equals `ts_init` for batches built from a single message.
+	ts_last: Timestamp,
 }
 
 impl BatchTrades {
-	pub(crate) fn new(prec: PrecisionPriceQty, trades: Vec<InnerTrade>) -> Self {
+	pub(crate) fn new(prec: PrecisionPriceQty, trades: Vec<InnerTrade>, ts_init: Timestamp, ts_last: Timestamp) -> Self {
 		assert!(trades.len() != 0); // this is an invariant upheld by our own implementation, so we shouldn't introduce runtime cost of checking it in release builds.
-		Self { prec, trades }
+		let ts_event = trades.last().expect("never empty").time;
+		Self {
+			prec,
+			trades,
+			ts_event,
+			ts_init,
+			ts_last,
+		}
 	}
 
 	pub fn len(&self) -> usize {
@@ -388,6 +471,20 @@ impl BatchTrades {
 	/// Iterate `(time, price_raw, qty_raw)` tuples. Precision is shared via [`Self::prec`].
 	pub fn iter(&self) -> impl Iterator<Item = (Timestamp, i32, u32)> + '_ {
 		self.trades.iter().map(|t| (t.time, t.price, t.qty))
+	}
+}
+
+impl Timestamped for BatchTrades {
+	fn ts_event(&self) -> Timestamp {
+		self.ts_event
+	}
+
+	fn ts_init(&self) -> Timestamp {
+		self.ts_init
+	}
+
+	fn ts_last(&self) -> Timestamp {
+		self.ts_last
 	}
 }
 

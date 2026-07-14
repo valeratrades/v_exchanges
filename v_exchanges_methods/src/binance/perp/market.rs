@@ -4,9 +4,8 @@ use adapters::Client;
 //HACK: Methods should be implemented on the central interface struct, following <https://github.com/wisespace-io/binance-rs>.
 use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
-use v_utils::prelude::*;
 
-use crate::ExchangeResult;
+use crate::{ExchangeResult, prelude::*};
 
 pub async fn prices(client: &Client, pairs: Option<Vec<Pair>>) -> ExchangeResult<BTreeMap<Pair, f64>> {
 	let options = vec![BinanceOption::HttpUrl(BinanceHttpUrl::FuturesUsdM)];
@@ -18,7 +17,17 @@ pub async fn prices(client: &Client, pairs: Option<Vec<Pair>>) -> ExchangeResult
 		}
 		None => client.get_no_query("/fapi/v2/ticker/price", options).await?,
 	};
-	Ok(rs.into_iter().map(Into::into).collect())
+	Ok(rs
+		.into_iter()
+		.filter_map(|p| match Pair::from_str(&p.symbol) {
+			Ok(pair) => Some((pair, p.price)),
+			// this endpoint only returns concatenated symbol strings, so unrepresentable listings (eg `BTCU`) can only be skipped
+			Err(e) => {
+				tracing::warn!("Skipping unparseable Binance symbol {}: {e}", p.symbol);
+				None
+			}
+		})
+		.collect())
 }
 
 #[serde_as]
@@ -29,9 +38,4 @@ struct PriceObject {
 	price: f64,
 	symbol: String,
 	time: i64,
-}
-impl From<PriceObject> for (Pair, f64) {
-	fn from(p: PriceObject) -> Self {
-		(Pair::from_str(&p.symbol).expect("Assume v_utils can handle all Binance pairs"), p.price)
-	}
 }
