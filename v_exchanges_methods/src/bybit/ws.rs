@@ -64,10 +64,9 @@ impl ExchangeStream for BookConnection {
 				other => panic!("Bybit sent unexpected book event type: {other}"),
 			};
 			let seq = BybitSeq { u: parsed.u, is_snapshot };
-			if let Some(prev) = self.last_seq.get(&pair)
-				&& seq.has_gap_from_prev(prev)
-			{
-				tracing::warn!(pair = %pair, prev_u = prev.u, next_u = seq.u, "Bybit orderbook gap detected on delta chain");
+			let gapped = self.last_seq.get(&pair).map(|prev| seq.has_gap_from_prev(prev)).unwrap_or(false);
+			if gapped {
+				tracing::warn!(pair = %pair, next_u = seq.u, "Bybit orderbook gap detected on delta chain");
 			}
 			self.last_seq.insert(pair, seq);
 
@@ -79,7 +78,11 @@ impl ExchangeStream for BookConnection {
 				bids: parsed.b.into_iter().map(parse_level).collect(),
 				asks: parsed.a.into_iter().map(parse_level).collect(),
 			};
-			out.push(if is_snapshot { BookUpdate::Snapshot(shape) } else { BookUpdate::BatchDelta(shape) });
+			out.push(if is_snapshot {
+				BookUpdate::Snapshot(shape)
+			} else {
+				BookUpdate::BatchDelta { shape, gapped }
+			});
 		}
 		Ok(out)
 	}

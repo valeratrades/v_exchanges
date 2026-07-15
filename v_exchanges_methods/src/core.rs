@@ -53,16 +53,6 @@ pub trait SubscribeOrder {
 
 	async fn place_and_subscribe(&mut self, topics: Vec<Self::Order>) -> Result<(), WsError>;
 }
-/// Pluggable sink that captures book updates as they fly through the WS connection. The connection
-/// invokes `on_snapshot`/`on_delta` synchronously on every event, before returning from `next()`.
-/// Implementations are expected to be cheap; heavy I/O should be batched internally.
-pub trait BookPersistor: Send + Sync {
-	fn on_snapshot(&mut self, pair: Pair, shape: &BookShape);
-	fn on_delta(&mut self, pair: Pair, shape: &BookShape, gapped: bool);
-	/// Flush any in-memory buffers immediately. Called by callers at shutdown to avoid losing rows.
-	fn flush(&mut self) {}
-}
-
 /// Per-exchange book-event ordering token. Used internally by the WS connection to detect gaps
 /// in the per-pair delta chain. Not persisted; the *result* (`gapped: bool`) is.
 pub trait Sequence: Send + Sync {
@@ -409,13 +399,17 @@ impl Timestamped for BookShape {
 #[derive(Clone, Debug)]
 pub enum BookUpdate {
 	Snapshot(BookShape),
-	BatchDelta(BookShape),
+	/// `gapped` is `true` when the originating WS event broke the per-pair sequence chain.
+	BatchDelta {
+		shape: BookShape,
+		gapped: bool,
+	},
 }
 
 impl BookUpdate {
 	pub fn shape(&self) -> &BookShape {
 		match self {
-			Self::Snapshot(s) | Self::BatchDelta(s) => s,
+			Self::Snapshot(s) | Self::BatchDelta { shape: s, .. } => s,
 		}
 	}
 }

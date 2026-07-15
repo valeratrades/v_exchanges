@@ -24,8 +24,7 @@ pub struct Binance {
 	pub info_cache: BTreeMap<Instrument, ExchangeInfo>,
 }
 impl Binance {
-	/// Concrete-typed counterpart to [`ExchangeImpl::ws_book`]. Lets callers attach a
-	/// [`crate::core::BookPersistor`] via [`ws::BookConnection::with_persistor`] before boxing.
+	/// Concrete-typed counterpart to [`ExchangeImpl::ws_book`], exposing the connection before boxing.
 	pub async fn book_connection(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<ws::BookConnection> {
 		match instrument {
 			Instrument::Perp | Instrument::Spot | Instrument::Margin => {

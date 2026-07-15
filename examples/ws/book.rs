@@ -38,7 +38,7 @@ async fn main() {
 fn print_update(source: &str, update: &BookUpdate) {
 	let (kind, shape) = match update {
 		BookUpdate::Snapshot(s) => ("SNAPSHOT", s),
-		BookUpdate::BatchDelta(d) => ("DELTA", d),
+		BookUpdate::BatchDelta { shape, .. } => ("DELTA", shape),
 	};
 	let best_bid = shape.bids.iter().next_back().map(|(p, _)| Price {
 		raw: *p,

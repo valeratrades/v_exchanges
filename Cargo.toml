@@ -57,22 +57,16 @@ v_utils = "^2.15"
 #dynosaur = "^0.2.0"
 
 #[dev-dependencies]
-arrow = "58"
 bytes = "1.11"
 color-eyre = "0.6"
 criterion = { version = "0.8", default-features = false }
 enum_dispatch = "0.3"
-iai-callgrind = "0.16"
 insta = "1.47"
-parquet = "58"
 rust_decimal = "1.42"
 strum = { version = "^0.28", features = ["derive"] }
-tempfile = "3"
 tokio-tungstenite = "0.29"
 
 v_exchanges_adapters = { version = "0.18.6", path = "v_exchanges_adapters" }
 v_exchanges_api_generics = { version = "0.20.6", path = "v_exchanges_api_generics" }
-v_exchanges_book = { version = "0.1.6", path = "v_exchanges_book" }
 v_exchanges_core = { version = "0.2.6", path = "v_exchanges_core" }
 v_exchanges_methods = { version = "0.1.7", path = "v_exchanges_methods", default-features = false }
-v_exchanges_persistence = { version = "0.1.6", path = "v_exchanges_persistence" }
