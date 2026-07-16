@@ -4750,7 +4750,7 @@ dependencies = [
 
 [[package]]
 name = "v_utils_macros"
-version = "2.11.55"
+version = "2.11.57"
 dependencies = [
  "eyre",
  "heck",
