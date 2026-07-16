@@ -8,7 +8,9 @@ use derive_more::{Deref, DerefMut};
 use jiff::Timestamp;
 use secrecy::SecretString;
 use serde_json::json;
+pub use trading_data::{BookShape, BookUpdate};
 use v_exchanges_core::Price;
+pub use v_utils::trades::{ExchangeName, Instrument, PrecisionPriceQty, Symbol};
 use v_utils::{trades::Timestamped, utils::filter_nulls};
 
 use crate::{
@@ -57,6 +59,12 @@ pub trait SubscribeOrder {
 /// in the per-pair delta chain. Not persisted; the *result* (`gapped: bool`) is.
 pub trait Sequence: Send + Sync {
 	fn has_gap_from_prev(&self, prev: &Self) -> bool;
+}
+/// Feature-gated exchange construction. Local extension trait over the foreign [`ExchangeName`]
+/// (defined in `v_utils::trades`) — the only piece of exchange behavior that cannot leave this crate.
+pub trait ExchangeInit {
+	fn init_client(&self) -> Box<dyn Exchange>;
+	fn init_mock_client(&self) -> Box<dyn Exchange>;
 }
 /// most exchanges default to returning OI value in asset quantity, not quote. Exception would be Inverse on Bybit.
 /// Which actually makes sense, as same endpoints accept things like "BTCETH", where quote value would be irrelevant.
@@ -235,20 +243,8 @@ pub struct PairInfo {
 	/// `None` means perpetual (no expiry). Only set for dated futures.
 	pub delivery_date: Option<Timestamp>,
 }
-#[derive(Clone, Copy, Debug, strum::Display, strum::EnumString, Eq, Hash, PartialEq)]
-#[strum(serialize_all = "lowercase")]
-#[non_exhaustive]
-pub enum ExchangeName {
-	Binance,
-	Bybit,
-	Kucoin,
-	Mexc,
-	BitFlyer,
-	Coincheck,
-	Yahoo,
-}
-impl ExchangeName {
-	pub fn init_client(&self) -> Box<dyn Exchange> {
+impl ExchangeInit for ExchangeName {
+	fn init_client(&self) -> Box<dyn Exchange> {
 		match self {
 			#[cfg(feature = "binance")]
 			Self::Binance => Box::new(crate::Binance::default()),
@@ -262,7 +258,7 @@ impl ExchangeName {
 		}
 	}
 
-	pub fn init_mock_client(&self) -> Box<dyn Exchange> {
+	fn init_mock_client(&self) -> Box<dyn Exchange> {
 		match self {
 			#[cfg(feature = "binance")]
 			Self::Binance => Box::new(crate::Binance {
@@ -289,145 +285,11 @@ impl ExchangeName {
 	}
 }
 
-#[derive(Clone, Copy, Debug, Default, serde::Deserialize, strum::Display, strum::EnumString, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Serialize)]
-#[non_exhaustive]
-pub enum Instrument {
-	#[default]
-	#[strum(serialize = "")]
-	Spot,
-	#[strum(serialize = ".P")]
-	Perp,
-	#[strum(serialize = ".M")]
-	Margin, //Q: do we care for being able to parse spot/margin diff from ticker defs?
-	#[strum(serialize = ".PERP_INVERSE")]
-	PerpInverse,
-	#[strum(serialize = ".OPTIONS")]
-	Options,
-}
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Ticker {
 	pub symbol: Symbol,
 	pub exchange_name: ExchangeName,
 }
-#[derive(Clone, Copy, Debug, Default, serde::Deserialize, Eq, Hash, PartialEq, serde::Serialize, derive_new::new)]
-pub struct Symbol {
-	pub pair: Pair,
-	pub instrument: Instrument,
-}
-/// Per-batch precision shared across all levels / trades in a [`BookShape`] / [`BatchTrades`].
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct PrecisionPriceQty {
-	pub price: u8,
-	pub qty: u8,
-}
-
-impl PrecisionPriceQty {
-	/// Strip the decimal point from a string and right-pad to `expected_precision` decimals.
-	/// Trailing zeros beyond `expected_precision` are ignored (Binance pads `.24` to `.24000000`);
-	/// any non-zero digit beyond `expected_precision` is a bug and panics.
-	fn digits(s: &str, expected_precision: u8) -> String {
-		match s.find('.') {
-			Some(dot) => {
-				let int_part = &s[..dot];
-				let frac_part = &s[dot + 1..];
-				let frac_significant = frac_part.trim_end_matches('0');
-				let significant_decimals = frac_significant.len() as u8;
-				assert!(
-					significant_decimals <= expected_precision,
-					"string {s:?} has {significant_decimals} significant decimal places, expected at most {expected_precision}"
-				);
-				let pad = expected_precision as usize - frac_significant.len();
-				let mut out = String::with_capacity(int_part.len() + expected_precision as usize);
-				out.push_str(int_part);
-				out.push_str(frac_significant);
-				for _ in 0..pad {
-					out.push('0');
-				}
-				out
-			}
-			None => {
-				let mut out = String::with_capacity(s.len() + expected_precision as usize);
-				out.push_str(s);
-				for _ in 0..expected_precision {
-					out.push('0');
-				}
-				out
-			}
-		}
-	}
-
-	pub(crate) fn parse_price(&self, s: &str) -> i32 {
-		Self::digits(s, self.price).parse().expect("price digits are valid i32")
-	}
-
-	pub(crate) fn parse_qty(&self, s: &str) -> u32 {
-		Self::digits(s, self.qty).parse().expect("qty digits are valid u32")
-	}
-}
-
-/// (price, qty) levels for both sides of an orderbook, keyed by raw price.
-/// Both BTreeMaps are ascending; consumers reverse `bids` for best-bid.
-#[derive(Clone, Debug, Default)]
-pub struct BookShape {
-	/// Exchange-provided event time.
-	pub ts_event: Timestamp,
-	/// When we first received the data backing this shape.
-	pub ts_init: Timestamp,
-	/// When we last wrote into this shape. Equals `ts_init` for shapes built from a single message.
-	pub ts_last: Timestamp,
-	pub prec: PrecisionPriceQty,
-	pub asks: BTreeMap<i32, u32>,
-	pub bids: BTreeMap<i32, u32>,
-}
-
-impl Timestamped for BookShape {
-	fn ts_event(&self) -> Timestamp {
-		self.ts_event
-	}
-
-	fn ts_init(&self) -> Timestamp {
-		self.ts_init
-	}
-
-	fn ts_last(&self) -> Timestamp {
-		self.ts_last
-	}
-}
-
-/// Distinguishes full snapshots from incremental deltas.
-/// For deltas: qty=0 means remove that price level.
-#[derive(Clone, Debug)]
-pub enum BookUpdate {
-	Snapshot(BookShape),
-	/// `gapped` is `true` when the originating WS event broke the per-pair sequence chain.
-	BatchDelta {
-		shape: BookShape,
-		gapped: bool,
-	},
-}
-
-impl BookUpdate {
-	pub fn shape(&self) -> &BookShape {
-		match self {
-			Self::Snapshot(s) | Self::BatchDelta { shape: s, .. } => s,
-		}
-	}
-}
-
-impl Timestamped for BookUpdate {
-	fn ts_event(&self) -> Timestamp {
-		self.shape().ts_event
-	}
-
-	fn ts_init(&self) -> Timestamp {
-		self.shape().ts_init
-	}
-
-	fn ts_last(&self) -> Timestamp {
-		self.shape().ts_last
-	}
-}
-
 /// Batched trade stream event. All trades share `prec`.
 #[derive(Clone, Debug, Default)]
 pub struct BatchTrades {
@@ -769,29 +631,6 @@ impl std::str::FromStr for Ticker {
 		let symbol = Symbol::from_str(symbol_str)?;
 
 		Ok(Ticker { symbol, exchange_name })
-	}
-}
-
-impl std::fmt::Display for Symbol {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}{}", self.pair, self.instrument)
-	}
-}
-
-impl std::str::FromStr for Symbol {
-	type Err = eyre::Report;
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let (pair_str, instrument_ticker_str) = s.split_once('.').map(|(p, i)| (p, format!(".{}", i.to_uppercase()))).unwrap_or((s, "".to_owned()));
-		let pair = Pair::from_str(pair_str)?;
-		let instrument = Instrument::from_str(&instrument_ticker_str)?;
-
-		Ok(Symbol { pair, instrument })
-	}
-}
-impl From<&str> for Symbol {
-	fn from(s: &str) -> Self {
-		Self::from_str(s).unwrap()
 	}
 }
 //,}}}

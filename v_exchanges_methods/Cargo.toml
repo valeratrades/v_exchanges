@@ -51,6 +51,7 @@ strum.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+trading_data.workspace = true
 uuid.workspace = true
 v_exchanges_adapters.workspace = true
 v_exchanges_core.workspace = true

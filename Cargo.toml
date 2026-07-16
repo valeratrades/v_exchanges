@@ -50,6 +50,9 @@ smart-default = "^0.7"
 thiserror = "^2.0"
 tokio = { version = "^1.52", features = ["sync", "macros", "io-util", "rt", "rt-multi-thread", "time"] } # enable only features that play with wasm.
 tracing = "^0.1.44"
+# NB: pulls arrow/parquet/zstd transitively into this HTTP/WS client (for BookShape/BookUpdate only).
+# Accepted for now; upgrade path is a default `storage` feature on trading_data gated off here.
+trading_data = { path = "../ev_invest/trading_data/trading_data" }
 url = "^2.5.8"
 ustr = "^1"
 uuid = { version = "^1.23", features = ["v7"] }
@@ -70,3 +73,6 @@ v_exchanges_adapters = { version = "0.18.6", path = "v_exchanges_adapters" }
 v_exchanges_api_generics = { version = "0.20.6", path = "v_exchanges_api_generics" }
 v_exchanges_core = { version = "0.2.6", path = "v_exchanges_core" }
 v_exchanges_methods = { version = "0.1.7", path = "v_exchanges_methods", default-features = false }
+
+[patch.crates-io]
+v_utils = { path = "../v_utils/v_utils" }
