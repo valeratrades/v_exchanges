@@ -207,7 +207,13 @@ impl WsHandler for KucoinWsHandler {
 		let time_ms = jrpc.get("time").and_then(|v| v.as_i64()).unwrap_or(0);
 		let time = Timestamp::from_millisecond(time_ms).unwrap_or_else(|_| Timestamp::now());
 
-		let content = ContentEvent { data, topic, time, event_type };
+		let content = ContentEvent {
+			data,
+			topic,
+			time,
+			exec_time: None,
+			event_type,
+		};
 		Ok(ResponseOrContent::Content(content))
 	}
 }

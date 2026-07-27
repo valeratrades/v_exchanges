@@ -102,7 +102,12 @@ pub enum ResponseOrContent {
 pub struct ContentEvent {
 	pub data: serde_json::Value,
 	pub topic: String,
+	/// When the venue put this frame on the wire.
 	pub time: Timestamp,
+	/// When the venue's matching engine acted, where the envelope reports it separately from
+	/// [`Self::time`]. `None` means the venue told us only when it *sent* the frame — the two are
+	/// different readings and collapsing them would invent an execution time we were never given.
+	pub exec_time: Option<Timestamp>,
 	pub event_type: String,
 }
 #[derive(Clone, Debug, Eq)]
@@ -688,6 +693,7 @@ mod tests {
 				data: jrpc.clone(),
 				topic: "test".to_owned(),
 				time: Timestamp::UNIX_EPOCH,
+				exec_time: None,
 				event_type: "test".to_owned(),
 			}))
 		}
@@ -722,6 +728,7 @@ mod tests {
 				data: jrpc,
 				topic: "test".to_owned(),
 				time: Timestamp::UNIX_EPOCH,
+				exec_time: None,
 				event_type: "test".to_owned(),
 			}))
 		}

@@ -624,7 +624,10 @@ impl WsHandler for BybitWsHandler {
 		pub struct ContentResponse {
 			pub data: serde_json::Value,
 			pub topic: String,
+			/// Envelope: when Bybit sent the frame.
 			pub ts: i64,
+			/// Matching-engine time, on the orderbook topic. Absent elsewhere.
+			pub cts: Option<i64>,
 			#[serde(rename = "type")]
 			pub event_type: String,
 		}
@@ -634,6 +637,7 @@ impl WsHandler for BybitWsHandler {
 					topic: content.topic,
 					data: content.data,
 					time: Timestamp::from_millisecond(content.ts).unwrap(),
+					exec_time: content.cts.map(|c| Timestamp::from_millisecond(c).expect("Bybit sent an out-of-range cts")),
 					event_type: content.event_type,
 				}
 			}

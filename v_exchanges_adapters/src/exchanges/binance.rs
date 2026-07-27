@@ -259,7 +259,10 @@ impl WsHandler for BinanceWsHandler {
 		let content = ContentEvent {
 			data: event_data,
 			topic: event_topic,
+			// Binance's envelope carries only `E`; the per-stream `T` lives inside `data` and is
+			// parsed by whichever stream knows its payload shape.
 			time: event_time,
+			exec_time: None,
 			event_type,
 		};
 		Ok(ResponseOrContent::Content(content))

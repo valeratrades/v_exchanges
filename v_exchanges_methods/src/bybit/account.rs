@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{DisplayFromStr, serde_as};
 use tracing::warn;
-use v_exchanges_adapters::bybit::{BybitHttpAuth, BybitOption};
 use trading_data_core::Asset;
+use v_exchanges_adapters::bybit::{BybitHttpAuth, BybitOption};
 use v_utils::macros::ScreamIt;
 
 use crate::{

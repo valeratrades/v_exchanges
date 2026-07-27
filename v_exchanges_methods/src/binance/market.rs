@@ -5,8 +5,8 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
-use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
 use trading_data_core::{Accumulator, Kline, Ohlc, Pair, Span, Ts};
+use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
 
 use super::BinanceTimeframe;
 use crate::{
@@ -181,6 +181,8 @@ pub(crate) async fn fetch_book_snapshot(client: &v_exchanges_adapters::Client, p
 			venue: Span::at(fetched),
 			local: None,
 		},
+		// `/depth` reports no venue clock reading whatsoever, so there is no send time to record.
+		venue_send: None,
 		prec,
 		bids: response.bids.into_iter().map(parse_level).collect(),
 		asks: response.asks.into_iter().map(parse_level).collect(),

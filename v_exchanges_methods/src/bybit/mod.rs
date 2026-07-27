@@ -6,12 +6,12 @@ use std::collections::BTreeMap;
 
 use adapters::bybit::{BybitOption, BybitOptions};
 use secrecy::SecretString;
-use v_exchanges_adapters::{Client, GetOptions};
 use trading_data_core::Pair;
+use v_exchanges_adapters::{Client, GetOptions};
 use v_utils::Timeframe;
 
 use crate::{
-	BookUpdate, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Instrument, MethodError, OpenInterest, PrecisionPriceQty, Symbol,
+	BatchTrades, BookUpdate, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Instrument, MethodError, OpenInterest, PrecisionPriceQty, Symbol,
 	core::{ExchangeImpl, Klines, PersonalInfo, RequestRange},
 };
 
@@ -108,6 +108,41 @@ impl ExchangeImpl for Bybit {
 						.collect::<ExchangeResult<_>>()?
 				};
 				let connection = ws::BookConnection::try_new(self, pairs, instrument, pair_precisions)?;
+				Ok(Box::new(connection))
+			}
+			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), instrument))),
+		}
+	}
+
+	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = BatchTrades>>, ExchangeError> {
+		match instrument {
+			Instrument::Perp | Instrument::Spot => {
+				if !self.info_cache.contains_key(&instrument) {
+					let info = ExchangeImpl::exchange_info(&*self, instrument).await?;
+					self.info_cache.insert(instrument, info);
+				}
+				let exchange = self.name();
+				let pair_precisions: BTreeMap<Pair, PrecisionPriceQty> = {
+					let info = self.info_cache.get(&instrument).expect("just inserted or was present");
+					pairs
+						.iter()
+						.map(|pair| {
+							info.pairs
+								.get(pair)
+								.ok_or_else(|| ExchangeError::Method(MethodError::new_pair_not_listed(exchange, instrument, *pair)))
+								.map(|pi| {
+									(
+										*pair,
+										PrecisionPriceQty {
+											price: pi.price_precision,
+											qty: pi.qty_precision,
+										},
+									)
+								})
+						})
+						.collect::<ExchangeResult<_>>()?
+				};
+				let connection = ws::TradeConnection::try_new(self, pairs, instrument, pair_precisions)?;
 				Ok(Box::new(connection))
 			}
 			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), instrument))),

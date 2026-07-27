@@ -8,8 +8,8 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
-use v_exchanges_adapters::bybit::BybitOption;
 use trading_data_core::{Kline, Ohlc, Pair};
+use v_exchanges_adapters::bybit::BybitOption;
 use v_utils::utils::filter_nulls;
 
 use super::{BybitInterval, BybitIntervalTime};

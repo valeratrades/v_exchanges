@@ -5,7 +5,8 @@ use adapters::{
 	bybit::{BybitOption, BybitWsHandler, BybitWsUrlBase},
 	generics::ws::{WsConnection, WsError},
 };
-use trading_data_core::{Accumulator, Pair, Span, Ts};
+use jiff::Timestamp;
+use trading_data_core::{Accumulator, BatchTrades, InnerTrade, Pair, Side, Span, Ts};
 
 use crate::{BookShape, BookUpdate, ExchangeStream, Instrument, PrecisionPriceQty, core::Sequence};
 
@@ -43,10 +44,6 @@ impl ExchangeStream for BookConnection {
 	async fn next(&mut self) -> Result<Vec<Self::Item>, WsError> {
 		let batch = self.connection.next().await?;
 		let mut out = Vec::with_capacity(batch.len());
-		// The venue axis below is Bybit's envelope `ts`, not its matching-engine `cts`: `cts` is a
-		// top-level field of the frame and `ContentEvent` only carries `data` + envelope `ts`, so
-		// promoting this book from a relay to an attested origin needs `cts` plumbed through the
-		// adapter layer first.
 		for content_event in batch {
 			let parsed: BybitBookData = serde_json::from_value(content_event.data).expect("Exchange responded with invalid book event");
 
@@ -70,15 +67,17 @@ impl ExchangeStream for BookConnection {
 			}
 			self.last_seq.insert(pair, seq);
 
+			// `cts` is the matching-engine time and `ts` the envelope; Bybit reports both, so both
+			// are kept. `cts` is absent on the (undocumented) frames that omit it, and there the
+			// execution reading is genuinely unknown rather than equal to the send.
+			let venue_send = Ts::from(content_event.time);
 			let shape = BookShape {
 				ts: Accumulator {
-					// Bybit's envelope `ts`. The matching-engine time `cts` rides the same frame but the
-					// generic `ContentEvent` drops it, so this is a *send* reading standing in as the
-					// venue axis — see the note in `next`.
-					venue: Span::at(Ts::from(content_event.time)),
+					venue: Span::at(content_event.exec_time.map(Ts::from).unwrap_or(venue_send)),
 					// Stamped by the consumer at ingest; the adapter has no place in the local chain.
 					local: None,
 				},
+				venue_send: Some(venue_send),
 				prec,
 				bids: parsed.b.into_iter().map(parse_level).collect(),
 				asks: parsed.a.into_iter().map(parse_level).collect(),
@@ -93,6 +92,66 @@ impl ExchangeStream for BookConnection {
 	}
 }
 
+// trades {{{
+#[derive(Debug)]
+pub struct TradeConnection {
+	connection: WsConnection<BybitWsHandler>,
+	pair_precisions: BTreeMap<Pair, PrecisionPriceQty>,
+}
+impl TradeConnection {
+	pub fn try_new(client: &Client, pairs: &[Pair], instrument: Instrument, pair_precisions: BTreeMap<Pair, PrecisionPriceQty>) -> Result<Self, WsError> {
+		let vec_topic_str = pairs.iter().map(|p| format!("publicTrade.{}", p.fmt_bybit())).collect::<Vec<_>>();
+
+		let url_suffix = match instrument {
+			Instrument::Perp => "/v5/public/linear",
+			Instrument::Spot => "/v5/public/spot",
+			_ => unimplemented!(),
+		};
+		let connection = client.ws_connection(url_suffix, vec![BybitOption::WsUrl(BybitWsUrlBase::Bybit), BybitOption::WsTopics(vec_topic_str)])?;
+
+		Ok(Self { connection, pair_precisions })
+	}
+}
+#[async_trait::async_trait]
+impl ExchangeStream for TradeConnection {
+	type Item = BatchTrades;
+
+	async fn next(&mut self) -> Result<Vec<Self::Item>, WsError> {
+		let batch = self.connection.next().await?;
+		// One `now` per socket read: every frame drained here shares a reception time, and a
+		// per-frame `now()` would only record scheduler jitter as if it were network latency.
+		let now = Ts::from(Timestamp::now());
+		let mut by_pair: BTreeMap<Pair, (PrecisionPriceQty, Vec<InnerTrade>)> = BTreeMap::new();
+		for content_event in batch {
+			// Bybit sends one frame per matching batch, so the envelope `ts` is that batch's send
+			// time and applies to every trade in `data`.
+			let sent = Ts::from(content_event.time);
+			let parsed: Vec<BybitTradeData> = serde_json::from_value(content_event.data).expect("Exchange responded with invalid trade event");
+			for t in parsed {
+				let pair: Pair = t.symbol.as_str().try_into().unwrap_or_else(|_| panic!("failed to parse pair from trade event: {}", t.symbol));
+				let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
+				by_pair.entry(pair).or_insert((prec, Vec::new())).1.push(InnerTrade {
+					time: Ts::from(Timestamp::from_millisecond(t.time).expect("Exchange responded with invalid timestamp")),
+					sent: Some(sent),
+					price: prec.parse_price(&t.price),
+					qty: prec.parse_qty(&t.size),
+					// Bybit's `S` already names the taker, unlike Binance's maker-flag.
+					side: t.side,
+				});
+			}
+		}
+		// `BatchTrades::new` asserts non-empty and venue-time sorted; a frame with no trades simply
+		// contributes no group, so an all-empty read yields `Ok(vec![])`.
+		Ok(by_pair
+			.into_iter()
+			.map(|(_, (prec, mut trades))| {
+				trades.sort_by_key(|t| t.time);
+				BatchTrades::new(prec, trades, now)
+			})
+			.collect())
+	}
+}
+
 /// Sequence token for Bybit v5 orderbook events. `is_snapshot` disables the gap check across a
 /// snapshot boundary (either side being a snapshot resets the chain).
 #[derive(Clone, Copy, Debug)]
@@ -100,6 +159,25 @@ pub struct BybitSeq {
 	pub u: u64,
 	pub is_snapshot: bool,
 }
+/// Bybit public trade event entry.
+/// Docs: https://bybit-exchange.github.io/docs/v5/websocket/public/trade
+#[derive(Clone, Debug, serde::Deserialize)]
+struct BybitTradeData {
+	/// Trade fill time (venue matching engine).
+	#[serde(rename = "T")]
+	time: i64,
+	#[serde(rename = "s")]
+	symbol: String,
+	/// Taker side.
+	#[serde(rename = "S")]
+	side: Side,
+	#[serde(rename = "v")]
+	size: String,
+	#[serde(rename = "p")]
+	price: String,
+}
+//,}}}
+
 /// Bybit orderbook event data payload.
 /// Docs: https://bybit-exchange.github.io/docs/v5/websocket/public/orderbook
 #[derive(Clone, Debug, serde::Deserialize)]

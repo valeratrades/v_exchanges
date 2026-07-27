@@ -56,6 +56,10 @@ impl ExchangeStream for TradesConnection {
 			// full `raw_json` render stays inside the rare warn branch, off the hot path.
 			let is_na_artifact = content_event.data.get("X").and_then(|x| x.as_str()).unwrap_or("NA") == "NA";
 
+			// Binance's envelope `E` is when it sent the frame; the payload `T` is when the match
+			// happened. Both are real readings of the venue's clock and the gap between them is its
+			// internal latency, so neither stands in for the other.
+			let sent = Ts::from(content_event.time);
 			let (pair_str, timestamp, qty_asset_str, price_str, is_maker) = match self.instrument {
 				Instrument::Perp => {
 					let parsed = serde_json::from_value::<TradeEventPerp>(content_event.data).expect("Exchange responded with invalid trade event");
@@ -90,6 +94,7 @@ impl ExchangeStream for TradesConnection {
 			let trade = InnerTrade {
 				// Binance `T`: the venue's own execution time, not the envelope `E`.
 				time: Ts::from(Timestamp::from_millisecond(timestamp).expect("Exchange responded with invalid timestamp")),
+				sent: Some(sent),
 				price: price_raw,
 				qty: qty_raw,
 				// Binance `m` answers "was the *buyer* the maker?", so it names the passive side; the
@@ -273,12 +278,14 @@ impl ExchangeStream for BookConnection {
 				// so they share a receive time. Per-event `now()` would only add scheduling noise.
 				for content_event in batch {
 					let parsed: DepthEvent = serde_json::from_value(content_event.data).expect("Exchange responded with invalid depth event");
-					// `T` (execution) on futures; spot reports only the envelope `E`, so there the axis
-					// is a *send* reading. Substituting silently is what this vocabulary exists to
-					// prevent — the two cases are distinguished here rather than collapsed upstream.
+					// `T` (execution) on futures; spot depth reports only the envelope `E`. Where `T` is
+					// absent the execution reading is genuinely unknown, and `ts_venue_send` being
+					// equal to the axis is what records that — the substitution is visible on disk
+					// rather than hidden behind an `unwrap_or`.
+					let venue_send = Ts::from(content_event.time);
 					let venue_axis = match parsed.transaction_time {
 						Some(ts) => Ts::from(Timestamp::from_millisecond(ts).expect("Exchange responded with invalid timestamp")),
-						None => Ts::from(content_event.time),
+						None => venue_send,
 					};
 
 					// topic: "btcusdt@depth@100ms" → take before first '@' → uppercase → pair
@@ -296,6 +303,7 @@ impl ExchangeStream for BookConnection {
 							// Stamped by the consumer at ingest.
 							local: None,
 						},
+						venue_send: Some(venue_send),
 						prec,
 						bids: parsed.bids.into_iter().map(parse_level).collect(),
 						asks: parsed.asks.into_iter().map(parse_level).collect(),
