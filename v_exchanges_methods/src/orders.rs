@@ -2,7 +2,7 @@ use arrayvec::ArrayString;
 use jiff::Timestamp;
 use smart_default::SmartDefault;
 use uuid::Uuid;
-use v_utils::trades::Side;
+use trading_data_core::Side;
 
 use crate::{Price, Qty, Ticker};
 

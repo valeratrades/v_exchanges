@@ -8,7 +8,8 @@ use std::collections::BTreeMap;
 
 use secrecy::SecretString;
 use v_exchanges_adapters::Client;
-use v_utils::trades::{Pair, Timeframe};
+use trading_data_core::Pair;
+use v_utils::Timeframe;
 
 use crate::{
 	ExchangeName, ExchangeResult, Instrument, RequestRange, Symbol,

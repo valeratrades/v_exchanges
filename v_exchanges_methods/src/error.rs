@@ -5,8 +5,9 @@ use adapters::generics::{
 	ws::WsError,
 };
 use eyre::Report;
+use trading_data_core::Pair;
 use v_utils::{
-	trades::{Pair, Timeframe},
+	Timeframe,
 	utils::{Sysexit, SysexitCode},
 };
 

@@ -5,8 +5,7 @@ use adapters::{
 	bybit::{BybitOption, BybitWsHandler, BybitWsUrlBase},
 	generics::ws::{WsConnection, WsError},
 };
-use jiff::Timestamp;
-use v_utils::trades::Pair;
+use trading_data_core::{Accumulator, Pair, Span, Ts};
 
 use crate::{BookShape, BookUpdate, ExchangeStream, Instrument, PrecisionPriceQty, core::Sequence};
 
@@ -44,9 +43,10 @@ impl ExchangeStream for BookConnection {
 	async fn next(&mut self) -> Result<Vec<Self::Item>, WsError> {
 		let batch = self.connection.next().await?;
 		let mut out = Vec::with_capacity(batch.len());
-		// One `now` for the whole batch: every event here was drained from the same socket read, so
-		// they share a receive time. Per-event `Timestamp::now()` would only add scheduling noise.
-		let now = Timestamp::now();
+		// The venue axis below is Bybit's envelope `ts`, not its matching-engine `cts`: `cts` is a
+		// top-level field of the frame and `ContentEvent` only carries `data` + envelope `ts`, so
+		// promoting this book from a relay to an attested origin needs `cts` plumbed through the
+		// adapter layer first.
 		for content_event in batch {
 			let parsed: BybitBookData = serde_json::from_value(content_event.data).expect("Exchange responded with invalid book event");
 
@@ -71,9 +71,14 @@ impl ExchangeStream for BookConnection {
 			self.last_seq.insert(pair, seq);
 
 			let shape = BookShape {
-				ts_event: content_event.time,
-				ts_init: now,
-				ts_last: now,
+				ts: Accumulator {
+					// Bybit's envelope `ts`. The matching-engine time `cts` rides the same frame but the
+					// generic `ContentEvent` drops it, so this is a *send* reading standing in as the
+					// venue axis — see the note in `next`.
+					venue: Span::at(Ts::from(content_event.time)),
+					// Stamped by the consumer at ingest; the adapter has no place in the local chain.
+					local: None,
+				},
 				prec,
 				bids: parsed.b.into_iter().map(parse_level).collect(),
 				asks: parsed.a.into_iter().map(parse_level).collect(),

@@ -6,7 +6,7 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{DisplayFromStr, serde_as};
-use v_utils::trades::Pair;
+use trading_data_core::Pair;
 
 use crate::{
 	ExchangeError,

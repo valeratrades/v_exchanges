@@ -7,7 +7,8 @@ use adapters::mexc::{MexcOption, MexcOptions};
 use derive_more::derive::{Deref, DerefMut};
 use secrecy::SecretString;
 use v_exchanges_adapters::{Client, GetOptions};
-use v_utils::trades::{Pair, Timeframe};
+use trading_data_core::Pair;
+use v_utils::Timeframe;
 
 use crate::{
 	ExchangeInfo, ExchangeName, ExchangeResult, Instrument, Symbol,

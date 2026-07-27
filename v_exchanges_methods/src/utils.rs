@@ -15,7 +15,7 @@ pub fn join_params(a: Value, b: Value) -> Value {
 macro_rules! define_provider_timeframe {
 	($struct_name:ident, $timeframes:expr) => {
 		#[derive(derive_more::AsRef, Clone, Copy, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
-		pub struct $struct_name(v_utils::trades::Timeframe);
+		pub struct $struct_name(v_utils::Timeframe);
 
 		impl std::fmt::Display for $struct_name {
 			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -30,21 +30,21 @@ macro_rules! define_provider_timeframe {
 			}
 		}
 
-		impl TryFrom<v_utils::trades::Timeframe> for $struct_name {
+		impl TryFrom<v_utils::Timeframe> for $struct_name {
 			type Error = $crate::UnsupportedTimeframeError;
 
-			fn try_from(t: v_utils::trades::Timeframe) -> Result<Self, Self::Error> {
+			fn try_from(t: v_utils::Timeframe) -> Result<Self, Self::Error> {
 				const TIMEFRAMES: [&str; $timeframes.len()] = $timeframes;
 
 				match t.try_as_predefined(&TIMEFRAMES) {
 					Some(_) => Ok(Self(t)),
-					_ => Err($crate::UnsupportedTimeframeError::new(t, TIMEFRAMES.iter().map(v_utils::trades::Timeframe::from).collect())),
+					_ => Err($crate::UnsupportedTimeframeError::new(t, TIMEFRAMES.iter().map(v_utils::Timeframe::from).collect())),
 				}
 			}
 		}
 		impl From<&str> for $struct_name {
 			fn from(s: &str) -> Self {
-				Self(v_utils::trades::Timeframe::from(s))
+				Self(v_utils::Timeframe::from(s))
 			}
 		}
 	};

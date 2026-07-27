@@ -1,7 +1,6 @@
 use std::str::FromStr as _;
 
 use v_exchanges::prelude::*;
-use v_utils::trades::Pair;
 
 #[tokio::main]
 async fn main() {
@@ -49,11 +48,11 @@ fn print_update(source: &str, update: &BookUpdate) {
 		precision: shape.prec.price,
 	});
 	println!(
-		"[{source}] {kind:>8} | bids: {:>4} asks: {:>4} | best_bid: {:<12} best_ask: {:<12} | {}",
+		"[{source}] {kind:>8} | bids: {:>4} asks: {:>4} | best_bid: {:<12} best_ask: {:<12} | {:?}",
 		shape.bids.len(),
 		shape.asks.len(),
 		best_bid.map_or("-".to_string(), |p| p.to_string()),
 		best_ask.map_or("-".to_string(), |p| p.to_string()),
-		shape.ts_event,
+		shape.ts.venue.last,
 	);
 }

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
-use v_utils::trades::{Kline, Ohlc, Pair};
+use trading_data_core::{Accumulator, Kline, Ohlc, Pair, Span, Ts};
 
 use super::BinanceTimeframe;
 use crate::{
@@ -171,12 +171,16 @@ pub(crate) async fn fetch_book_snapshot(client: &v_exchanges_adapters::Client, p
 	let options = vec![BinanceOption::HttpUrl(base_url)];
 	let response: DepthResponse = client.get(endpoint, &params, options).await?;
 
-	let now = Timestamp::now();
 	let parse_level = |(p, q): (String, String)| (prec.parse_price(&p), prec.parse_qty(&q));
+	// `/depth` returns only `lastUpdateId` — no venue clock reading at all. Our fetch time is the
+	// only reading that exists, so it stands in as the venue axis; it is a local reading wearing a
+	// venue label, and the honest fix is a nullable venue axis (see the book-lane axis question).
+	let fetched = Ts::from(Timestamp::now());
 	Ok(BookShape {
-		ts_event: now,
-		ts_init: now,
-		ts_last: now,
+		ts: Accumulator {
+			venue: Span::at(fetched),
+			local: None,
+		},
 		prec,
 		bids: response.bids.into_iter().map(parse_level).collect(),
 		asks: response.asks.into_iter().map(parse_level).collect(),

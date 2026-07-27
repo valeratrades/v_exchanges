@@ -6,7 +6,8 @@ use serde_json::Value;
 use serde_with::{DisplayFromStr, serde_as};
 use tracing::warn;
 use v_exchanges_adapters::bybit::{BybitHttpAuth, BybitOption};
-use v_utils::{macros::ScreamIt, trades::Asset};
+use trading_data_core::Asset;
+use v_utils::macros::ScreamIt;
 
 use crate::{
 	ExchangeResult,
@@ -221,13 +222,13 @@ async fn balances_inner(client: &Client, recv_window: Option<std::time::Duration
 					}) {
 						existing.underlying += pos.amount;
 						if let Some(ref mut usd) = existing.usd {
-							*usd = v_utils::trades::Usd(**usd + usd_value);
+							*usd = trading_data_core::Usd(**usd + usd_value);
 						}
 					} else {
 						vec_balance.push(AssetBalance {
 							asset: (&*pos.coin).into(),
 							underlying: pos.amount,
-							usd: Some(v_utils::trades::Usd(usd_value)),
+							usd: Some(trading_data_core::Usd(usd_value)),
 						});
 					}
 				}

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::kucoin::{KucoinHttpUrl, KucoinOption};
-use v_utils::trades::{Kline, Ohlc, Pair};
+use trading_data_core::{Kline, Ohlc, Pair};
 
 use crate::{
 	ExchangeResult, RequestRange, Symbol,
@@ -105,7 +105,7 @@ pub mod futures {
 	use serde::{Deserialize, Serialize};
 	use serde_json::json;
 	use v_exchanges_adapters::kucoin::{KucoinHttpUrl, KucoinOption};
-	use v_utils::trades::{Kline, Ohlc, Pair};
+	use trading_data_core::{Kline, Ohlc, Pair};
 
 	use crate::{
 		ExchangeResult, RequestRange, Symbol,

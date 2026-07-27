@@ -7,7 +7,8 @@ use std::collections::BTreeMap;
 use adapters::bybit::{BybitOption, BybitOptions};
 use secrecy::SecretString;
 use v_exchanges_adapters::{Client, GetOptions};
-use v_utils::trades::{Pair, Timeframe};
+use trading_data_core::Pair;
+use v_utils::Timeframe;
 
 use crate::{
 	BookUpdate, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Instrument, MethodError, OpenInterest, PrecisionPriceQty, Symbol,

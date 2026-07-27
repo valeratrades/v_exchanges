@@ -2,7 +2,8 @@ use eyre::{Result, bail, eyre};
 use jiff::Timestamp;
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
 use serde_json::Value;
-use v_utils::{NowThen, trades::Close};
+use trading_data_core::Close;
+use v_utils::NowThen;
 
 pub async fn vix(tf: YahooTimeframe, n: u8) -> Result<Vec<Close>> {
 	let mut headers = HeaderMap::default();

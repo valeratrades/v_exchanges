@@ -6,7 +6,7 @@ use adapters::{
 	generics::ws::{WsConnection, WsError},
 };
 use jiff::Timestamp;
-use v_utils::trades::Pair;
+use trading_data_core::{Accumulator, Pair, Side, Span, Ts};
 
 use crate::{
 	BatchTrades, BookShape, BookUpdate, ExchangeError, ExchangeStream, Instrument, PrecisionPriceQty,
@@ -56,14 +56,14 @@ impl ExchangeStream for TradesConnection {
 			// full `raw_json` render stays inside the rare warn branch, off the hot path.
 			let is_na_artifact = content_event.data.get("X").and_then(|x| x.as_str()).unwrap_or("NA") == "NA";
 
-			let (pair_str, timestamp, qty_asset_str, price_str) = match self.instrument {
+			let (pair_str, timestamp, qty_asset_str, price_str, is_maker) = match self.instrument {
 				Instrument::Perp => {
 					let parsed = serde_json::from_value::<TradeEventPerp>(content_event.data).expect("Exchange responded with invalid trade event");
-					(parsed.pair, parsed.timestamp, parsed.qty_asset, parsed.price)
+					(parsed.pair, parsed.timestamp, parsed.qty_asset, parsed.price, parsed.is_maker)
 				}
 				Instrument::Spot | Instrument::Margin => {
 					let parsed = serde_json::from_value::<TradeEventSpot>(content_event.data).expect("Exchange responded with invalid trade event");
-					(parsed.pair, parsed.timestamp, parsed.qty_asset, parsed.price)
+					(parsed.pair, parsed.timestamp, parsed.qty_asset, parsed.price, parsed.is_maker)
 				}
 				_ => unimplemented!(),
 			};
@@ -88,16 +88,20 @@ impl ExchangeStream for TradesConnection {
 			}
 
 			let trade = InnerTrade {
-				time: Timestamp::from_millisecond(timestamp).expect("Exchange responded with invalid timestamp"),
+				// Binance `T`: the venue's own execution time, not the envelope `E`.
+				time: Ts::from(Timestamp::from_millisecond(timestamp).expect("Exchange responded with invalid timestamp")),
 				price: price_raw,
 				qty: qty_raw,
+				// Binance `m` answers "was the *buyer* the maker?", so it names the passive side; the
+				// aggressor this field records is the other one.
+				side: if is_maker { Side::Sell } else { Side::Buy },
 			};
 			by_pair.entry(pair).or_insert((prec, Vec::new())).1.push(trade);
 		}
 		// Only non-empty groups are emitted, so `BatchTrades::new`'s non-empty assert holds. An
 		// all-zero-skip batch yields `Ok(vec![])` — a no-op `for` for consumers.
 		let now = Timestamp::now();
-		Ok(by_pair.into_iter().map(|(_, (prec, trades))| BatchTrades::new(prec, trades, now, now)).collect())
+		Ok(by_pair.into_iter().map(|(_, (prec, trades))| BatchTrades::new(prec, trades, Ts::from(now))).collect())
 	}
 }
 
@@ -108,7 +112,7 @@ pub struct TradeEventPerp {
 	#[serde(rename = "X")]
 	_order_type: String,
 	#[serde(rename = "m")]
-	_is_maker: bool,
+	is_maker: bool,
 	#[serde(rename = "q")]
 	qty_asset: String,
 	#[serde(rename = "p")]
@@ -123,6 +127,8 @@ pub struct TradeEventPerp {
 pub struct TradeEventSpot {
 	#[serde(rename = "T")]
 	timestamp: i64,
+	#[serde(rename = "m")]
+	is_maker: bool,
 	#[serde(rename = "q")]
 	qty_asset: String,
 	#[serde(rename = "p")]
@@ -265,13 +271,15 @@ impl ExchangeStream for BookConnection {
 				let mut out = Vec::with_capacity(batch.len());
 				// One `now` for the whole batch: every event here was drained from the same socket read,
 				// so they share a receive time. Per-event `now()` would only add scheduling noise.
-				let now = Timestamp::now();
 				for content_event in batch {
 					let parsed: DepthEvent = serde_json::from_value(content_event.data).expect("Exchange responded with invalid depth event");
-					let ts_event = parsed
-						.transaction_time
-						.map(|ts| Timestamp::from_millisecond(ts).expect("Exchange responded with invalid timestamp"))
-						.unwrap_or(content_event.time);
+					// `T` (execution) on futures; spot reports only the envelope `E`, so there the axis
+					// is a *send* reading. Substituting silently is what this vocabulary exists to
+					// prevent — the two cases are distinguished here rather than collapsed upstream.
+					let venue_axis = match parsed.transaction_time {
+						Some(ts) => Ts::from(Timestamp::from_millisecond(ts).expect("Exchange responded with invalid timestamp")),
+						None => Ts::from(content_event.time),
+					};
 
 					// topic: "btcusdt@depth@100ms" → take before first '@' → uppercase → pair
 					let pair_str = content_event.topic.split('@').next().expect("Binance depth topic always contains '@'").to_uppercase();
@@ -283,9 +291,11 @@ impl ExchangeStream for BookConnection {
 
 					let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.parse_price(&p), prec.parse_qty(&q)) };
 					let shape = BookShape {
-						ts_event,
-						ts_init: now,
-						ts_last: now,
+						ts: Accumulator {
+							venue: Span::at(venue_axis),
+							// Stamped by the consumer at ingest.
+							local: None,
+						},
 						prec,
 						bids: parsed.bids.into_iter().map(parse_level).collect(),
 						asks: parsed.asks.into_iter().map(parse_level).collect(),

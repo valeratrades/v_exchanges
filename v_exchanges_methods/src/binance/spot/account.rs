@@ -2,7 +2,7 @@ use jiff::Timestamp;
 use serde::Deserialize;
 use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::binance::{BinanceAuth, BinanceHttpUrl, BinanceOption};
-use v_utils::trades::{Asset, Pair, Usd};
+use trading_data_core::{Asset, Pair, Usd};
 
 use crate::{
 	ExchangeResult,

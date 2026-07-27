@@ -8,7 +8,6 @@
 
 pub extern crate v_exchanges_adapters as adapters;
 pub use v_exchanges_core::{Price, Qty};
-pub use v_utils::trades::Timestamped;
 
 pub mod core;
 // false positive: derive_new generates assignments that rustc thinks are dead, but fields are read by thiserror/Display
@@ -33,7 +32,8 @@ pub mod prelude {
 	pub use serde_json::{Value, json};
 	pub use thiserror::Error;
 	pub use tracing::{Span, debug, error, field::Empty, info, instrument, trace, warn};
-	pub use v_utils::trades::*;
+	pub use trading_data_core::*;
+	pub use v_utils::{Timeframe, TimeframeDesignator};
 
 	#[cfg(feature = "binance")]
 	pub use crate::binance::Binance;
@@ -53,7 +53,7 @@ pub mod prelude {
 	pub use crate::mexc::Mexc;
 	#[cfg(feature = "data")]
 	pub use crate::yahoo::*;
-	pub use crate::{Price, Qty, Timestamped, core::*, error::*, orders::*, other_types::*};
+	pub use crate::{Price, Qty, core::*, error::*, orders::*, other_types::*};
 }
 #[cfg(feature = "binance")]
 #[cfg_attr(docsrs, doc(cfg(feature = "binance")))]

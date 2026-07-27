@@ -5,10 +5,8 @@ use jiff::Timestamp;
 use serde::Deserialize;
 use serde_with::{DisplayFromStr, serde_as};
 use v_exchanges_adapters::binance::{BinanceAuth, BinanceHttpUrl, BinanceOption};
-use v_utils::{
-	macros::ScreamIt,
-	trades::{Asset, Pair, Side, Usd},
-};
+use trading_data_core::{Asset, Pair, Side, Usd};
+use v_utils::macros::ScreamIt;
 
 use crate::{
 	ExchangeResult,

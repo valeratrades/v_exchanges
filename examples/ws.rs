@@ -1,7 +1,6 @@
 use std::str::FromStr as _;
 
 use v_exchanges::prelude::*;
-use v_utils::trades::Pair;
 
 #[tokio::main]
 async fn main() {

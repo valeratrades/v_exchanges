@@ -8,10 +8,8 @@ use derive_more::{Deref, DerefMut};
 use jiff::Timestamp;
 use secrecy::SecretString;
 use serde_json::json;
-pub use trading_data::{BookShape, BookUpdate};
-use v_exchanges_core::Price;
-pub use v_utils::trades::{ExchangeName, Instrument, PrecisionPriceQty, Symbol};
-use v_utils::{trades::Timestamped, utils::filter_nulls};
+pub use trading_data_core::{BookShape, BookUpdate, ExchangeName, Instrument, PrecisionPriceQty, Symbol};
+use v_utils::utils::filter_nulls;
 
 use crate::{
 	error::{ExchangeError, ExchangeResult, MethodError, OutOfRangeError, RequestRangeError},
@@ -19,6 +17,36 @@ use crate::{
 };
 
 const MAX_RECV_WINDOW: std::time::Duration = std::time::Duration::from_secs(10 * 60); // 10 minutes
+
+pub use trading_data_core::{BatchTrades, InnerTrade};
+
+/// Feature-gated exchange construction. Local extension trait over the foreign [`ExchangeName`]
+/// (defined in `trading_data_core`) — the only piece of exchange behavior that cannot leave this crate.
+pub trait ExchangeInit {
+	fn init_client(&self) -> Box<dyn Exchange>;
+	fn init_mock_client(&self) -> Box<dyn Exchange>;
+}
+
+/// Per-exchange book-event ordering token. Used internally by the WS connection to detect gaps
+/// in the per-pair delta chain. Not persisted; the *result* (`gapped: bool`) is.
+pub trait Sequence: Send + Sync {
+	fn has_gap_from_prev(&self, prev: &Self) -> bool;
+}
+
+#[async_trait::async_trait]
+pub trait SubscribeOrder {
+	type Order;
+
+	async fn place_and_subscribe(&mut self, topics: Vec<Self::Order>) -> Result<(), WsError>;
+}
+
+/// Concerns itself with exact types.
+#[async_trait::async_trait]
+pub trait ExchangeStream: std::fmt::Debug + Send + Sync {
+	type Item;
+
+	async fn next(&mut self) -> eyre::Result<Vec<Self::Item>, WsError>;
+}
 
 /// Main trait for all standardized exchange interactions.
 ///
@@ -41,30 +69,6 @@ pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Cli
 	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo>;
 	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BatchTrades>>>;
 	async fn ws_book(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>>;
-}
-/// Concerns itself with exact types.
-#[async_trait::async_trait]
-pub trait ExchangeStream: std::fmt::Debug + Send + Sync {
-	type Item;
-
-	async fn next(&mut self) -> eyre::Result<Vec<Self::Item>, WsError>;
-}
-#[async_trait::async_trait]
-pub trait SubscribeOrder {
-	type Order;
-
-	async fn place_and_subscribe(&mut self, topics: Vec<Self::Order>) -> Result<(), WsError>;
-}
-/// Per-exchange book-event ordering token. Used internally by the WS connection to detect gaps
-/// in the per-pair delta chain. Not persisted; the *result* (`gapped: bool`) is.
-pub trait Sequence: Send + Sync {
-	fn has_gap_from_prev(&self, prev: &Self) -> bool;
-}
-/// Feature-gated exchange construction. Local extension trait over the foreign [`ExchangeName`]
-/// (defined in `v_utils::trades`) — the only piece of exchange behavior that cannot leave this crate.
-pub trait ExchangeInit {
-	fn init_client(&self) -> Box<dyn Exchange>;
-	fn init_mock_client(&self) -> Box<dyn Exchange>;
 }
 /// most exchanges default to returning OI value in asset quantity, not quote. Exception would be Inverse on Bybit.
 /// Which actually makes sense, as same endpoints accept things like "BTCETH", where quote value would be irrelevant.
@@ -290,59 +294,8 @@ pub struct Ticker {
 	pub symbol: Symbol,
 	pub exchange_name: ExchangeName,
 }
-/// Batched trade stream event. All trades share `prec`.
-#[derive(Clone, Debug, Default)]
-pub struct BatchTrades {
-	prec: PrecisionPriceQty,
-	trades: Vec<InnerTrade>,
-	/// Exchange-provided event time of the latest trade in the batch.
-	ts_event: Timestamp,
-	/// When we first received the data backing this batch.
-	ts_init: Timestamp,
-	/// When we last appended into this batch. Equals `ts_init` for batches built from a single message.
-	ts_last: Timestamp,
-}
-
-impl BatchTrades {
-	pub(crate) fn new(prec: PrecisionPriceQty, trades: Vec<InnerTrade>, ts_init: Timestamp, ts_last: Timestamp) -> Self {
-		assert!(trades.len() != 0); // this is an invariant upheld by our own implementation, so we shouldn't introduce runtime cost of checking it in release builds.
-		let ts_event = trades.last().expect("never empty").time;
-		Self {
-			prec,
-			trades,
-			ts_event,
-			ts_init,
-			ts_last,
-		}
-	}
-
-	pub fn len(&self) -> usize {
-		self.trades.len()
-	}
-
-	pub fn last_price(&self) -> Price {
-		Price::new(self.trades.last().expect("never empty").price, self.prec.price)
-	}
-
-	/// Iterate `(time, price_raw, qty_raw)` tuples. Precision is shared via [`Self::prec`].
-	pub fn iter(&self) -> impl Iterator<Item = (Timestamp, i32, u32)> + '_ {
-		self.trades.iter().map(|t| (t.time, t.price, t.qty))
-	}
-}
-
-impl Timestamped for BatchTrades {
-	fn ts_event(&self) -> Timestamp {
-		self.ts_event
-	}
-
-	fn ts_init(&self) -> Timestamp {
-		self.ts_init
-	}
-
-	fn ts_last(&self) -> Timestamp {
-		self.ts_last
-	}
-}
+// `InnerTrade`/`BatchTrades` moved to `trading_data_core` — the shared parse boundary so persistence
+// can convert a ws batch straight into rows. Re-exported here so this crate's paths are unchanged.
 
 /// Internal trait for exchange implementations.
 /// Exchange implementations should implement this trait, not `Exchange` directly.
@@ -425,12 +378,6 @@ pub(crate) trait ExchangeImpl: std::fmt::Debug + Send + Sync + std::ops::Deref<T
 		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), instrument)))
 	}
 	//,}}}
-}
-#[derive(Clone, Debug, Default)]
-pub(crate) struct InnerTrade {
-	pub time: Timestamp,
-	pub price: i32,
-	pub qty: u32,
 }
 
 /// Validates recv_window parameters and warns if using global default.

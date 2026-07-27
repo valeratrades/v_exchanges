@@ -9,7 +9,8 @@ use adapters::{
 	binance::{BinanceOption, BinanceOptions},
 };
 use secrecy::SecretString;
-use v_utils::trades::{Pair, Timeframe};
+use trading_data_core::Pair;
+use v_utils::Timeframe;
 
 use crate::{
 	BatchTrades, BookShape, BookUpdate, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Klines, MethodError, PrecisionPriceQty, RequestRange,
