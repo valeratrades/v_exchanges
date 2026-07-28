@@ -53,6 +53,6 @@ fn print_update(source: &str, update: &BookUpdate) {
 		shape.asks.len(),
 		best_bid.map_or("-".to_string(), |p| p.to_string()),
 		best_ask.map_or("-".to_string(), |p| p.to_string()),
-		shape.ts.venue.last,
+		shape.ts.venue_exec.last,
 	);
 }

@@ -6,7 +6,7 @@ use adapters::{
 	generics::ws::{WsConnection, WsError},
 };
 use jiff::Timestamp;
-use trading_data_core::{Accumulator, BatchTrades, InnerTrade, Pair, Side, Span, Ts};
+use trading_data_core::{Aggregate, BatchTrades, InnerTrade, Local, Pair, Side, Span, Ts};
 
 use crate::{BookShape, BookUpdate, ExchangeStream, Instrument, PrecisionPriceQty, core::Sequence};
 
@@ -44,6 +44,9 @@ impl ExchangeStream for BookConnection {
 	async fn next(&mut self) -> Result<Vec<Self::Item>, WsError> {
 		let batch = self.connection.next().await?;
 		let mut out = Vec::with_capacity(batch.len());
+		// One `now` per socket read: every frame drained here shares a reception time, and a
+		// per-frame `now()` would record scheduler jitter as if it were network latency.
+		let now = Ts::<Local>::from(Timestamp::now());
 		for content_event in batch {
 			let parsed: BybitBookData = serde_json::from_value(content_event.data).expect("Exchange responded with invalid book event");
 
@@ -67,17 +70,14 @@ impl ExchangeStream for BookConnection {
 			}
 			self.last_seq.insert(pair, seq);
 
-			// `cts` is the matching-engine time and `ts` the envelope; Bybit reports both, so both
-			// are kept. `cts` is absent on the (undocumented) frames that omit it, and there the
-			// execution reading is genuinely unknown rather than equal to the send.
-			let venue_send = Ts::from(content_event.time);
+			// `cts` is Bybit's matching-engine time — when the book actually changed. Fall back to the
+			// envelope `ts` on the frames that omit it.
+			let venue_exec = content_event.exec_time.map(Ts::from).unwrap_or_else(|| Ts::from(content_event.time));
 			let shape = BookShape {
-				ts: Accumulator {
-					venue: Span::at(content_event.exec_time.map(Ts::from).unwrap_or(venue_send)),
-					// Stamped by the consumer at ingest; the adapter has no place in the local chain.
-					local: None,
+				ts: Aggregate {
+					venue_exec: Span::at(venue_exec),
+					local_recv: Span::at(now),
 				},
-				venue_send: Some(venue_send),
 				prec,
 				bids: parsed.b.into_iter().map(parse_level).collect(),
 				asks: parsed.a.into_iter().map(parse_level).collect(),

@@ -6,7 +6,7 @@ use adapters::{
 	generics::ws::{WsConnection, WsError},
 };
 use jiff::Timestamp;
-use trading_data_core::{Accumulator, Pair, Side, Span, Ts};
+use trading_data_core::{Aggregate, Local, Pair, Side, Span, Ts};
 
 use crate::{
 	BatchTrades, BookShape, BookUpdate, ExchangeError, ExchangeStream, Instrument, PrecisionPriceQty,
@@ -276,16 +276,15 @@ impl ExchangeStream for BookConnection {
 				let mut out = Vec::with_capacity(batch.len());
 				// One `now` for the whole batch: every event here was drained from the same socket read,
 				// so they share a receive time. Per-event `now()` would only add scheduling noise.
+				// One `now` per socket read: see the trade stream.
+				let now = Ts::<Local>::from(Timestamp::now());
 				for content_event in batch {
 					let parsed: DepthEvent = serde_json::from_value(content_event.data).expect("Exchange responded with invalid depth event");
-					// `T` (execution) on futures; spot depth reports only the envelope `E`. Where `T` is
-					// absent the execution reading is genuinely unknown, and `ts_venue_send` being
-					// equal to the axis is what records that — the substitution is visible on disk
-					// rather than hidden behind an `unwrap_or`.
-					let venue_send = Ts::from(content_event.time);
-					let venue_axis = match parsed.transaction_time {
+					// `T` (transaction) on futures; spot depth reports only the envelope `E`, which then
+					// stands in — see `Aggregate::venue_exec`.
+					let venue_exec = match parsed.transaction_time {
 						Some(ts) => Ts::from(Timestamp::from_millisecond(ts).expect("Exchange responded with invalid timestamp")),
-						None => venue_send,
+						None => Ts::from(content_event.time),
 					};
 
 					// topic: "btcusdt@depth@100ms" → take before first '@' → uppercase → pair
@@ -298,12 +297,10 @@ impl ExchangeStream for BookConnection {
 
 					let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.parse_price(&p), prec.parse_qty(&q)) };
 					let shape = BookShape {
-						ts: Accumulator {
-							venue: Span::at(venue_axis),
-							// Stamped by the consumer at ingest.
-							local: None,
+						ts: Aggregate {
+							venue_exec: Span::at(venue_exec),
+							local_recv: Span::at(now),
 						},
-						venue_send: Some(venue_send),
 						prec,
 						bids: parsed.bids.into_iter().map(parse_level).collect(),
 						asks: parsed.asks.into_iter().map(parse_level).collect(),

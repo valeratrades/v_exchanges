@@ -5,7 +5,7 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
-use trading_data_core::{Accumulator, Kline, Ohlc, Pair, Span, Ts};
+use trading_data_core::{Aggregate, Kline, Local, Ohlc, Pair, Span, Ts};
 use v_exchanges_adapters::binance::{BinanceHttpUrl, BinanceOption};
 
 use super::BinanceTimeframe;
@@ -154,6 +154,9 @@ pub(super) async fn open_interest(client: &v_exchanges_adapters::Client, symbol:
 // book snapshot {{{
 #[derive(serde::Deserialize)]
 struct DepthResponse {
+	/// Transaction time. Present on futures, absent on spot.
+	#[serde(rename = "T")]
+	transaction_time: Option<i64>,
 	bids: Vec<(String, String)>,
 	asks: Vec<(String, String)>,
 }
@@ -172,17 +175,18 @@ pub(crate) async fn fetch_book_snapshot(client: &v_exchanges_adapters::Client, p
 	let response: DepthResponse = client.get(endpoint, &params, options).await?;
 
 	let parse_level = |(p, q): (String, String)| (prec.parse_price(&p), prec.parse_qty(&q));
-	// `/depth` returns only `lastUpdateId` — no venue clock reading at all. Our fetch time is the
-	// only reading that exists, so it stands in as the venue axis; it is a local reading wearing a
-	// venue label, and the honest fix is a nullable venue axis (see the book-lane axis question).
-	let fetched = Ts::from(Timestamp::now());
+	let received = Ts::<Local>::from(Timestamp::now());
+	// Futures `/depth` reports `T`; spot reports neither `T` nor `E`, so there the fetch time is the
+	// only reading in existence and stands in for the venue's.
+	let venue_exec = response
+		.transaction_time
+		.map(|ts| Ts::from(Timestamp::from_millisecond(ts).expect("Binance sent an out-of-range depth timestamp")))
+		.unwrap_or_else(|| Ts::from_nanos(received.as_nanos()));
 	Ok(BookShape {
-		ts: Accumulator {
-			venue: Span::at(fetched),
-			local: None,
+		ts: Aggregate {
+			venue_exec: Span::at(venue_exec),
+			local_recv: Span::at(received),
 		},
-		// `/depth` reports no venue clock reading whatsoever, so there is no send time to record.
-		venue_send: None,
 		prec,
 		bids: response.bids.into_iter().map(parse_level).collect(),
 		asks: response.asks.into_iter().map(parse_level).collect(),
