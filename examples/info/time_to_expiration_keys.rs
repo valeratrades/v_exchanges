@@ -33,12 +33,12 @@ async fn main() {
 	}
 
 	// Bybit
-	if let (Ok(pub_), Ok(sec)) = (env::var("QUANTM_BYBIT_SUB_PUBKEY"), env::var("QUANTM_BYBIT_SUB_SECRET")) {
+	if let (Ok(pub_), Ok(sec)) = (env::var("BYBIT_TIGER_READ_PUBKEY"), env::var("BYBIT_TIGER_READ_SECRET")) {
 		let mut c = ExchangeName::Bybit.init_client();
 		c.auth(pub_, sec.into());
-		fetch!("bybit", "QUANTM_BYBIT_SUB", Instrument::Perp, c);
+		fetch!("bybit", "BYBIT_TIGER_READ", Instrument::Perp, c);
 	} else {
-		eprintln!("QUANTM_BYBIT_SUB_PUBKEY or QUANTM_BYBIT_SUB_SECRET not set, skipping.");
+		eprintln!("BYBIT_TIGER_READ_PUBKEY or BYBIT_TIGER_READ_SECRET not set, skipping.");
 	}
 
 	// Kucoin (requires passphrase — can't go through dyn Exchange)

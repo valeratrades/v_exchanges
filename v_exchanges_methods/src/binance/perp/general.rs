@@ -6,7 +6,7 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{DisplayFromStr, serde_as};
-use trading_data_core::Pair;
+use trading_data_core::{Pair, Precision};
 
 use crate::{
 	ExchangeError,
@@ -64,8 +64,8 @@ impl From<FuturesSymbol> for PairInfo {
 			ms => Some(Timestamp::from_millisecond(ms).expect("Binance deliveryDate is valid ms timestamp")),
 		};
 		Self {
-			price_precision: v.price_precision,
-			qty_precision: v.quantity_precision as u8,
+			price_precision: Precision(v.price_precision as i8),
+			qty_precision: Precision(v.quantity_precision as i8),
 			delivery_date,
 		}
 	}

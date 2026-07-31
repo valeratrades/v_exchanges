@@ -39,8 +39,8 @@ async fn check_binance() {
 async fn check_bybit() {
 	println!("🔍 Checking Bybit...");
 
-	let key_var = "QUANTM_BYBIT_SUB_PUBKEY";
-	let secret_var = "QUANTM_BYBIT_SUB_SECRET";
+	let key_var = "BYBIT_TIGER_READ_PUBKEY";
+	let secret_var = "BYBIT_TIGER_READ_SECRET";
 
 	match (env::var(key_var), env::var(secret_var)) {
 		(Ok(key), Ok(secret)) => {

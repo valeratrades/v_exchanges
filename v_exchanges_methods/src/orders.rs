@@ -1,8 +1,8 @@
 use arrayvec::ArrayString;
 use jiff::Timestamp;
 use smart_default::SmartDefault;
-use uuid::Uuid;
 use trading_data_core::Side;
+use uuid::Uuid;
 
 use crate::{Price, Qty, Ticker};
 
@@ -67,22 +67,6 @@ pub struct LimitOrder {
 	//Q: nautilus has `quote_quantity: bool`. Do I want it? Or should I on the contrary avoid it as plague, for fear of overcomplicating the logic?
 }
 impl Eq for LimitOrder {}
-impl std::hash::Hash for LimitOrder {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		self.side.hash(state);
-		self.price.hash(state);
-		self.qty.hash(state);
-		self.time_in_force.hash(state);
-		self.post_only.hash(state);
-		self.reduce_only.hash(state);
-		self.display_qty.hash(state);
-		self.trigger.hash(state);
-		self.stp.hash(state);
-		self.order_id.hash(state);
-		self.contingency.hash(state);
-		self.tags.hash(state);
-	}
-}
 
 /// Exchange-agnostic market order.
 #[derive(Clone, Debug, derive_new::new)]
@@ -152,7 +136,7 @@ pub struct TrailingStopOrder {
 }
 
 /// Trigger configuration for conditional orders (stop-limit, stop-market, take-profit, etc.)
-#[derive(Clone, Debug, Eq, Hash, PartialEq, derive_new::new)]
+#[derive(Clone, Debug, Eq, PartialEq, derive_new::new)]
 pub struct Trigger {
 	pub price: Price,
 	#[new(default)]

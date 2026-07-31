@@ -10,7 +10,7 @@ use v_exchanges_adapters::{
 async fn main() {
 	v_utils::clientside!();
 
-	let keys_prefix = "QUANTM_BYBIT_SUB";
+	let keys_prefix = "BYBIT_TIGER_READ";
 	let pubkey_name = format!("{keys_prefix}_PUBKEY");
 	let secret_name = format!("{keys_prefix}_SECRET");
 
@@ -100,8 +100,8 @@ mod tests {
 	#[tokio::test]
 	#[ignore] // Requires API credentials
 	async fn test_bybit_private_websocket() {
-		let pubkey = env::var("QUANTM_BYBIT_SUB_PUBKEY").expect("QUANTM_BYBIT_SUB_PUBKEY must be set");
-		let secret = env::var("QUANTM_BYBIT_SUB_SECRET").expect("QUANTM_BYBIT_SUB_SECRET must be set");
+		let pubkey = env::var("BYBIT_TIGER_READ_PUBKEY").expect("BYBIT_TIGER_READ_PUBKEY must be set");
+		let secret = env::var("BYBIT_TIGER_READ_SECRET").expect("BYBIT_TIGER_READ_SECRET must be set");
 
 		test_private_ws(pubkey, secret).await;
 	}

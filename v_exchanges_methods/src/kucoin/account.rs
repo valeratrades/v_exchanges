@@ -2,8 +2,8 @@ use adapters::Client;
 use eyre::{Result, eyre};
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
-use v_exchanges_adapters::kucoin::{KucoinAuth, KucoinHttpUrl, KucoinOption};
 use trading_data_core::{Asset, Pair, Usd};
+use v_exchanges_adapters::kucoin::{KucoinAuth, KucoinHttpUrl, KucoinOption};
 
 use crate::{
 	ExchangeResult,

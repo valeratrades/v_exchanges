@@ -4,8 +4,8 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_with::{DisplayFromStr, serde_as};
+use trading_data_core::{Kline, Ohlc, Pair, Precision};
 use v_exchanges_adapters::kucoin::{KucoinHttpUrl, KucoinOption};
-use trading_data_core::{Kline, Ohlc, Pair};
 
 use crate::{
 	ExchangeResult, RequestRange, Symbol,
@@ -104,8 +104,8 @@ pub mod futures {
 	use jiff::Timestamp;
 	use serde::{Deserialize, Serialize};
 	use serde_json::json;
-	use v_exchanges_adapters::kucoin::{KucoinHttpUrl, KucoinOption};
 	use trading_data_core::{Kline, Ohlc, Pair};
+	use v_exchanges_adapters::kucoin::{KucoinHttpUrl, KucoinOption};
 
 	use crate::{
 		ExchangeResult, RequestRange, Symbol,
@@ -262,7 +262,7 @@ pub mod futures {
 		let response: ContractsActiveResponse = client.get("/api/v1/contracts/active", &json!({}), options).await?;
 
 		let mut pairs = BTreeMap::default();
-		let step_precision = |step: f64| if step == 0.0 { 0u8 } else { (-step.log10()).max(0.0).round() as u8 };
+		let step_precision = |step: f64| if step == 0.0 { Precision(0) } else { Precision((-step.log10()).round() as i8) };
 
 		for contract in response.data {
 			// Only include active contracts
@@ -393,7 +393,7 @@ pub(super) async fn exchange_info(client: &v_exchanges_adapters::Client, _recv_w
 	let response: SymbolsResponse = client.get("/api/v2/symbols", &json!({}), options).await?;
 
 	let mut pairs = BTreeMap::default();
-	let step_precision = |step: f64| if step == 0.0 { 0u8 } else { (-step.log10()).max(0.0).round() as u8 };
+	let step_precision = |step: f64| if step == 0.0 { Precision(0) } else { Precision((-step.log10()).round() as i8) };
 
 	for symbol in response.data {
 		// Only include enabled trading pairs

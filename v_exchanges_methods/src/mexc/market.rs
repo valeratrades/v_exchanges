@@ -5,6 +5,7 @@ use adapters::{
 	mexc::{MexcHttpUrl, MexcOption},
 };
 use jiff::Timestamp;
+use trading_data_core::Precision;
 
 use crate::{
 	ExchangeResult, RequestRange, Symbol,
@@ -127,8 +128,8 @@ pub(super) async fn exchange_info(client: &Client) -> ExchangeResult<ExchangeInf
 		let pair = Pair::new(contract.base_coin.as_str(), contract.quote_coin.as_str());
 
 		// priceScale is number of decimal places
-		let price_precision = contract.price_scale as u8;
-		let qty_precision = contract.vol_decimal as u8;
+		let price_precision = Precision(contract.price_scale as i8);
+		let qty_precision = Precision(contract.vol_decimal as i8);
 
 		let pair_info = PairInfo {
 			price_precision,

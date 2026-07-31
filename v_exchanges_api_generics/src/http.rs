@@ -622,7 +622,7 @@ mod tests {
 
 		// Ban expired: entry is evicted and the request proceeds to the network.
 		client.banned_until.insert(bucket, Timestamp::now() - SignedDuration::from_secs(60));
-		let _ = client.get_no_query("", &handler).await;
+		client.get_no_query("", &handler).await.expect_err("BanHandler always errors");
 		assert!(handler.network_ran.load(Ordering::SeqCst), "expired ban did not proceed");
 		assert!(!client.banned_until.contains_key(&bucket), "expired ban was not evicted");
 	}
@@ -635,7 +635,7 @@ mod tests {
 		let server = async {
 			let (mut sock, _) = listener.accept().await.unwrap();
 			let mut buf = [0u8; 1024];
-			let _ = sock.read(&mut buf).await;
+			sock.read(&mut buf).await.expect("client sent a request");
 			sock.write_all(b"HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\n\r\n").await.unwrap();
 		};
 

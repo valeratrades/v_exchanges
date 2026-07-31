@@ -57,7 +57,7 @@ impl ExchangeStream for BookConnection {
 				.unwrap_or_else(|_| panic!("failed to parse pair from orderbook topic: {}", content_event.topic));
 			let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
 
-			let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.parse_price(&p), prec.parse_qty(&q)) };
+			let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.price.parse_i32(&p), prec.qty.parse_u32(&q)) };
 			let is_snapshot = match content_event.event_type.as_str() {
 				"snapshot" => true,
 				"delta" => false,
@@ -133,8 +133,8 @@ impl ExchangeStream for TradeConnection {
 				by_pair.entry(pair).or_insert((prec, Vec::new())).1.push(InnerTrade {
 					time: Ts::from(Timestamp::from_millisecond(t.time).expect("Exchange responded with invalid timestamp")),
 					sent: Some(sent),
-					price: prec.parse_price(&t.price),
-					qty: prec.parse_qty(&t.size),
+					price: prec.price.parse_i32(&t.price),
+					qty: prec.qty.parse_u32(&t.size),
 					// Bybit's `S` already names the taker, unlike Binance's maker-flag.
 					side: t.side,
 				});

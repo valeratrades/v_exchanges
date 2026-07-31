@@ -74,8 +74,8 @@ impl ExchangeStream for TradesConnection {
 			let pair: Pair = pair_str.as_str().try_into().unwrap_or_else(|_| panic!("failed to parse pair from trade event: {pair_str}"));
 			let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
 
-			let price_raw = prec.parse_price(&price_str);
-			let qty_raw = prec.parse_qty(&qty_asset_str);
+			let price_raw = prec.price.parse_i32(&price_str);
+			let qty_raw = prec.qty.parse_u32(&qty_asset_str);
 			if price_raw == 0 || qty_raw == 0 {
 				if !is_na_artifact {
 					tracing::warn!(
@@ -295,7 +295,7 @@ impl ExchangeStream for BookConnection {
 						.unwrap_or_else(|_| panic!("failed to parse pair from depth topic: {}", content_event.topic));
 					let prec = *self.pair_precisions.get(&pair).unwrap_or_else(|| panic!("{pair} not in pair_precisions"));
 
-					let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.parse_price(&p), prec.parse_qty(&q)) };
+					let parse_level = |(p, q): (String, String)| -> (i32, u32) { (prec.price.parse_i32(&p), prec.qty.parse_u32(&q)) };
 					let shape = BookShape {
 						ts: Aggregate {
 							venue_exec: Span::at(venue_exec),

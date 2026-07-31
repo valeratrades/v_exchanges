@@ -54,7 +54,6 @@ tracing.workspace = true
 trading_data_core.workspace = true
 uuid.workspace = true
 v_exchanges_adapters.workspace = true
-v_exchanges_core.workspace = true
 v_utils.workspace = true
 
 [dev-dependencies]

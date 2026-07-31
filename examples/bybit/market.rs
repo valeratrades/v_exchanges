@@ -16,7 +16,7 @@ async fn main() {
 	let open_interest = client.open_interest(symbol, "1h".into(), 5.into()).await.unwrap();
 	println!("{open_interest:?}");
 
-	let keys_prefix = "QUANTM_BYBIT_SUB";
+	let keys_prefix = "BYBIT_TIGER_READ";
 	let pubkey_name = format!("{keys_prefix}_PUBKEY");
 	let secret_name = format!("{keys_prefix}_SECRET");
 	if let (Ok(pubkey), Ok(secret)) = (env::var(&pubkey_name), env::var(&secret_name)) {

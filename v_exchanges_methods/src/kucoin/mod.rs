@@ -7,8 +7,8 @@ crate::define_provider_timeframe!(KucoinTimeframe, ["1m", "3m", "5m", "15m", "30
 use std::collections::BTreeMap;
 
 use secrecy::SecretString;
-use v_exchanges_adapters::Client;
 use trading_data_core::Pair;
+use v_exchanges_adapters::Client;
 use v_utils::Timeframe;
 
 use crate::{

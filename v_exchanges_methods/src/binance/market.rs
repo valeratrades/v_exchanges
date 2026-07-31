@@ -174,7 +174,7 @@ pub(crate) async fn fetch_book_snapshot(client: &v_exchanges_adapters::Client, p
 	let options = vec![BinanceOption::HttpUrl(base_url)];
 	let response: DepthResponse = client.get(endpoint, &params, options).await?;
 
-	let parse_level = |(p, q): (String, String)| (prec.parse_price(&p), prec.parse_qty(&q));
+	let parse_level = |(p, q): (String, String)| (prec.price.parse_i32(&p), prec.qty.parse_u32(&q));
 	let received = Ts::<Local>::from(Timestamp::now());
 	// Futures `/depth` reports `T`; spot reports neither `T` nor `E`, so there the fetch time is the
 	// only reading in existence and stands in for the venue's.

@@ -665,7 +665,6 @@ impl Default for WsConfig {
 
 #[cfg(test)]
 mod tests {
-	use futures_util::SinkExt as _;
 	use tokio::net::TcpListener;
 	use tokio_tungstenite::accept_async;
 

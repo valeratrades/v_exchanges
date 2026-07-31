@@ -39,14 +39,8 @@ fn print_update(source: &str, update: &BookUpdate) {
 		BookUpdate::Snapshot(s) => ("SNAPSHOT", s),
 		BookUpdate::BatchDelta { shape, .. } => ("DELTA", shape),
 	};
-	let best_bid = shape.bids.iter().next_back().map(|(p, _)| Price {
-		raw: *p,
-		precision: shape.prec.price,
-	});
-	let best_ask = shape.asks.iter().next().map(|(p, _)| Price {
-		raw: *p,
-		precision: shape.prec.price,
-	});
+	let best_bid = shape.bids.iter().next_back().map(|(&p, _)| Price::new(p, shape.prec.price));
+	let best_ask = shape.asks.iter().next().map(|(&p, _)| Price::new(p, shape.prec.price));
 	println!(
 		"[{source}] {kind:>8} | bids: {:>4} asks: {:>4} | best_bid: {:<12} best_ask: {:<12} | {:?}",
 		shape.bids.len(),

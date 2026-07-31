@@ -59,8 +59,7 @@ fn print_expiry(label: &str, expired_at: &str) {
 async fn main() {
 	v_utils::clientside!();
 
-	let (pub_, sec) = match (env::var("QUANTM_BYBIT_SUB_PUBKEY"), env::var("QUANTM_BYBIT_SUB_SECRET")) {
-		//let (pub_, sec) = match (env::var("BYBIT_TESTSUB_PUBKEY"), env::var("BYBIT_TESTSUB_SECRET")) {
+	let (pub_, sec) = match (env::var("BYBIT_TIGER_FULL_PUBKEY"), env::var("BYBIT_TIGER_FULL_SECRET")) {
 		(Ok(p), Ok(s)) => (p, s),
 		_ => {
 			panic!("one of the keys is not set");

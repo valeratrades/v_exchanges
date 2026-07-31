@@ -23,7 +23,7 @@ ahash = { version = "^0.8", features = ["serde"] }
 arc-swap = "^1"
 arrayvec = "^0.7"
 async-trait = "^0.1"
-base64 = "^0.22"
+base64 = "^0.23"
 cfg-if = "^1.0"
 dashmap = "^6"
 derive-new = "^0.7"
@@ -44,32 +44,31 @@ serde = { version = "^1.0", features = ["derive"] }
 serde_json = "^1.0"
 serde_plain = "^1.0" #TEST
 serde_urlencoded = "^0.7"
-serde_with = "^3.20"
+serde_with = "^3.21"
 sha2 = "^0.11"
 smart-default = "^0.7"
 thiserror = "^2.0"
-tokio = { version = "^1.52", features = ["sync", "macros", "io-util", "rt", "rt-multi-thread", "time"] } # enable only features that play with wasm.
+tokio = { version = "^1.53", features = ["sync", "macros", "io-util", "rt", "rt-multi-thread", "time"] } # enable only features that play with wasm.
 tracing = "^0.1.44"
 trading_data_core.version = "0.3"
 url = "^2.5.8"
 ustr = "^1"
-uuid = { version = "^1.23", features = ["v7"] }
-v_utils = "^2.15"
+uuid = { version = "^1.24", features = ["v7"] }
+v_utils = { version = "^2.16", features = ["xdg"] }
 #dynosaur = "^0.2.0"
 
 #[dev-dependencies]
-bytes = "1.11"
+bytes = "1.12"
 color-eyre = "0.6"
 criterion = { version = "0.8", default-features = false }
 enum_dispatch = "0.3"
-insta = "1.47"
+insta = "1.48"
 rust_decimal = "1.42"
 strum = { version = "^0.28", features = ["derive"] }
 tokio-tungstenite = "0.30"
 
 v_exchanges_adapters = { version = "0.19.2", path = "v_exchanges_adapters" }
 v_exchanges_api_generics = { version = "0.21.2", path = "v_exchanges_api_generics" }
-v_exchanges_core = { version = "0.3.2", path = "v_exchanges_core" }
 v_exchanges_methods = { version = "0.2.2", path = "v_exchanges_methods", default-features = false }
 
 [patch.crates-io]

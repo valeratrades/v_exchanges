@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
 use tracing::instrument;
-use trading_data_core::Pair;
+use trading_data_core::{Pair, Precision};
 
 use crate::{
 	ExchangeResult,
@@ -58,10 +58,12 @@ struct AssetPriceResponse {
 	price: f64,
 }
 
-fn count_significant_decimals(s: &str) -> u8 {
-	match s.find('.') {
-		Some(dot) => s[dot + 1..].trim_end_matches('0').len() as u8,
-		None => 0,
+/// Prices are multiples of the tick by the venue's own filter, so a tick above 1 is a genuinely
+/// negative precision — that is what keeps a 12-digit index price inside an i32 raw column.
+fn tick_precision(s: &str) -> Precision {
+	match s.split_once('.') {
+		Some((_, frac)) => Precision(frac.trim_end_matches('0').len() as i8),
+		None => Precision(-(s.len() as i8 - s.trim_end_matches('0').len() as i8)),
 	}
 }
 
@@ -113,10 +115,10 @@ impl SpotSymbol {
 
 impl From<SpotSymbol> for PairInfo {
 	fn from(s: SpotSymbol) -> Self {
-		let price_precision = s.tick_size().map(count_significant_decimals).unwrap_or(0);
+		let price_precision = s.tick_size().map(tick_precision).unwrap_or_default();
 		Self {
 			price_precision,
-			qty_precision: s.base_asset_precision,
+			qty_precision: Precision(s.base_asset_precision as i8),
 			delivery_date: None,
 		}
 	}

@@ -8,7 +8,7 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::{DisplayFromStr, serde_as};
-use trading_data_core::{Kline, Ohlc, Pair};
+use trading_data_core::{Kline, Ohlc, Pair, Precision};
 use v_exchanges_adapters::bybit::BybitOption;
 use v_utils::utils::filter_nulls;
 
@@ -349,14 +349,14 @@ pub(super) async fn exchange_info(client: &v_exchanges_adapters::Client, instrum
 					.price_filter
 					.tick_size
 					.split_once('.')
-					.map(|(_, decimals)| decimals.trim_end_matches('0').len() as u8)
-					.unwrap_or(0);
+					.map(|(_, decimals)| Precision(decimals.trim_end_matches('0').len() as i8))
+					.unwrap_or_default();
 				let qty_precision = i
 					.lot_size_filter
 					.base_precision
 					.split_once('.')
-					.map(|(_, decimals)| decimals.trim_end_matches('0').len() as u8)
-					.unwrap_or(0);
+					.map(|(_, decimals)| Precision(decimals.trim_end_matches('0').len() as i8))
+					.unwrap_or_default();
 				Some((
 					pair,
 					PairInfo {
@@ -385,13 +385,13 @@ pub(super) async fn exchange_info(client: &v_exchanges_adapters::Client, instrum
 		.into_iter()
 		.filter_map(|i| {
 			let pair: Pair = i.symbol.try_into().ok()?;
-			let price_precision = i.price_scale.parse::<u8>().unwrap_or(0);
+			let price_precision = i.price_scale.parse::<Precision>().unwrap_or_default();
 			let qty_precision = i
 				.lot_size_filter
 				.qty_step
 				.split_once('.')
-				.map(|(_, decimals)| decimals.trim_end_matches('0').len() as u8)
-				.unwrap_or(0);
+				.map(|(_, decimals)| Precision(decimals.trim_end_matches('0').len() as i8))
+				.unwrap_or_default();
 			let delivery_date = match i.delivery_time {
 				0 => None,
 				ms => Some(Timestamp::from_millisecond(ms).expect("Bybit deliveryTime is valid ms")),
