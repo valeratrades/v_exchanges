@@ -22,7 +22,7 @@ full = ["major", "data", "mexc", "kucoin", "bitflyer", "coincheck"]
 major = ["binance", "bybit"]
 
 binance = ["v_exchanges_adapters/binance"]
-bybit = ["v_exchanges_adapters/bybit"]
+bybit = ["v_exchanges_adapters/bybit", "dep:flate2", "dep:reqwest", "dep:zip"]
 bitflyer = ["v_exchanges_adapters/bitflyer"]
 coincheck = ["v_exchanges_adapters/coincheck"]
 kucoin = ["v_exchanges_adapters/kucoin"]
@@ -38,6 +38,7 @@ derive-new.workspace = true
 derive_more.workspace = true
 enum_dispatch.workspace = true
 eyre.workspace = true
+flate2 = { workspace = true, optional = true }
 futures-util.workspace = true
 jiff.workspace = true
 miette.workspace = true
@@ -55,6 +56,7 @@ trading_data_core.workspace = true
 uuid.workspace = true
 v_exchanges_adapters.workspace = true
 v_utils.workspace = true
+zip = { workspace = true, optional = true }
 
 [dev-dependencies]
 color-eyre.workspace = true

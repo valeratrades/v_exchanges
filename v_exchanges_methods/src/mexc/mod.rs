@@ -12,7 +12,7 @@ use v_utils::Timeframe;
 
 use crate::{
 	ExchangeInfo, ExchangeName, ExchangeResult, Instrument, Symbol,
-	core::{ExchangeImpl, Klines, PersonalInfo, RequestRange},
+	core::{Account, ExchangeSeal, Klines, Market, PersonalInfo, RequestRange, validate_recv_window},
 };
 
 #[derive(Clone, Debug, Default, Deref, DerefMut)]
@@ -23,17 +23,10 @@ pub struct Mexc {
 	pub info_cache: BTreeMap<Instrument, ExchangeInfo>,
 }
 
-//? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
+impl ExchangeSeal for Mexc {}
+
 #[async_trait::async_trait]
-impl ExchangeImpl for Mexc {
-	fn info_cache_mut(&mut self) -> &mut BTreeMap<Instrument, ExchangeInfo> {
-		&mut self.info_cache
-	}
-
-	fn name(&self) -> ExchangeName {
-		ExchangeName::Mexc
-	}
-
+impl Account for Mexc {
 	fn auth(&mut self, pubkey: String, secret: SecretString) {
 		self.update_default_option(MexcOption::Pubkey(pubkey));
 		self.update_default_option(MexcOption::Secret(secret));
@@ -47,6 +40,22 @@ impl ExchangeImpl for Mexc {
 		GetOptions::<MexcOptions>::default_options(&**self).recv_window
 	}
 
+	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
+		validate_recv_window(recv_window, self.default_recv_window())?;
+		match instrument {
+			Instrument::Perp => account::personal_info(self, recv_window).await,
+			_ => unimplemented!(),
+		}
+	}
+}
+
+//? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
+#[async_trait::async_trait]
+impl Market for Mexc {
+	fn name(&self) -> ExchangeName {
+		ExchangeName::Mexc
+	}
+
 	async fn prices(&self, _pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
 		match instrument {
 			Instrument::Perp => unimplemented!("Mexc does not have a multi-asset endpoints for futures"),
@@ -57,13 +66,6 @@ impl ExchangeImpl for Mexc {
 	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
 		match symbol.instrument {
 			Instrument::Perp => market::klines(self, symbol, tf.try_into()?, range).await,
-			_ => unimplemented!(),
-		}
-	}
-
-	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
-		match instrument {
-			Instrument::Perp => account::personal_info(self, recv_window).await,
 			_ => unimplemented!(),
 		}
 	}

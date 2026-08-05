@@ -48,27 +48,104 @@ pub trait ExchangeStream: std::fmt::Debug + Send + Sync {
 	async fn next(&mut self) -> eyre::Result<Vec<Self::Item>, WsError>;
 }
 
-/// Main trait for all standardized exchange interactions.
-///
-/// //NB: NEVER implement this trait manually. It is auto-implemented via blanket impl for all `ExchangeImpl` implementors.
-/// The blanket impl ensures that this trait can only be implemented within this crate.
+/// Reference data and the venue's request API. Every venue has one, so it is the base every other
+/// capability is stated against.
 #[async_trait::async_trait]
-pub trait Exchange: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Client> + std::ops::DerefMut {
+pub trait Market: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Client> + std::ops::DerefMut {
 	fn name(&self) -> ExchangeName;
+
+	#[allow(unused_variables)]
+	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
+		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), instrument)))
+	}
+
+	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
+	#[allow(unused_variables)]
+	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
+		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), symbol.instrument)))
+	}
+
+	/// If no pairs are specified, returns for all;
+	#[allow(unused_variables)]
+	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
+		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), instrument)))
+	}
+
+	/// NB: not perf-critical, so literally just calls `prices`, incurring cost of making a vec and a BTreeMap for no reason
+	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
+		self.prices(Some(vec![symbol.pair]), symbol.instrument).await.map(|m| m[&symbol.pair])
+	}
+
+	/// Get Open Interest data
+	/// in output vec: greater the index, fresher the data
+	#[allow(unused_variables)]
+	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
+		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), symbol.instrument)))
+	}
+}
+
+/// Everything behind an api key.
+///
+/// Each **private** method allows to specify `recv_window`; pass it through
+/// [`validate_recv_window`] before the venue sees it.
+#[async_trait::async_trait]
+pub trait Account: Market {
 	fn auth(&mut self, pubkey: String, secret: SecretString);
+	/// Set number of **milliseconds** the request is valid for. Recv Window of over a minute does not make sense, thus it's expressed as u16.
+	///
+	/// **WARNING:** This sets a global default and should only be used as a crutch when you can't pass `recv_window` per-request.
+	/// Prefer using the `recv_window` parameter in individual method calls instead.
 	fn set_recv_window(&mut self, recv_window: std::time::Duration);
+	/// Get the default recv_window configured for this exchange, if any.
+	fn default_recv_window(&self) -> Option<std::time::Duration>;
+
+	#[allow(unused_variables)]
+	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
+		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), instrument)))
+	}
+}
+
+//? potentially `total_balance`? Would return precompiled USDT-denominated balance of a (bybit::wallet/binance::account)
+// balances are defined for each margin type: [futures_balance, spot_balance, margin_balance], but note that on some exchanges, (like bybit), some of these may point to the same exact call
+// to negate confusion could add a `total_balance` endpoint
+
+//? could implement many things that are _explicitly_ combinatorial. I can imagine several cases, where knowing that say the specified limit for the klines is wayyy over the max and that you may be opting into a long wait by calling it, could be useful.
+
+/// Live event feeds. Not every venue has one — a venue that doesn't simply doesn't implement this,
+/// and [`Exchange::stream`] answers `None` rather than a runtime "not supported".
+#[async_trait::async_trait]
+pub trait Stream: Market {
+	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BatchTrades>>>;
+	/// Orderbook depth updates (max depth only).
+	async fn ws_book(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>>;
+}
+
+/// Bulk historical data, read from the venue's archive rather than its request API.
+///
+/// The return types are [`Stream`]'s exactly: a replay of the archive and a live socket produce the
+/// same events, so a consumer takes both on one path. It also bounds memory — the stream pulls one
+/// archive unit at a time rather than materialising the window.
+///
+/// Raw archive bytes land in `/tmp` and never cross this boundary; what comes back is already
+/// scaled to the venue's own tick, which the implementor resolves through its own
+/// [`Market::exchange_info`].
+#[async_trait::async_trait]
+pub trait History: Market {
+	async fn trades(&self, symbol: Symbol, since: Timestamp, until: Timestamp) -> ExchangeResult<Box<dyn ExchangeStream<Item = BatchTrades>>>;
+	async fn book(&self, symbol: Symbol, since: Timestamp, until: Timestamp) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>>;
+}
+
+/// A venue, with whatever it happens to be able to do.
+///
+/// //NB: NEVER implement this trait manually. It is auto-implemented via blanket impl for all `ExchangeSeal` implementors.
+/// The blanket impl ensures that this trait can only be implemented within this crate.
+pub trait Exchange: Market + Account {
 	fn set_timeout(&mut self, timeout: std::time::Duration);
 	fn set_retry_config(&mut self, config: RetryConfig);
 	fn set_use_testnet(&mut self, b: bool);
 	fn set_cache_testnet_calls(&mut self, duration: Option<std::time::Duration>);
-	async fn exchange_info(&mut self, instrument: Instrument) -> ExchangeResult<ExchangeInfo>;
-	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines>;
-	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>>;
-	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64>;
-	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>>;
-	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo>;
-	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BatchTrades>>>;
-	async fn ws_book(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>>;
+	fn stream(&mut self) -> Option<&mut dyn Stream>;
+	fn history(&self) -> Option<&dyn History>;
 }
 /// most exchanges default to returning OI value in asset quantity, not quote. Exception would be Inverse on Bybit.
 /// Which actually makes sense, as same endpoints accept things like "BTCETH", where quote value would be irrelevant.
@@ -297,92 +374,21 @@ pub struct Ticker {
 // `InnerTrade`/`BatchTrades` moved to `trading_data_core` — the shared parse boundary so persistence
 // can convert a ws batch straight into rows. Re-exported here so this crate's paths are unchanged.
 
-/// Internal trait for exchange implementations.
-/// Exchange implementations should implement this trait, not `Exchange` directly.
-///
-/// Each **private** method allows to specify `recv_window`.
-///
-/// # Other
-/// - has too many methods, so for dev purposes most default to `unimplemented!()`.
-#[async_trait::async_trait]
-pub(crate) trait ExchangeImpl: std::fmt::Debug + Send + Sync + std::ops::Deref<Target = Client> + std::ops::DerefMut {
-	fn name(&self) -> ExchangeName;
-	fn info_cache_mut(&mut self) -> &mut BTreeMap<Instrument, ExchangeInfo>;
-
-	// Config {{{
-	fn auth(&mut self, pubkey: String, secret: SecretString);
-	/// Set number of **milliseconds** the request is valid for. Recv Window of over a minute does not make sense, thus it's expressed as u16.
-	///
-	/// **WARNING:** This sets a global default and should only be used as a crutch when you can't pass `recv_window` per-request.
-	/// Prefer using the `recv_window` parameter in individual method calls instead.
-	fn set_recv_window(&mut self, recv_window: std::time::Duration);
-	/// Get the default recv_window configured for this exchange, if any.
-	fn default_recv_window(&self) -> Option<std::time::Duration>;
-	//,}}}
-
-	//Q: do we actually want to return a `MethodNotSupported` error, or should we just `unimplemented!()`?
-
-	#[allow(unused_variables)]
-	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
-		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), instrument)))
+/// The seal, and where a venue states which of the acquired capabilities it has: `Exchange` can
+/// only be reached through this, and this is `pub(crate)`.
+pub(crate) trait ExchangeSeal: Market + Account {
+	fn stream(&mut self) -> Option<&mut dyn Stream> {
+		None
 	}
 
-	//? should I have Self::Pair too? Like to catch the non-existent ones immediately? Although this would increase the error surface on new listings.
-	#[allow(unused_variables)]
-	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
-		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), symbol.instrument)))
+	fn history(&self) -> Option<&dyn History> {
+		None
 	}
-
-	/// If no pairs are specified, returns for all;
-	#[allow(unused_variables)]
-	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
-		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), instrument)))
-	}
-
-	#[allow(unused_variables)]
-	/// NB: not perf-critical, so literally just calls `prices`, incurring cost of making a vec and a BTreeMap for no reason
-	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
-		self.prices(Some(vec![symbol.pair]), symbol.instrument).await.map(|m| m[&symbol.pair])
-	}
-
-	/// Get Open Interest data
-	/// in output vec: greater the index, fresher the data
-	#[allow(unused_variables)]
-	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
-		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), symbol.instrument)))
-	}
-
-	// Authenticated {{{
-	#[allow(unused_variables)]
-	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
-		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), instrument)))
-	}
-	//,}}}
-
-	//? potentially `total_balance`? Would return precompiled USDT-denominated balance of a (bybit::wallet/binance::account)
-	// balances are defined for each margin type: [futures_balance, spot_balance, margin_balance], but note that on some exchanges, (like bybit), some of these may point to the same exact call
-	// to negate confusion could add a `total_balance` endpoint
-
-	//? could implement many things that are _explicitly_ combinatorial. I can imagine several cases, where knowing that say the specified limit for the klines is wayyy over the max and that you may be opting into a long wait by calling it, could be useful.
-
-	// Websocket {{{
-	// Start a websocket connection for individual trades
-	#[allow(unused_variables)]
-	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BatchTrades>>> {
-		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), instrument)))
-	}
-
-	/// Start a websocket connection for orderbook depth updates (max depth only).
-	#[allow(unused_variables)]
-	async fn ws_book(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>> {
-		Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), instrument)))
-	}
-	//,}}}
 }
 
 /// Validates recv_window parameters and warns if using global default.
 /// Returns an error if either the provided or default recv_window exceeds MAX_RECV_WINDOW.
-fn validate_recv_window(recv_window: Option<std::time::Duration>, default_recv_window: Option<std::time::Duration>) -> ExchangeResult<()> {
+pub(crate) fn validate_recv_window(recv_window: Option<std::time::Duration>, default_recv_window: Option<std::time::Duration>) -> ExchangeResult<()> {
 	if let Some(rw) = recv_window
 		&& rw > MAX_RECV_WINDOW
 	{
@@ -404,22 +410,7 @@ fn validate_recv_window(recv_window: Option<std::time::Duration>, default_recv_w
 	Ok(())
 }
 
-/// Blanket impl: any type implementing ExchangeImpl automatically gets Exchange.
-/// This enforces that Exchange can only be implemented within this crate (since ExchangeImpl is pub(crate)).
-#[async_trait::async_trait]
-impl<T: ExchangeImpl> Exchange for T {
-	fn name(&self) -> ExchangeName {
-		ExchangeImpl::name(self)
-	}
-
-	fn auth(&mut self, pubkey: String, secret: SecretString) {
-		ExchangeImpl::auth(self, pubkey, secret)
-	}
-
-	fn set_recv_window(&mut self, recv_window: std::time::Duration) {
-		ExchangeImpl::set_recv_window(self, recv_window)
-	}
-
+impl<T: ExchangeSeal> Exchange for T {
 	fn set_timeout(&mut self, timeout: std::time::Duration) {
 		self.http_client_mut().config.timeout = timeout;
 	}
@@ -436,40 +427,12 @@ impl<T: ExchangeImpl> Exchange for T {
 		self.http_client_mut().config.cache_testnet_calls = duration;
 	}
 
-	async fn exchange_info(&mut self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
-		let info = ExchangeImpl::exchange_info(self, instrument).await?;
-		self.info_cache_mut().insert(instrument, info.clone());
-		Ok(info)
+	fn stream(&mut self) -> Option<&mut dyn Stream> {
+		ExchangeSeal::stream(self)
 	}
 
-	async fn klines(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Klines> {
-		ExchangeImpl::klines(self, symbol, tf, range).await
-	}
-
-	async fn prices(&self, pairs: Option<Vec<Pair>>, instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, f64>> {
-		ExchangeImpl::prices(self, pairs, instrument).await
-	}
-
-	async fn price(&self, symbol: Symbol) -> ExchangeResult<f64> {
-		ExchangeImpl::price(self, symbol).await
-	}
-
-	async fn open_interest(&self, symbol: Symbol, tf: Timeframe, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
-		ExchangeImpl::open_interest(self, symbol, tf, range).await
-	}
-
-	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
-		validate_recv_window(recv_window, ExchangeImpl::default_recv_window(self))?;
-		ExchangeImpl::personal_info(self, instrument, recv_window).await
-	}
-
-	// Websocket connections are NOT rate-limited by the semaphore
-	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BatchTrades>>> {
-		ExchangeImpl::ws_trades(self, pairs, instrument).await
-	}
-
-	async fn ws_book(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>> {
-		ExchangeImpl::ws_book(self, pairs, instrument).await
+	fn history(&self) -> Option<&dyn History> {
+		ExchangeSeal::history(self)
 	}
 }
 

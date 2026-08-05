@@ -14,7 +14,7 @@ use v_utils::Timeframe;
 
 use crate::{
 	BatchTrades, BookShape, BookUpdate, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Klines, MethodError, PrecisionPriceQty, RequestRange,
-	core::{ExchangeImpl, Instrument, PersonalInfo, Symbol},
+	core::{Account, ExchangeSeal, Instrument, Market, PersonalInfo, Stream, Symbol, validate_recv_window},
 };
 
 #[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
@@ -25,12 +25,12 @@ pub struct Binance {
 	pub info_cache: BTreeMap<Instrument, ExchangeInfo>,
 }
 impl Binance {
-	/// Concrete-typed counterpart to [`ExchangeImpl::ws_book`], exposing the connection before boxing.
+	/// Concrete-typed counterpart to [`Stream::ws_book`], exposing the connection before boxing.
 	pub async fn book_connection(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<ws::BookConnection> {
 		match instrument {
 			Instrument::Perp | Instrument::Spot | Instrument::Margin => {
 				if !self.info_cache.contains_key(&instrument) {
-					let info = ExchangeImpl::exchange_info(&*self, instrument).await?;
+					let info = Market::exchange_info(&*self, instrument).await?;
 					self.info_cache.insert(instrument, info);
 				}
 				let exchange = self.name();
@@ -64,7 +64,7 @@ impl Binance {
 
 	pub async fn book_snapshot(&mut self, pair: Pair, instrument: Instrument) -> ExchangeResult<BookShape> {
 		if !self.info_cache.contains_key(&instrument) {
-			let info = ExchangeImpl::exchange_info(&*self, instrument).await?;
+			let info = Market::exchange_info(&*self, instrument).await?;
 			self.info_cache.insert(instrument, info);
 		}
 		let prec = {
@@ -83,16 +83,14 @@ impl Binance {
 	}
 }
 
+impl ExchangeSeal for Binance {
+	fn stream(&mut self) -> Option<&mut dyn Stream> {
+		Some(self)
+	}
+}
+
 #[async_trait::async_trait]
-impl ExchangeImpl for Binance {
-	fn info_cache_mut(&mut self) -> &mut BTreeMap<Instrument, ExchangeInfo> {
-		&mut self.info_cache
-	}
-
-	fn name(&self) -> ExchangeName {
-		ExchangeName::Binance
-	}
-
+impl Account for Binance {
 	fn auth(&mut self, pubkey: String, secret: SecretString) {
 		self.update_default_option(BinanceOption::Pubkey(pubkey));
 		self.update_default_option(BinanceOption::Secret(secret));
@@ -104,6 +102,25 @@ impl ExchangeImpl for Binance {
 
 	fn default_recv_window(&self) -> Option<std::time::Duration> {
 		GetOptions::<BinanceOptions>::default_options(&**self).recv_window
+	}
+
+	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
+		validate_recv_window(recv_window, self.default_recv_window())?;
+		match instrument {
+			Instrument::Perp => {
+				let prices = self.prices(None, instrument).await?;
+				perp::account::personal_info(self, recv_window, &prices).await
+			}
+			Instrument::Spot | Instrument::Margin => spot::account::personal_info(self, recv_window).await,
+			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), instrument))),
+		}
+	}
+}
+
+#[async_trait::async_trait]
+impl Market for Binance {
+	fn name(&self) -> ExchangeName {
+		ExchangeName::Binance
 	}
 
 	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
@@ -136,23 +153,15 @@ impl ExchangeImpl for Binance {
 			_ => Err(ExchangeError::Method(MethodError::new_method_not_supported(self.name(), symbol.instrument))),
 		}
 	}
+}
 
-	async fn personal_info(&self, instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
-		match instrument {
-			Instrument::Perp => {
-				let prices = self.prices(None, instrument).await?;
-				perp::account::personal_info(self, recv_window, &prices).await
-			}
-			Instrument::Spot | Instrument::Margin => spot::account::personal_info(self, recv_window).await,
-			_ => Err(ExchangeError::Method(MethodError::new_method_not_implemented(self.name(), instrument))),
-		}
-	}
-
+#[async_trait::async_trait]
+impl Stream for Binance {
 	async fn ws_trades(&mut self, pairs: &[Pair], instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = BatchTrades>>, ExchangeError> {
 		match instrument {
 			Instrument::Perp | Instrument::Spot | Instrument::Margin => {
 				if !self.info_cache.contains_key(&instrument) {
-					let info = ExchangeImpl::exchange_info(&*self, instrument).await?;
+					let info = Market::exchange_info(&*self, instrument).await?;
 					self.info_cache.insert(instrument, info);
 				}
 				let exchange = self.name();

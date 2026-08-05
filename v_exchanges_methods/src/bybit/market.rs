@@ -212,26 +212,61 @@ pub(super) async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<
 //,}}}
 
 // open_interest {{{
-pub(super) async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitIntervalTime, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
-	range.ensure_allowed(1..=200, &tf)?;
-	let range_json = range.serialize(ExchangeName::Bybit);
+/// Bybit's ceiling on one page of this endpoint.
+const OI_PAGE: u32 = 200;
+/// What the walk may spend before we call the endpoint's shape changed. The venue decides when to
+/// stop handing back cursors, and an unbounded loop lets it decide never.
+const OI_MAX_PAGES: u32 = 64;
 
+pub(super) async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitIntervalTime, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
+	// A per-*request* cap: the walk below turns the endpoint's page ceiling into an implementation
+	// detail, so what the caller is held to is what the walk can spend.
+	range.ensure_allowed(1..=OI_PAGE * OI_MAX_PAGES, &tf)?;
 	let base_params = filter_nulls(json!({
 		"category": "linear",
 		"symbol": symbol.pair.fmt_bybit(),
 		"intervalTime": tf.to_string(),
+		"limit": OI_PAGE,
 	}));
+	let mut base_map = base_params.as_object().expect("just built an object").clone();
+	// A `Limit` range would otherwise overwrite the page size and make the walk single-page again.
+	if let RequestRange::Span { .. } = range {
+		base_map.extend(range.serialize(ExchangeName::Bybit).as_object().expect("serializes to an object").clone());
+	}
+	let wanted = match range {
+		RequestRange::Limit(n) => n as usize,
+		RequestRange::Span { .. } => usize::MAX,
+	};
 
-	let mut base_map = base_params.as_object().unwrap().clone();
-	let range_map = range_json.as_object().unwrap();
-	base_map.extend(range_map.clone());
-	let params = filter_nulls(serde_json::Value::Object(base_map));
+	let mut raw: Vec<OpenInterestData> = Vec::new();
+	let mut cursor = String::new();
+	for page in 1..=OI_MAX_PAGES {
+		let mut params = base_map.clone();
+		if !cursor.is_empty() {
+			params.insert("cursor".into(), Value::String(cursor.clone()));
+		}
+		let response: OpenInterestResponse = client.get("/v5/market/open-interest", &filter_nulls(Value::Object(params)), vec![BybitOption::None]).await?;
+		let exhausted = response.result.list.is_empty() || response.result.next_page_cursor.is_empty();
+		raw.extend(response.result.list);
+		cursor = response.result.next_page_cursor;
+		if exhausted || raw.len() >= wanted {
+			break;
+		}
+		assert!(page < OI_MAX_PAGES, "bybit paginated {symbol}'s open interest past {OI_MAX_PAGES} pages of {OI_PAGE}");
+	}
 
-	let options = vec![BybitOption::None];
-	let response: OpenInterestResponse = client.get("/v5/market/open-interest", &params, options).await?;
-
-	if response.result.list.is_empty() {
+	if raw.is_empty() {
 		return Err(crate::ExchangeError::Other(eyre::eyre!("No open interest data returned")));
+	}
+	// Pages come newest-first and the last one overshoots `wanted`; the contract is oldest-first.
+	raw.sort_unstable_by_key(|d| d.timestamp);
+	raw.dedup_by_key(|d| d.timestamp);
+	if let RequestRange::Span { since, until } = range {
+		let (since, until) = (since.as_millisecond(), until.map(|u| u.as_millisecond()).unwrap_or(i64::MAX));
+		raw.retain(|d| (since..until).contains(&d.timestamp));
+	}
+	if let RequestRange::Limit(n) = range {
+		raw.drain(..raw.len().saturating_sub(n as usize));
 	}
 
 	// For PerpInverse, we need to fetch the price to convert
@@ -248,8 +283,8 @@ pub(super) async fn open_interest(client: &v_exchanges_adapters::Client, symbol:
 	};
 
 	// Convert all data points to OpenInterest
-	let mut result = Vec::with_capacity(response.result.list.len());
-	for data in response.result.list {
+	let mut result = Vec::with_capacity(raw.len());
+	for data in raw {
 		let (val_asset, val_quote) = match symbol.instrument {
 			Instrument::PerpInverse => {
 				// as of (2025/10/14), Bybit returns value in `quote` for Inverse and in `asset` for Linear reqs

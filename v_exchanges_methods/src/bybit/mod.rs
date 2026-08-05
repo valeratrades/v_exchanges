@@ -1,4 +1,5 @@
 mod account;
+mod history;
 mod market;
 mod ws;
 
@@ -12,7 +13,7 @@ use v_utils::Timeframe;
 
 use crate::{
 	BatchTrades, BookUpdate, ExchangeError, ExchangeInfo, ExchangeName, ExchangeResult, ExchangeStream, Instrument, MethodError, OpenInterest, PrecisionPriceQty, Symbol,
-	core::{ExchangeImpl, Klines, PersonalInfo, RequestRange},
+	core::{Account, ExchangeSeal, History, Klines, Market, PersonalInfo, RequestRange, Stream, validate_recv_window},
 };
 
 #[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
@@ -23,17 +24,31 @@ pub struct Bybit {
 	pub info_cache: BTreeMap<Instrument, ExchangeInfo>,
 }
 
-//? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
+impl ExchangeSeal for Bybit {
+	fn stream(&mut self) -> Option<&mut dyn Stream> {
+		Some(self)
+	}
+
+	fn history(&self) -> Option<&dyn History> {
+		Some(self)
+	}
+}
+
 #[async_trait::async_trait]
-impl ExchangeImpl for Bybit {
-	fn info_cache_mut(&mut self) -> &mut BTreeMap<Instrument, ExchangeInfo> {
-		&mut self.info_cache
+impl History for Bybit {
+	async fn trades(&self, symbol: Symbol, since: jiff::Timestamp, until: jiff::Timestamp) -> ExchangeResult<Box<dyn ExchangeStream<Item = BatchTrades>>> {
+		let info = Market::exchange_info(self, symbol.instrument).await?;
+		Ok(Box::new(history::ArchiveTrades::new(symbol, history::precision(&info, symbol)?, history::window(since, until)?)))
 	}
 
-	fn name(&self) -> ExchangeName {
-		ExchangeName::Bybit
+	async fn book(&self, symbol: Symbol, since: jiff::Timestamp, until: jiff::Timestamp) -> ExchangeResult<Box<dyn ExchangeStream<Item = BookUpdate>>> {
+		let info = Market::exchange_info(self, symbol.instrument).await?;
+		Ok(Box::new(history::ArchiveBook::new(symbol, history::precision(&info, symbol)?, history::window(since, until)?)))
 	}
+}
 
+#[async_trait::async_trait]
+impl Account for Bybit {
 	fn auth(&mut self, pubkey: String, secret: SecretString) {
 		self.update_default_option(BybitOption::Pubkey(pubkey));
 		self.update_default_option(BybitOption::Secret(secret));
@@ -45,6 +60,19 @@ impl ExchangeImpl for Bybit {
 
 	fn default_recv_window(&self) -> Option<std::time::Duration> {
 		GetOptions::<BybitOptions>::default_options(&**self).recv_window
+	}
+
+	async fn personal_info(&self, _instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
+		validate_recv_window(recv_window, self.default_recv_window())?;
+		account::personal_info(self, recv_window).await
+	}
+}
+
+//? currently client ends up importing this from crate::binance, but could it be possible to lift the [Client] reexport up, and still have the ability to call all exchange methods right on it?
+#[async_trait::async_trait]
+impl Market for Bybit {
+	fn name(&self) -> ExchangeName {
+		ExchangeName::Bybit
 	}
 
 	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
@@ -74,16 +102,15 @@ impl ExchangeImpl for Bybit {
 			_ => Err(crate::ExchangeError::Method(crate::MethodError::new_method_not_supported(self.name(), symbol.instrument))),
 		}
 	}
+}
 
-	async fn personal_info(&self, _instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
-		account::personal_info(self, recv_window).await
-	}
-
+#[async_trait::async_trait]
+impl Stream for Bybit {
 	async fn ws_book(&mut self, pairs: &[Pair], instrument: Instrument) -> Result<Box<dyn ExchangeStream<Item = BookUpdate>>, ExchangeError> {
 		match instrument {
 			Instrument::Perp | Instrument::Spot => {
 				if !self.info_cache.contains_key(&instrument) {
-					let info = ExchangeImpl::exchange_info(&*self, instrument).await?;
+					let info = Market::exchange_info(&*self, instrument).await?;
 					self.info_cache.insert(instrument, info);
 				}
 				let exchange = self.name();
@@ -118,7 +145,7 @@ impl ExchangeImpl for Bybit {
 		match instrument {
 			Instrument::Perp | Instrument::Spot => {
 				if !self.info_cache.contains_key(&instrument) {
-					let info = ExchangeImpl::exchange_info(&*self, instrument).await?;
+					let info = Market::exchange_info(&*self, instrument).await?;
 					self.info_cache.insert(instrument, info);
 				}
 				let exchange = self.name();

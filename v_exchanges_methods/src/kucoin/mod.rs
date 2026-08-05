@@ -13,7 +13,7 @@ use v_utils::Timeframe;
 
 use crate::{
 	ExchangeName, ExchangeResult, Instrument, RequestRange, Symbol,
-	core::{ExchangeImpl, ExchangeInfo, Klines, PersonalInfo},
+	core::{Account, ExchangeInfo, ExchangeSeal, Klines, Market, PersonalInfo, validate_recv_window},
 };
 
 #[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
@@ -24,16 +24,10 @@ pub struct Kucoin {
 	pub info_cache: BTreeMap<Instrument, ExchangeInfo>,
 }
 
+impl ExchangeSeal for Kucoin {}
+
 #[async_trait::async_trait]
-impl ExchangeImpl for Kucoin {
-	fn info_cache_mut(&mut self) -> &mut BTreeMap<Instrument, ExchangeInfo> {
-		&mut self.info_cache
-	}
-
-	fn name(&self) -> ExchangeName {
-		ExchangeName::Kucoin
-	}
-
+impl Account for Kucoin {
 	fn auth(&mut self, pubkey: String, secret: SecretString) {
 		self.update_default_option(KucoinOption::Pubkey(pubkey));
 		self.update_default_option(KucoinOption::Secret(secret));
@@ -46,6 +40,18 @@ impl ExchangeImpl for Kucoin {
 
 	fn default_recv_window(&self) -> Option<std::time::Duration> {
 		None // KuCoin doesn't support configurable recv_window
+	}
+
+	async fn personal_info(&self, _instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
+		validate_recv_window(recv_window, self.default_recv_window())?;
+		account::personal_info(self, recv_window).await
+	}
+}
+
+#[async_trait::async_trait]
+impl Market for Kucoin {
+	fn name(&self) -> ExchangeName {
+		ExchangeName::Kucoin
 	}
 
 	async fn exchange_info(&self, instrument: Instrument) -> ExchangeResult<ExchangeInfo> {
@@ -70,9 +76,5 @@ impl ExchangeImpl for Kucoin {
 			Instrument::Perp => market::futures::klines(self, symbol, tf.try_into()?, range, None).await,
 			_ => unimplemented!(),
 		}
-	}
-
-	async fn personal_info(&self, _instrument: Instrument, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
-		account::personal_info(self, recv_window).await
 	}
 }
