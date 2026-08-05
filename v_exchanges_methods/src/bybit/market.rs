@@ -19,6 +19,11 @@ use crate::{
 };
 
 // klines {{{
+/// Bybit's ceiling on one page of this endpoint.
+const OI_PAGE: u32 = 200;
+/// What the walk may spend before we call the endpoint's shape changed. The venue decides when to
+/// stop handing back cursors, and an unbounded loop lets it decide never.
+const OI_MAX_PAGES: u32 = 64;
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KlineResponse {
@@ -212,11 +217,6 @@ pub(super) async fn prices(client: &v_exchanges_adapters::Client, pairs: Option<
 //,}}}
 
 // open_interest {{{
-/// Bybit's ceiling on one page of this endpoint.
-const OI_PAGE: u32 = 200;
-/// What the walk may spend before we call the endpoint's shape changed. The venue decides when to
-/// stop handing back cursors, and an unbounded loop lets it decide never.
-const OI_MAX_PAGES: u32 = 64;
 
 pub(super) async fn open_interest(client: &v_exchanges_adapters::Client, symbol: Symbol, tf: BybitIntervalTime, range: RequestRange) -> ExchangeResult<Vec<OpenInterest>> {
 	// A per-*request* cap: the walk below turns the endpoint's page ceiling into an implementation

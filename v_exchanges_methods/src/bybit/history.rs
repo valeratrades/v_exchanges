@@ -5,7 +5,7 @@
 //! yield is already scaled to the venue's own tick.
 
 use std::{
-	collections::VecDeque,
+	collections::{BTreeMap, VecDeque},
 	fs,
 	io::{BufRead as _, BufReader, Lines, Write as _},
 	path::{Path, PathBuf},
