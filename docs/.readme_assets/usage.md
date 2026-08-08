@@ -1,14 +1,14 @@
-Example evocations of crate's methods are exposed in [./examples], with their `[[example]]` references defined [./v_exchanges/Cargo.toml].
+Example evocations of crate's methods are exposed in [examples/](../../examples), with their `[[example]]` references defined in [exchange_interactions/Cargo.toml](../../exchange_interactions/Cargo.toml).
 To run:
 ```sh
-cargo run -p v_exchanges --example binance_market_perp
+cargo run -p exchange_interactions --example binance_market_perp
 ```
 
 The spirit of how the framework is used in code is best described with the following `cli` example:
 ```rs
 use std::str::FromStr as _;
 
-use v_exchanges::prelude::*;
+use exchange_interactions::prelude::*;
 
 #[tokio::main]
 async fn main() {

@@ -1,6 +1,6 @@
 use std::{env, time::Duration};
 
-use v_exchanges::prelude::*;
+use exchange_interactions::prelude::*;
 
 #[tokio::main]
 async fn main() {
@@ -67,7 +67,7 @@ async fn check_kucoin() {
 		(Ok(key), Ok(secret), Ok(passphrase)) => {
 			#[cfg(feature = "kucoin")]
 			{
-				use v_exchanges_adapters::kucoin::KucoinOption;
+				use exchange_interactions_adapters::kucoin::KucoinOption;
 				let mut kucoin = ExchangeName::Kucoin.init_client();
 				kucoin.update_default_option(KucoinOption::Pubkey(key));
 				kucoin.update_default_option(KucoinOption::Secret(secret.into()));

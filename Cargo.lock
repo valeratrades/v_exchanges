@@ -885,6 +885,118 @@ dependencies = [
 ]
 
 [[package]]
+name = "exchange_interactions"
+version = "0.19.2"
+dependencies = [
+ "color-eyre",
+ "exchange_interactions_adapters",
+ "exchange_interactions_methods",
+ "insta",
+ "jiff",
+ "miette",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "v_utils",
+]
+
+[[package]]
+name = "exchange_interactions_adapters"
+version = "0.19.2"
+dependencies = [
+ "ahash 0.8.12",
+ "base64 0.23.0",
+ "derive-new",
+ "derive_more",
+ "exchange_interactions_api_generics",
+ "eyre",
+ "hex",
+ "hmac",
+ "jiff",
+ "rand 0.10.2",
+ "rust_decimal",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sha2",
+ "smart-default",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
+ "ustr",
+ "v_utils",
+]
+
+[[package]]
+name = "exchange_interactions_api_generics"
+version = "0.21.2"
+dependencies = [
+ "ahash 0.8.12",
+ "arc-swap",
+ "bytes",
+ "dashmap",
+ "derive-new",
+ "derive_more",
+ "eyre",
+ "futures-util",
+ "jiff",
+ "miette",
+ "netwatcher",
+ "nonzero_ext",
+ "rand 0.10.2",
+ "reqwest",
+ "rstest",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "thiserror",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "url",
+ "ustr",
+ "v_utils",
+]
+
+[[package]]
+name = "exchange_interactions_methods"
+version = "0.2.2"
+dependencies = [
+ "ahash 0.8.12",
+ "arrayvec",
+ "async-trait",
+ "cfg-if",
+ "color-eyre",
+ "derive-new",
+ "derive_more",
+ "enum_dispatch",
+ "exchange_interactions_adapters",
+ "eyre",
+ "flate2",
+ "futures-util",
+ "insta",
+ "jiff",
+ "miette",
+ "reqwest",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "smart-default",
+ "strum",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "trading_data_core",
+ "uuid",
+ "v_utils",
+ "zip",
+]
+
+[[package]]
 name = "eyre"
 version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3776,6 +3888,9 @@ dependencies = [
 [[package]]
 name = "trading_data_expr"
 version = "0.3.0"
+dependencies = [
+ "libm",
+]
 
 [[package]]
 name = "trading_data_macros"
@@ -3928,118 +4043,6 @@ dependencies = [
  "getrandom 0.4.3",
  "js-sys",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "v_exchanges"
-version = "0.19.2"
-dependencies = [
- "color-eyre",
- "insta",
- "jiff",
- "miette",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "v_exchanges_adapters",
- "v_exchanges_methods",
- "v_utils",
-]
-
-[[package]]
-name = "v_exchanges_adapters"
-version = "0.19.2"
-dependencies = [
- "ahash 0.8.12",
- "base64 0.23.0",
- "derive-new",
- "derive_more",
- "eyre",
- "hex",
- "hmac",
- "jiff",
- "rand 0.10.2",
- "rust_decimal",
- "secrecy",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "sha2",
- "smart-default",
- "thiserror",
- "tokio",
- "tracing",
- "url",
- "ustr",
- "v_exchanges_api_generics",
- "v_utils",
-]
-
-[[package]]
-name = "v_exchanges_api_generics"
-version = "0.21.2"
-dependencies = [
- "ahash 0.8.12",
- "arc-swap",
- "bytes",
- "dashmap",
- "derive-new",
- "derive_more",
- "eyre",
- "futures-util",
- "jiff",
- "miette",
- "netwatcher",
- "nonzero_ext",
- "rand 0.10.2",
- "reqwest",
- "rstest",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "thiserror",
- "tokio",
- "tokio-tungstenite",
- "tracing",
- "url",
- "ustr",
- "v_utils",
-]
-
-[[package]]
-name = "v_exchanges_methods"
-version = "0.2.2"
-dependencies = [
- "ahash 0.8.12",
- "arrayvec",
- "async-trait",
- "cfg-if",
- "color-eyre",
- "derive-new",
- "derive_more",
- "enum_dispatch",
- "eyre",
- "flate2",
- "futures-util",
- "insta",
- "jiff",
- "miette",
- "reqwest",
- "secrecy",
- "serde",
- "serde_json",
- "serde_with",
- "smart-default",
- "strum",
- "thiserror",
- "tokio",
- "tracing",
- "trading_data_core",
- "uuid",
- "v_exchanges_adapters",
- "v_utils",
- "zip",
 ]
 
 [[package]]

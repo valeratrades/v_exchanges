@@ -1,6 +1,6 @@
 use std::env;
 
-use v_exchanges_adapters::{
+use exchange_interactions_adapters::{
 	bybit::{BybitOption, BybitOptions, BybitWsUrlBase},
 	generics::ws::WsConnection,
 	traits::{HandlerOptions, WsOption},

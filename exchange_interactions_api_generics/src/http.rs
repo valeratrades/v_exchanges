@@ -1,0 +1,666 @@
+use std::{
+	fmt::Debug,
+	path::PathBuf,
+	sync::{
+		Arc, OnceLock,
+		atomic::{AtomicBool, Ordering},
+	},
+	time::Duration,
+};
+
+use arc_swap::ArcSwap;
+pub use bytes::Bytes;
+use dashmap::DashMap;
+use eyre::{Report, eyre};
+use jiff::Timestamp;
+use reqwest::Url;
+pub use reqwest::{
+	Method, Request, RequestBuilder, StatusCode,
+	header::{self, HeaderMap},
+};
+use serde::Serialize;
+use tracing::{Span, debug, error, field::Empty, info, instrument, warn};
+pub use ustr::Ustr;
+
+use crate::{
+	ConstructAuthError, RetryConfig, UrlError,
+	ratelimiter::{RateLimiter, clock::MonotonicClock},
+	retry::ExponentialBackoff,
+};
+
+/// The User Agent string
+pub static USER_AGENT: &str = concat!("exchange_interactions_api_generics/", env!("CARGO_PKG_VERSION"));
+
+/// Client for communicating with APIs through HTTP/HTTPS.
+///
+/// When making a HTTP request or starting a websocket connection with this client,
+/// a handler that implements [RequestHandler] is required.
+#[derive(Clone)]
+pub struct Client {
+	/// Swappable so the stale connection pool can be dropped wholesale on a host
+	/// network-identity change. `Arc<ArcSwap<_>>` (not bare `ArcSwap`): `ArcSwap` is not
+	/// `Clone`, but `Client` must stay `Clone` (cloned into WS snapshot futures and held by
+	/// every adapter), and all clones must share the SAME cell so one swap heals them all.
+	client: Arc<ArcSwap<reqwest::Client>>,
+	/// Set by netwatcher's callback when host interface addresses change; checked-and-cleared
+	/// at the top of `request()`. Shared across clones (Arc) so the single watch serves all.
+	net_dirty: Arc<AtomicBool>,
+	/// Keeps the single netwatcher subscription alive for the lifetime of the client graph;
+	/// dropping it stops the watch. Shared across clones via Arc. The `Mutex` is solely to
+	/// gain `Sync` (the handle's drop-time `mpsc::Receiver` is `!Sync`, so `Arc<WatchHandle>`
+	/// alone would not be `Send`, but `Client` must be `Send`); it is never locked — the
+	/// handle is only ever dropped, once, when the last clone goes away.
+	_net_watch: Arc<std::sync::Mutex<netwatcher::WatchHandle>>,
+	pub config: RequestConfig,
+	pub rate_limiter: Option<Arc<RateLimiter<Ustr, MonotonicClock>>>,
+	/// Per-bucket unban time. Once an exchange reports a ban (`IpError::Timeout`), the bucket is
+	/// short-circuited until this instant instead of re-hitting the API (which renews/escalates the
+	/// ban). Keyed by the same bucket as `rate_limiter`; shared across clones (Arc) like it.
+	banned_until: Arc<DashMap<Ustr, Timestamp>>,
+}
+
+// Manual `Debug`: `netwatcher::WatchHandle` is not `Debug`, so we skip it — mirrors the
+// `ws.rs` "manual Debug, skip non-Debug fields" precedent.
+impl Debug for Client {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Client")
+			.field("client", &self.client)
+			.field("net_dirty", &self.net_dirty)
+			.field("config", &self.config)
+			.field("rate_limiter", &self.rate_limiter)
+			.finish_non_exhaustive()
+	}
+}
+
+/// Centralizes inner-client construction so `Default` and the network-change rebuild can never drift.
+fn build_reqwest_client() -> reqwest::Client {
+	reqwest::Client::new()
+}
+
+impl Default for Client {
+	fn default() -> Self {
+		let net_dirty = Arc::new(AtomicBool::new(false));
+		let flag = Arc::clone(&net_dirty);
+		// `is_initial` fires synchronously here; ignore it (nothing stale at startup).
+		let watch = netwatcher::watch_interfaces_with_callback(move |u: netwatcher::Update| {
+			if !u.is_initial {
+				flag.store(true, Ordering::Relaxed);
+			}
+		})
+		.expect("netwatcher: failed to subscribe to host network change events");
+		Self {
+			client: Arc::new(ArcSwap::from_pointee(build_reqwest_client())),
+			net_dirty,
+			_net_watch: Arc::new(std::sync::Mutex::new(watch)),
+			config: RequestConfig::default(),
+			rate_limiter: None,
+			banned_until: Arc::new(DashMap::new()),
+		}
+	}
+}
+
+impl Client {
+	/// Makes an HTTP request with the given [RequestHandler] and returns the response.
+	///
+	/// It is recommended to use methods like [get()][Self::get()] because this method takes many type parameters and parameters.
+	///
+	/// The request is passed to `handler` before being sent, and the response is passed to `handler` before being returned.
+	/// Note, that as stated in the docs for [RequestBuilder::query()], parameter `query` only accepts a **sequence of** key-value pairs.
+	#[instrument(skip_all, fields(?url, ?query, request_builder = Empty))] //TODO: get all generics to impl std::fmt::Debug
+	pub async fn request<Q, B, H>(&self, method: Method, url: &str, query: Option<&Q>, body: Option<B>, handler: &H) -> Result<H::Successful, RequestError>
+	where
+		Q: Serialize + ?Sized + std::fmt::Debug,
+		H: RequestHandler<B>, {
+		// Drop the stale connection pool if the host network identity changed since last call.
+		if self.net_dirty.swap(false, Ordering::Relaxed) {
+			self.client.store(Arc::new(build_reqwest_client()));
+			info!("host network change observed; rebuilt HTTP connection pool");
+		}
+		let reqwest_client = self.client.load();
+
+		let config = &self.config;
+		let base_url = handler.base_url(config.use_testnet)?;
+		let url = base_url.join(url).map_err(|_| RequestError::Other(eyre!("Failed to parse provided URL")))?;
+		debug!(?config);
+
+		// Mock cache: check before making any requests
+		let mock_path = config.mock_cache_dir.as_ref().map(|dir| mock_cache_path(dir, &url));
+		if let Some(ref path) = mock_path
+			&& let Ok(file) = std::fs::read_to_string(path)
+			&& path
+				.metadata()
+				.expect("already read the file, guaranteed to exist")
+				.modified()
+				.expect("switch OSes, you're on something stupid")
+				.elapsed()
+				.unwrap() < MOCK_CACHE_DURATION
+		{
+			debug!("Mock cache hit: {}", path.display());
+			let body = Bytes::from(file);
+			let (status, headers) = (StatusCode::OK, header::HeaderMap::new());
+			return handler.handle_response(status, headers, body).map_err(RequestError::HandleResponse);
+		}
+
+		let bucket: Ustr = {
+			// Segment 1: always "ip"
+			// Segment 2: exchange name — second-level domain of the request host (e.g. "binance" from "api.binance.com")
+			// Segment 3: credential name — truncated hash of pubkey, present only if handler carries one
+			let exchange = url.host_str().and_then(|h| {
+				let parts: Vec<&str> = h.split('.').collect();
+				// SLD is second-from-last for normal domains, last for single-label (localhost etc.)
+				parts.len().checked_sub(2).map(|i| parts[i])
+			});
+			let key_name = handler.rate_limit_key_name();
+			let s = match (exchange, key_name.as_deref()) {
+				(Some(ex), Some(kn)) => format!("ip.{ex}.{kn}"),
+				(Some(ex), None) => format!("ip.{ex}"),
+				(None, _) => "ip".to_owned(),
+			};
+			Ustr::from(&s)
+		};
+
+		// Ban gate: while the exchange says we're banned on this bucket, refuse to send (re-hitting
+		// the API renews/escalates the ban). Copy the timestamp out before any `remove` to drop the `Ref`.
+		let banned = self.banned_until.get(&bucket).map(|r| *r);
+		if let Some(until) = banned {
+			if Timestamp::now() < until {
+				warn!(%bucket, ?until, "IP banned; short-circuiting request until unban time");
+				return Err(RequestError::HandleResponse(HandleError::Api(ApiError::Ip(IpError::Timeout { until: Some(until) }))));
+			}
+			self.banned_until.remove(&bucket);
+		}
+
+		if let Some(rl) = &self.rate_limiter {
+			rl.until_key_ready_n(&bucket, 1).await;
+		}
+
+		let mut backoff = ExponentialBackoff::try_from(&config.retry).map_err(|e| RequestError::Other(eyre!("Invalid retry configuration: {e}")))?;
+
+		let mut attempt: u32 = 0;
+		loop {
+			let attempt_num = attempt + 1;
+			//HACK: hate to create a new request every time, but I haven't yet figured out how to provide by reference
+			let mut request_builder = reqwest_client.request(method.clone(), url.clone()).timeout(config.timeout);
+			if let Some(query) = query {
+				request_builder = request_builder.query(query);
+			}
+			Span::current().record("request_builder", format!("{request_builder:?}"));
+
+			if config.use_testnet
+				&& let Some(cache_duration) = config.cache_testnet_calls
+			{
+				let path = test_calls_path(&url, &query);
+				if let Ok(file) = std::fs::read_to_string(&path)
+					&& path
+						.metadata()
+						.expect("already read the file, guaranteed to exist")
+						.modified()
+						.expect("switch OSes, you're on something stupid")
+						.elapsed()
+						.unwrap() < cache_duration
+				{
+					let body = Bytes::from(file);
+					let (status, headers) = (StatusCode::OK, header::HeaderMap::new()); // we only cache if we get a 200 (headers are only relevant on unsuccessful), so pass defaults.
+					return handler.handle_response(status, headers, body).map_err(RequestError::HandleResponse);
+				}
+			}
+
+			let request = handler.build_request(request_builder, &body, attempt_num as u8).map_err(RequestError::BuildRequest)?;
+			match reqwest_client.execute(request).await {
+				Ok(mut response) => {
+					let status = response.status();
+					let headers = std::mem::take(response.headers_mut());
+					debug!(?status, ?headers, "Received response headers");
+					let body: Bytes = match response.bytes().await {
+						Ok(b) => b,
+						Err(e) => {
+							error!(?status, ?headers, ?e, "Failed to read response body");
+							return Err(RequestError::ReceiveResponse(e));
+						}
+					};
+					{
+						let truncated_body = v_utils::utils::truncate_msg(std::str::from_utf8(&body)?.trim());
+						debug!(truncated_body);
+					}
+
+					// Persist to mock cache on successful response
+					if status.is_success()
+						&& let Some(ref path) = mock_path
+					{
+						if let Some(parent) = path.parent() {
+							std::fs::create_dir_all(parent).ok();
+						}
+						std::fs::write(path, &body).ok();
+						debug!("Mock cache write: {}", path.display());
+					}
+
+					match config.use_testnet {
+						true => {
+							// if we're here, the cache file didn't exist or is outdated
+							let handled = handler.handle_response(status, headers.clone(), body.clone())?;
+							std::fs::write(test_calls_path(&url, &query), &body).ok();
+							return Ok(handled);
+						}
+						false => {
+							let handled = handler.handle_response(status, headers.clone(), body.clone());
+							if let Err(HandleError::Api(ApiError::Ip(IpError::Timeout { until }))) = &handled {
+								let until = until.unwrap_or_else(|| Timestamp::now() + config.ban_cooldown);
+								warn!(%bucket, ?until, "exchange reported IP ban; gating bucket until unban time");
+								self.banned_until.insert(bucket, until);
+							}
+							return handled.map_err(|e| {
+								error!(?status, ?headers, body = ?v_utils::utils::truncate_msg(std::str::from_utf8(&body).unwrap_or("<invalid utf8>")), "Failed to handle response");
+								RequestError::HandleResponse(e)
+							});
+						}
+					}
+				}
+				Err(e) =>
+					if attempt < config.retry.max_retries && is_retryable_request_error(&e) {
+						let delay = backoff.next_duration();
+						info!(attempt = attempt_num, delay_ms = delay.as_millis(), "Retrying after network error");
+						if delay.is_zero() {
+							tokio::task::yield_now().await;
+						} else {
+							tokio::time::sleep(delay).await;
+						}
+						attempt += 1;
+					} else {
+						warn!(?e);
+						return Err(RequestError::SendRequest(e));
+					},
+			}
+		}
+	}
+
+	/// Makes an GET request with the given [RequestHandler].
+	///
+	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
+	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
+	///
+	/// For more information, see [request()][Self::request()].
+	pub async fn get<Q, H>(&self, url: &str, query: &Q, handler: &H) -> Result<H::Successful, RequestError>
+	where
+		Q: Serialize + ?Sized + Debug,
+		H: RequestHandler<()>, {
+		self.request::<Q, (), H>(Method::GET, url, Some(query), None, handler).await
+	}
+
+	/// Derivation of [get()][Self::get()].
+	pub async fn get_no_query<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError>
+	where
+		H: RequestHandler<()>, {
+		self.request::<&[(&str, &str)], (), H>(Method::GET, url, None, None, handler).await
+	}
+
+	/// Makes an POST request with the given [RequestHandler].
+	///
+	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
+	///
+	/// For more information, see [request()][Self::request()].
+	pub async fn post<B, H>(&self, url: &str, body: B, handler: &H) -> Result<H::Successful, RequestError>
+	where
+		H: RequestHandler<B>, {
+		self.request::<(), B, H>(Method::POST, url, None, Some(body), handler).await
+	}
+
+	/// Derivation of [post()][Self::post()].
+	pub async fn post_no_body<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError>
+	where
+		H: RequestHandler<()>, {
+		self.request::<(), (), H>(Method::POST, url, None, None, handler).await
+	}
+
+	/// Makes an PUT request with the given [RequestHandler].
+	///
+	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
+	///
+	/// For more information, see [request()][Self::request()].
+	pub async fn put<B, H>(&self, url: &str, body: B, handler: &H) -> Result<H::Successful, RequestError>
+	where
+		H: RequestHandler<B>, {
+		self.request::<(), B, H>(Method::PUT, url, None, Some(body), handler).await
+	}
+
+	/// Derivation of [put()][Self::put()].
+	pub async fn put_no_body<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError>
+	where
+		H: RequestHandler<()>, {
+		self.request::<(), (), H>(Method::PUT, url, None, None, handler).await
+	}
+
+	/// Makes an DELETE request with the given [RequestHandler].
+	///
+	/// This method just calls [request()][Self::request()]. It requires less typing for type parameters and parameters.
+	/// This method requires that `handler` can handle a request with a body of type `()`. The actual body passed will be `None`.
+	///
+	/// For more information, see [request()][Self::request()].
+	pub async fn delete<Q, H>(&self, url: &str, query: &Q, handler: &H) -> Result<H::Successful, RequestError>
+	where
+		Q: Serialize + ?Sized + Debug,
+		H: RequestHandler<()>, {
+		self.request::<Q, (), H>(Method::DELETE, url, Some(query), None, handler).await
+	}
+
+	/// Derivation of [delete()][Self::delete()].
+	pub async fn delete_no_query<H>(&self, url: &str, handler: &H) -> Result<H::Successful, RequestError>
+	where
+		H: RequestHandler<()>, {
+		self.request::<&[(&str, &str)], (), H>(Method::DELETE, url, None, None, handler).await
+	}
+}
+
+/// A `trait` which is used to process requests and responses for the [Client].
+pub trait RequestHandler<B> {
+	/// The type which is returned to the caller of [Client::request()] when the response was successful.
+	type Successful;
+
+	/// Produce a url prefix (if any).
+	#[allow(unused_variables)]
+	fn base_url(&self, is_test: bool) -> Result<url::Url, UrlError> {
+		Url::parse("").map_err(UrlError::Parse)
+	}
+
+	/// Build a HTTP request to be sent.
+	///
+	/// Implementors have to decide how to include the `request_body` into the `builder`. Implementors can
+	/// also perform other operations (such as authorization) on the request.
+	fn build_request(&self, builder: RequestBuilder, request_body: &Option<B>, attempt_count: u8) -> Result<Request, BuildError>;
+
+	/// Handle a HTTP response before it is returned to the caller of [Client::request()].
+	///
+	/// You can verify, parse, etc... the response here before it is returned to the caller.
+	///
+	/// # Examples
+	/// ```
+	/// # use bytes::Bytes;
+	/// # use reqwest::{StatusCode, header::HeaderMap};
+	/// # trait Ignore {
+	/// fn handle_response(&self, status: StatusCode, _: HeaderMap, response_body: Bytes) -> Result<String, ()> {
+	///     if status.is_success() {
+	///         let body = std::str::from_utf8(&response_body).expect("body should be valid UTF-8").to_owned();
+	///         Ok(body)
+	///     } else {
+	///         Err(())
+	///     }
+	/// }
+	/// # }
+	/// ```
+	fn handle_response(&self, status: StatusCode, headers: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError>;
+
+	/// Returns a short identifier for the credential pair used by this handler, if any.
+	///
+	/// Used as the third segment of the rate-limit bucket key: `"ip.{exchange}.{name}"`.
+	/// The default is `None` (anonymous / unauthenticated request — only the two-segment key is used).
+	/// Exchange impls return a truncated hash of their pubkey so each key pair gets its own bucket.
+	fn rate_limit_key_name(&self) -> Option<String> {
+		None
+	}
+}
+
+/// Configuration when sending a request using [Client].
+///
+/// Modified in-place later if necessary.
+#[derive(Clone, Debug, Default)]
+pub struct RequestConfig {
+	/// Retry configuration for failed requests.
+	pub retry: RetryConfig,
+	/// The timeout set when sending a request. [Default]s to 3s.
+	///
+	/// It is possible for the [RequestHandler] to override this in [RequestHandler::build_request()].
+	/// See also: [RequestBuilder::timeout()].
+	pub timeout: Duration = Duration::from_secs(3),
+
+	/// Make all requests in test mode
+	pub use_testnet: bool,
+	/// if `test` is true, then we will try to read the file with the cached result of any request to the same URL, aged less than specified [Duration]
+	pub cache_testnet_calls: Option<Duration> = Some(Duration::from_days(30)),
+
+	/// When set, responses are cached under this directory. On cache hit (< 30 days old), the cached response is returned without making a network request.
+	/// On cache miss or stale cache, the real request is made, the response is persisted, then returned.
+	pub mock_cache_dir: Option<PathBuf>,
+
+	/// Fallback ban duration when the exchange reports a ban without an unban time (e.g. Bybit).
+	pub ban_cooldown: Duration = Duration::from_secs(300),
+}
+
+/// Error type encompassing all the failure modes of [RequestHandler::handle_response()].
+#[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error, derive_more::From)]
+pub enum HandleError {
+	/// Refer to [ApiError]
+	#[diagnostic(transparent)]
+	Api(ApiError),
+	/// Couldn't parse the response. Normally just wraps the [JsonError](serde_json::Error) with [truncate_msg](v_utils::utils::truncate_msg) around the response msg.
+	#[diagnostic(
+		code(exchange_interactions::http::handle::parse),
+		help("The response body could not be parsed. Check if the API response format has changed.")
+	)]
+	Parse(Report),
+}
+/// Errors that exchanges purposefully transmit.
+#[non_exhaustive]
+#[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error, derive_more::From)]
+pub enum ApiError {
+	/// IP-level errors (rate-limiting, WAF blocks, geo-blocking)
+	#[diagnostic(transparent)]
+	Ip(IpError),
+	/// Authentication/authorization errors shared across all exchanges
+	#[diagnostic(transparent)]
+	Auth(AuthError),
+	/// Errors that are a) specific to a particular exchange or b) should be handled by this crate, but are here for dev convenience
+	#[error(transparent)]
+	Other(Report),
+}
+
+/// IP-level errors that map uniformly across exchanges
+#[non_exhaustive]
+#[allow(unused_assignments)] // false positive: fields used in #[error] format strings, but thiserror codegen triggers this
+#[derive(Debug, miette::Diagnostic, thiserror::Error)]
+pub enum IpError {
+	/// Ip has been timed out or banned by the exchange application layer
+	#[error("IP timed out or banned until {until:?}")]
+	#[diagnostic(
+		code(exchange_interactions::ip::timeout),
+		help("Your IP has been rate-limited. Wait until the specified time or reduce request frequency.")
+	)]
+	Timeout {
+		/// Time of unban
+		until: Option<Timestamp>,
+	},
+	/// Request blocked by CDN/WAF (CloudFront, Cloudflare, etc.) - could be rate-limiting, geo-block, or malformed request.
+	/// Distinct from Timeout in that the response is HTML from the CDN, not JSON from the exchange.
+	#[error("blocked by WAF: {msg}")]
+	#[diagnostic(
+		code(exchange_interactions::ip::waf),
+		help("Your request was blocked by the exchange's CDN/WAF. This could be geo-blocking, rate-limiting, or a malformed request.")
+	)]
+	Waf { msg: String },
+	/// Geo-blocked: the exchange has determined the request originates from a restricted region.
+	/// Only emitted when the exchange explicitly communicates geo-blocking (e.g. Binance HTTP 451, Bybit retCode 10024).
+	#[error("geo-blocked: {msg}")]
+	#[diagnostic(
+		code(exchange_interactions::ip::geo_blocked),
+		help("Your IP is in a region restricted by the exchange. Use a VPN or contact the exchange for more information.")
+	)]
+	GeoBlocked { msg: String },
+}
+
+/// Authentication errors that map uniformly across exchanges
+#[non_exhaustive]
+#[allow(unused_assignments)] // false positive: fields used in #[error] format strings, but thiserror codegen triggers this
+#[derive(Debug, miette::Diagnostic, thiserror::Error)]
+pub enum AuthError {
+	#[error("API key has expired: {msg}")]
+	#[diagnostic(code(exchange_interactions::http::api::auth::key_expired), help("Generate a new API key from the exchange dashboard."))]
+	KeyExpired { msg: String },
+	#[error("Unauthorized: {msg}")]
+	#[diagnostic(
+		code(exchange_interactions::http::api::auth::unauthorized),
+		help("Check that your API key and secret are correct and have the required permissions.")
+	)]
+	Unauthorized { msg: String },
+}
+
+/// An `enum` that represents errors that could be returned by [Client::request()]
+#[derive(Debug, miette::Diagnostic, thiserror::Error)]
+pub enum RequestError {
+	#[error("failed to send HTTP request: {0}")]
+	#[diagnostic(code(exchange_interactions::http::request::send), help("Check your network connection and firewall settings."))]
+	SendRequest(#[source] reqwest::Error),
+	#[error("failed to parse response body as UTF-8: {0}")]
+	#[diagnostic(code(exchange_interactions::http::request::utf8))]
+	Utf8Error(#[from] std::str::Utf8Error),
+	#[error("failed to receive HTTP response: {0}")]
+	#[diagnostic(code(exchange_interactions::http::request::receive), help("The server may have closed the connection. Try again."))]
+	ReceiveResponse(#[source] reqwest::Error),
+	#[error("handler failed to build a request: {0}")]
+	#[diagnostic(transparent)]
+	BuildRequest(#[from] BuildError),
+	#[error("handler failed to process the response: {0}")]
+	#[diagnostic(transparent)]
+	HandleResponse(#[from] HandleError),
+	#[error("{0}")]
+	#[diagnostic(transparent)]
+	Url(#[from] UrlError),
+	/// errors meant to be propagated to the user or the developer, thus having no defined type.
+	#[allow(missing_docs)]
+	#[error(transparent)]
+	Other(#[from] Report),
+}
+
+/// Errors that can occur during exchange's implementation of the build-request process.
+#[derive(Debug, miette::Diagnostic, derive_more::Display, thiserror::Error, derive_more::From)]
+pub enum BuildError {
+	/// Signed request attempted, while lacking one of the necessary auth fields
+	#[diagnostic(transparent)]
+	Auth(ConstructAuthError),
+	/// Could not serialize body as application/x-www-form-urlencoded
+	#[diagnostic(code(exchange_interactions::http::build::url_serialization), help("Check that all request parameters can be URL-encoded."))]
+	UrlSerialization(serde_urlencoded::ser::Error),
+	/// Could not serialize body as application/json
+	#[diagnostic(code(exchange_interactions::http::build::json_serialization), help("Check that all request body fields can be serialized to JSON."))]
+	JsonSerialization(serde_json::Error),
+	//Q: not sure if there is ever a case when client could reach that, thus currently simply unwraping.
+	///// Error when calling reqwest::RequestBuilder::build()
+	//Reqwest(reqwest::Error),
+	#[allow(missing_docs)]
+	#[error(transparent)]
+	Other(Report),
+}
+
+/// Returns true if the reqwest error is a transport-level failure worth retrying.
+///
+/// Retryable: timeout, connection failure, or a request error without a status (never got a response).
+/// Non-retryable: anything with a status code (handler has full context to decide).
+fn is_retryable_request_error(e: &reqwest::Error) -> bool {
+	e.is_timeout() || e.is_connect() || (e.is_request() && e.status().is_none())
+}
+
+static TEST_CALLS_PATH: OnceLock<PathBuf> = OnceLock::new();
+fn test_calls_path<Q: Serialize>(url: &Url, query: &Option<Q>) -> PathBuf {
+	let base = TEST_CALLS_PATH.get_or_init(|| v_utils::xdg_cache_dir!("test_calls"));
+
+	let mut filename = url.to_string();
+	if query.is_some() {
+		filename.push('?');
+		filename.push_str(&serde_urlencoded::to_string(query).unwrap_or_default());
+	}
+	base.join(filename)
+}
+
+const MOCK_CACHE_DURATION: Duration = Duration::from_days(30);
+
+/// Constructs a cache path from the mock cache dir and the URL.
+/// Uses host + path as the meaningful parts (no query params, no scheme).
+fn mock_cache_path(cache_dir: &PathBuf, url: &Url) -> PathBuf {
+	let host = url.host_str().unwrap_or("unknown");
+	let path = url.path().trim_start_matches('/');
+	cache_dir.join(host).join(path)
+}
+
+#[cfg(test)]
+mod tests {
+	use std::sync::atomic::{AtomicBool, Ordering};
+
+	use jiff::SignedDuration;
+	use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+	use super::*;
+
+	/// Records whether the network path (`build_request`) was reached, and always maps the response
+	/// to an `IpError::Timeout` so the record path can be exercised.
+	struct BanHandler {
+		base: Url,
+		network_ran: AtomicBool,
+	}
+	impl RequestHandler<()> for BanHandler {
+		type Successful = ();
+
+		fn base_url(&self, _is_test: bool) -> Result<Url, UrlError> {
+			Ok(self.base.clone())
+		}
+
+		fn build_request(&self, builder: RequestBuilder, _body: &Option<()>, _attempt: u8) -> Result<Request, BuildError> {
+			self.network_ran.store(true, Ordering::SeqCst);
+			builder.build().map_err(|e| BuildError::Other(eyre!(e)))
+		}
+
+		fn handle_response(&self, _status: StatusCode, _headers: HeaderMap, _body: Bytes) -> Result<(), HandleError> {
+			Err(HandleError::Api(ApiError::Ip(IpError::Timeout { until: None })))
+		}
+	}
+
+	#[tokio::test]
+	async fn banned_bucket_short_circuits_then_recovers() {
+		let mut client = Client::default();
+		client.config.retry.max_retries = 0; // fail fast once the gate is passed
+		let handler = BanHandler {
+			base: Url::parse("https://api.testex.com/").unwrap(),
+			network_ran: AtomicBool::new(false),
+		};
+		let bucket = Ustr::from("ip.testex");
+
+		// Still banned: must short-circuit before touching the network.
+		client.banned_until.insert(bucket, Timestamp::now() + SignedDuration::from_secs(60));
+		let err = client.get_no_query("", &handler).await.unwrap_err();
+		assert!(matches!(err, RequestError::HandleResponse(HandleError::Api(ApiError::Ip(IpError::Timeout { .. })))));
+		assert!(!handler.network_ran.load(Ordering::SeqCst), "banned bucket hit the network");
+
+		// Ban expired: entry is evicted and the request proceeds to the network.
+		client.banned_until.insert(bucket, Timestamp::now() - SignedDuration::from_secs(60));
+		client.get_no_query("", &handler).await.expect_err("BanHandler always errors");
+		assert!(handler.network_ran.load(Ordering::SeqCst), "expired ban did not proceed");
+		assert!(!client.banned_until.contains_key(&bucket), "expired ban was not evicted");
+	}
+
+	#[tokio::test]
+	async fn ban_recorded_with_cooldown_fallback() {
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let addr = listener.local_addr().unwrap();
+
+		let server = async {
+			let (mut sock, _) = listener.accept().await.unwrap();
+			let mut buf = [0u8; 1024];
+			sock.read(&mut buf).await.expect("client sent a request");
+			sock.write_all(b"HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\n\r\n").await.unwrap();
+		};
+
+		let client = Client::default();
+		let handler = BanHandler {
+			base: Url::parse(&format!("http://{addr}/")).unwrap(),
+			network_ran: AtomicBool::new(false),
+		};
+		let before = Timestamp::now();
+		let (_, res) = tokio::join!(server, client.get_no_query("", &handler));
+
+		assert!(matches!(res, Err(RequestError::HandleResponse(HandleError::Api(ApiError::Ip(IpError::Timeout { until: None }))))));
+		let bucket = Ustr::from("ip.0"); // 127.0.0.1 -> SLD segment "0"
+		let until = *client.banned_until.get(&bucket).expect("ban recorded");
+		// `until: None` from the handler falls back to now + ban_cooldown (300s default).
+		let expected = before + client.config.ban_cooldown;
+		assert!(
+			until.duration_since(expected).abs() < SignedDuration::from_secs(2),
+			"recorded unban {until} far from expected {expected}"
+		);
+	}
+}

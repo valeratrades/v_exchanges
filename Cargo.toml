@@ -1,7 +1,7 @@
 cargo-features = ["codegen-backend"]
 
 [workspace]
-members = ["v_exchanges", "v_exchanges_*"]
+members = ["exchange_interactions", "exchange_interactions_*"]
 resolver = "3"
 
 [workspace.lints.rust]
@@ -69,10 +69,10 @@ rust_decimal = "1.42"
 strum = { version = "^0.28", features = ["derive"] }
 tokio-tungstenite = "0.30"
 
-v_exchanges_adapters = { version = "0.19.2", path = "v_exchanges_adapters" }
-v_exchanges_api_generics = { version = "0.21.2", path = "v_exchanges_api_generics" }
-v_exchanges_methods = { version = "0.2.2", path = "v_exchanges_methods", default-features = false }
+exchange_interactions_adapters = { version = "0.19.2", path = "exchange_interactions_adapters" }
+exchange_interactions_api_generics = { version = "0.21.2", path = "exchange_interactions_api_generics" }
+exchange_interactions_methods = { version = "0.2.2", path = "exchange_interactions_methods", default-features = false }
 
 [patch.crates-io]
-trading_data_core = { path = "../ev_invest/trading_data/trading_data_core" }
-v_utils = { path = "../v_utils/v_utils" }
+trading_data_core = { path = "../trading_data/trading_data_core" }
+v_utils = { path = "../../v_utils/v_utils" }

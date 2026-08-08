@@ -8,7 +8,7 @@
 //! OKs continue uninterrupted. For the genuine case, `systemctl suspend` then resume.
 use std::{str::FromStr as _, time::Duration};
 
-use v_exchanges::prelude::*;
+use exchange_interactions::prelude::*;
 
 #[tokio::main]
 async fn main() {

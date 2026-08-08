@@ -13,7 +13,7 @@
         rust = v_flakes.rs.default_nightly system;
 
         pre-commit-check = pre-commit-hooks.lib.${system}.run (v_flakes.files.preCommit { inherit pkgs; });
-        manifest = (pkgs.lib.importTOML ./v_exchanges/Cargo.toml).package;
+        manifest = (pkgs.lib.importTOML ./exchange_interactions/Cargo.toml).package;
         pname = manifest.name;
         stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv;
 
@@ -22,9 +22,9 @@
           build = {
             deny = true;
             workspace = let deprecate_by = "v1.0.0"; in {
-              "./v_exchanges" = [{ deprecate = { by_version = deprecate_by; force = true; }; }];
-              "./v_exchanges_adapters" = [{ deprecate = { by_version = deprecate_by; force = true; }; }];
-              "./v_exchanges_api_generics" = [{ deprecate = { by_version = deprecate_by; force = true; }; }];
+              "./exchange_interactions" = [{ deprecate = { by_version = deprecate_by; force = true; }; }];
+              "./exchange_interactions_adapters" = [{ deprecate = { by_version = deprecate_by; force = true; }; }];
+              "./exchange_interactions_api_generics" = [{ deprecate = { by_version = deprecate_by; force = true; }; }];
             };
           };
           style = {
@@ -42,7 +42,7 @@
             default = true;
             # not sure I like the `default`s option on the interface after this now {{{1
             warnings.exclude = [ "rust-doc" ];
-            warnings.augment = [{ name = "rust-doc"; args = { package = "v_exchanges"; }; }];
+            warnings.augment = [{ name = "rust-doc"; args = { package = "exchange_interactions"; }; }];
             #,}}}1
           };
         };
@@ -89,7 +89,7 @@
             openssl
             pkg-config
             rust
-            valgrind # iai-based microbenches in v_exchanges_persistence
+            valgrind # iai-based microbenches in exchange_interactions_persistence
             (writeShellScriptBin "test_all" "cargo t && cargo t --examples")
             (writeShellScriptBin "examples" "cargo -Zscript -q scripts/list_examples.rs")
           ] ++ pre-commit-check.enabledPackages ++ combined.enabledPackages;

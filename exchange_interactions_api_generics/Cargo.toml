@@ -1,0 +1,58 @@
+cargo-features = ["codegen-backend"]
+
+[package]
+name = "exchange_interactions_api_generics"
+version = "0.21.2"
+edition = "2024"
+
+authors = ["negi_grass", "valeratrades"]
+categories = ["api-bindings", "asynchronous"]
+description = "A client for HTTP/HTTPS/WebSocket APIs."
+documentation = "https://docs.rs/exchange_interactions_api_generics"
+homepage = "https://github.com/EV-invest/exchange_interactions"
+keywords = ["client", "websocket", "asynchronous"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/EV-invest/exchange_interactions/tree/main/exchange_interactions_api_generics"
+
+[package.metadata.cargo-machete]
+ignored = ["derive-new", "thiserror"]
+
+[features]
+native-tls = ["reqwest/native-tls", "tokio-tungstenite/native-tls"]
+native-tls-vendored = ["reqwest/native-tls-vendored", "tokio-tungstenite/native-tls-vendored"]
+rustls-tls-native-roots = ["reqwest/rustls", "tokio-tungstenite/rustls-tls-native-roots"]
+rustls-tls-webpki-roots = ["reqwest/rustls", "tokio-tungstenite/rustls-tls-webpki-roots"]
+
+[dependencies]
+ahash = { workspace = true, features = ["serde"] }
+arc-swap.workspace = true
+bytes.workspace = true
+dashmap.workspace = true
+derive-new.workspace = true
+derive_more.workspace = true
+eyre.workspace = true
+futures-util.workspace = true
+jiff.workspace = true
+miette.workspace = true
+netwatcher.workspace = true
+nonzero_ext.workspace = true
+rand.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_urlencoded.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+tracing.workspace = true
+url.workspace = true
+ustr.workspace = true
+v_utils.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
+tokio = { workspace = true, features = ["net", "macros", "rt-multi-thread", "time", "io-util"] }
+
+[lints]
+workspace = true

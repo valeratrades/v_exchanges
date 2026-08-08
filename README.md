@@ -1,11 +1,11 @@
-# v_exchanges
+# exchange_interactions
 ![Minimum Supported Rust Version](https://img.shields.io/badge/nightly-1.92+-ab6000.svg)
-[<img alt="crates.io" src="https://img.shields.io/crates/v/v_exchanges.svg?color=fc8d62&logo=rust" height="20" style=flat-square>](https://crates.io/crates/v_exchanges)
-[<img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs&style=flat-square" height="20">](https://docs.rs/v_exchanges)
-![Lines Of Code](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/valeratrades/b48e6f02c61942200e7d1e3eeabf9bcb/raw/v_exchanges-loc.json)
+[<img alt="crates.io" src="https://img.shields.io/crates/v/exchange_interactions.svg?color=fc8d62&logo=rust" height="20" style=flat-square>](https://crates.io/crates/exchange_interactions)
+[<img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs&style=flat-square" height="20">](https://docs.rs/exchange_interactions)
+![Lines Of Code](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/valeratrades/b48e6f02c61942200e7d1e3eeabf9bcb/raw/exchange_interactions-loc.json)
 <br>
-[<img alt="ci errors" src="https://img.shields.io/github/actions/workflow/status/valeratrades/v_exchanges/errors.yml?branch=main&style=for-the-badge&style=flat-square&label=errors&labelColor=420d09" height="20">](https://github.com/valeratrades/v_exchanges/actions?query=branch%3Amain) <!--NB: Won't find it if repo is private-->
-[<img alt="ci warnings" src="https://img.shields.io/github/actions/workflow/status/valeratrades/v_exchanges/warnings.yml?branch=main&style=for-the-badge&style=flat-square&label=warnings&labelColor=d16002" height="20">](https://github.com/valeratrades/v_exchanges/actions?query=branch%3Amain) <!--NB: Won't find it if repo is private-->
+[<img alt="ci errors" src="https://img.shields.io/github/actions/workflow/status/EV-invest/exchange_interactions/errors.yml?branch=main&style=for-the-badge&style=flat-square&label=errors&labelColor=420d09" height="20">](https://github.com/EV-invest/exchange_interactions/actions?query=branch%3Amain) <!--NB: Won't find it if repo is private-->
+[<img alt="ci warnings" src="https://img.shields.io/github/actions/workflow/status/EV-invest/exchange_interactions/warnings.yml?branch=main&style=for-the-badge&style=flat-square&label=warnings&labelColor=d16002" height="20">](https://github.com/EV-invest/exchange_interactions/actions?query=branch%3Amain) <!--NB: Won't find it if repo is private-->
 
 A unified library for all crypto exchange interactions, instead of manually wrapping all methods and keeping track of quirks of different exchanges.
 Before having this, I was never able to get production-ready any project relying on more than one exchange.
@@ -23,17 +23,17 @@ nix build
 <!-- markdownlint-restore -->
 
 ## Usage
-Example evocations of crate's methods are exposed in [./docs/.readme_assets/examples], with their `[[example]]` references defined [./docs/.readme_assets/v_exchanges/Cargo.toml].
+Example evocations of crate's methods are exposed in [./docs/.readme_assets/examples], with their `[[example]]` references defined [./docs/.readme_assets/exchange_interactions/Cargo.toml].
 To run:
 ```sh
-cargo run -p v_exchanges --example binance_market_perp
+cargo run -p exchange_interactions --example binance_market_perp
 ```
 
 The spirit of how the framework is used in code is best described with the following `cli` example:
 ```rs
 use std::str::FromStr as _;
 
-use v_exchanges::prelude::*;
+use exchange_interactions::prelude::*;
 
 #[tokio::main]
 async fn main() {
@@ -76,7 +76,7 @@ if you try the following with different `Exchange`s and `Instruments` encoded in
 [^1] where allowed, otherwise use min position size or just skip problematic endpoints
 
 ## Relevant projects and documentations
-- [crypto-botters](<https://github.com/negi-grass/crypto-botters>), from where I stole the entire `generic-api-client` (as `v_exchanges_api_generics`).
+- [crypto-botters](<https://github.com/negi-grass/crypto-botters>), from where I stole the entire `generic-api-client` (as `exchange_interactions_api_generics`).
 - [binance-rs](<https://github.com/wisespace-io/binance-rs>), which provided a cheat-sheet for so many binance interactions and best-practices on testing.
 - [binance-spot-connector-rust](<https://github.com/binance/binance-spot-connector-rust>)
 

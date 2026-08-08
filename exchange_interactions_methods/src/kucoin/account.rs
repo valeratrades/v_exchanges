@@ -1,0 +1,102 @@
+use adapters::Client;
+use exchange_interactions_adapters::kucoin::{KucoinAuth, KucoinHttpUrl, KucoinOption};
+use eyre::{Result, eyre};
+use serde::{Deserialize, Serialize};
+use serde_with::{DisplayFromStr, serde_as};
+use trading_data_core::{Asset, Pair, Usd};
+
+use crate::{
+	ExchangeResult,
+	core::{ApiKeyInfo, AssetBalance, Balances, KeyPermission, PersonalInfo},
+	kucoin::market,
+};
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountResponse {
+	pub code: String,
+	pub data: Vec<AccountData>,
+}
+#[serde_as]
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountData {
+	pub id: String,
+	pub currency: String,
+	#[serde(rename = "type")]
+	pub account_type: String,
+	#[serde_as(as = "DisplayFromStr")]
+	pub balance: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub available: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pub holds: f64,
+}
+pub(super) async fn personal_info(client: &Client, recv_window: Option<std::time::Duration>) -> ExchangeResult<PersonalInfo> {
+	let options = vec![KucoinOption::HttpAuth(KucoinAuth::Sign), KucoinOption::HttpUrl(KucoinHttpUrl::Spot)];
+	let (balances, api_response) = tokio::join!(balances(client, recv_window), client.get_no_query::<KucoinApiKeyResponse, _>("/api/v1/user/api-key", options),);
+	let permissions: Vec<KeyPermission> = api_response
+		.map(|r| r.data.permission.split(',').map(|s| KeyPermission::from_kucoin(s.trim())).collect())
+		.unwrap_or_default();
+	Ok(PersonalInfo {
+		api: ApiKeyInfo { expire_time: None, permissions },
+		balances: balances?,
+	})
+}
+
+#[derive(Debug, Deserialize)]
+struct KucoinApiKeyResponse {
+	data: KucoinApiKeyData,
+}
+#[derive(Debug, Deserialize)]
+struct KucoinApiKeyData {
+	permission: String,
+}
+
+pub(super) async fn balances(client: &Client, recv_window: Option<std::time::Duration>) -> ExchangeResult<Balances> {
+	assert!(client.is_authenticated::<KucoinOption>());
+
+	let options = vec![KucoinOption::HttpAuth(KucoinAuth::Sign), KucoinOption::HttpUrl(KucoinHttpUrl::Spot)];
+	let empty_params: &[(String, String)] = &[];
+	let account_response: AccountResponse = client.get("/api/v1/accounts", empty_params, options).await?;
+
+	// Helper function to calculate USD value for an asset
+	async fn usd_value(client: &Client, underlying: f64, asset: Asset, _recv_window: Option<std::time::Duration>) -> Result<Usd> {
+		if underlying == 0. {
+			return Ok(Usd(0.));
+		}
+		// Check common stablecoins
+		if asset == "USDT" || asset == "USDC" || asset == "BUSD" || asset == "DAI" {
+			return Ok(Usd(underlying));
+		}
+		// Fetch price for non-stablecoin assets
+		let usdt_pair = Pair::new(asset, "USDT".into());
+		let usdt_price = market::prices(client, Some(vec![usdt_pair]), None)
+			.await
+			.map_err(|e| eyre!("Failed to fetch USDT price for {asset} (balance: {underlying}): {e}"))?
+			.remove(&usdt_pair)
+			.ok_or_else(|| eyre!("{usdt_pair} not found in kucoin prices response"))?;
+		Ok((underlying * usdt_price).into())
+	}
+
+	let mut balances: Vec<AssetBalance> = Vec::default();
+	for account in &account_response.data {
+		// Only include accounts with non-zero balances
+		if account.balance > 0.0 {
+			let asset: Asset = (&*account.currency).into();
+			let underlying = account.balance;
+			let usd = usd_value(client, underlying, asset, recv_window).await.ok();
+
+			balances.push(AssetBalance { asset, underlying, usd });
+		}
+	}
+
+	let total = balances.iter().fold(Usd(0.), |acc, b| {
+		acc + match b.usd {
+			Some(b) => b,
+			None => Usd(0.),
+		}
+	});
+
+	Ok(Balances::new(balances, total))
+}

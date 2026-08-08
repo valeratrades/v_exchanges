@@ -12,13 +12,13 @@
 - [\.] polish http interactions in using this API in other projects
 - [ ] method to execute _all_ known requests in test mode[^1], on `success`full responses, persist the returned json objects to use in test later.
 - [x] use in [btc_line](https://github.com/valeratrades/btc_line) to get Websocket interactions nice and good
-- [ ] make fitted for the final stage of full integration into [discretionary_engine](<https://github.com/valeratrades/discretionary_engine>) (requires trade execution/followup methods suite), which would signify production-readiness of this crate.
+- [ ] make fitted for the final stage of full integration into [discretionary_engine](<https://github.com/EV-invest/discretionary_engine>) (requires trade execution/followup methods suite), which would signify production-readiness of this crate.
     upd: really should be just compatible with nautilus-trader; used only for data collection, - _not trading_ 
 
 
 [^1] where allowed, otherwise use min position size or just skip problematic endpoints
 
 ## Relevant projects and documentations
-- [crypto-botters](<https://github.com/negi-grass/crypto-botters>), from where I stole the entire `generic-api-client` (as `v_exchanges_api_generics`).
+- [crypto-botters](<https://github.com/negi-grass/crypto-botters>), from where I stole the entire `generic-api-client` (as `exchange_interactions_api_generics`).
 - [binance-rs](<https://github.com/wisespace-io/binance-rs>), which provided a cheat-sheet for so many binance interactions and best-practices on testing.
 - [binance-spot-connector-rust](<https://github.com/binance/binance-spot-connector-rust>)

@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, env};
 
+use exchange_interactions::{kucoin::KucoinOption, prelude::*};
 use jiff::Timestamp;
-use v_exchanges::{kucoin::KucoinOption, prelude::*};
 
 #[tokio::main]
 async fn main() {

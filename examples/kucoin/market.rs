@@ -1,7 +1,7 @@
 use std::{env, str::FromStr as _};
 
-use v_exchanges::{Instrument, Kucoin, prelude::*};
-use v_exchanges_adapters::kucoin::KucoinOption;
+use exchange_interactions::{Instrument, Kucoin, prelude::*};
+use exchange_interactions_adapters::kucoin::KucoinOption;
 
 #[tokio::main]
 async fn main() {

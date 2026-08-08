@@ -1,6 +1,6 @@
 use std::str::FromStr as _;
 
-use v_exchanges::prelude::*;
+use exchange_interactions::prelude::*;
 
 #[tokio::main]
 async fn main() {

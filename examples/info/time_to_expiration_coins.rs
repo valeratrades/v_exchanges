@@ -1,5 +1,5 @@
+use exchange_interactions::prelude::*;
 use jiff::Timestamp;
-use v_exchanges::prelude::*;
 
 #[tokio::main]
 async fn main() {

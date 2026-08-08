@@ -1,7 +1,7 @@
 use std::{str::FromStr as _, time::Duration};
 
-use v_exchanges::prelude::*;
-use v_exchanges_adapters::binance::BinanceOption;
+use exchange_interactions::prelude::*;
+use exchange_interactions_adapters::binance::BinanceOption;
 
 #[tokio::main]
 async fn main() {

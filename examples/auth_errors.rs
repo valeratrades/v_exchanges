@@ -1,6 +1,6 @@
 /// Exercises auth error interpretation for binance and bybit.
 /// Sends requests with fake API keys and verifies we get `ApiError::Auth` variants back.
-use v_exchanges::adapters::{
+use exchange_interactions::adapters::{
 	Client,
 	binance::{BinanceAuth, BinanceHttpUrl, BinanceOption},
 	bybit::{BybitHttpAuth, BybitOption},

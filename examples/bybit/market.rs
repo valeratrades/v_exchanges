@@ -1,6 +1,6 @@
 use std::{env, str::FromStr as _};
 
-use v_exchanges::{Bybit, prelude::*};
+use exchange_interactions::{Bybit, prelude::*};
 
 #[tokio::main]
 async fn main() {

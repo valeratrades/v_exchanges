@@ -1,0 +1,146 @@
+cargo-features = ["codegen-backend"]
+
+[package]
+name = "exchange_interactions"
+version = "0.19.2"
+edition = "2024"
+authors = ["negi-grass", "valeratrades"]
+categories = ["api-bindings", "asynchronous"]
+description = "Implementations of HTTP/HTTPS/WebSocket API methods for some crypto exchanges, using [crypto-botters](<https://github.com/negi-grass/crypto-botters>) framework"
+documentation = "https://docs.rs/exchange_interactions"
+homepage = "https://github.com/EV-invest/exchange_interactions"
+keywords = ["client", "websocket", "asynchronous"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/EV-invest/exchange_interactions/tree/main/exchange_interactions"
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+all-features = false
+features = ["major", "data"]
+rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
+
+[package.metadata.cargo-machete]
+ignored = ["color-eyre"]
+
+[features]
+default = ["major", "data"]
+
+full = ["major", "data", "mexc", "kucoin", "bitflyer", "coincheck"]
+major = ["binance", "bybit"]
+
+binance = ["exchange_interactions_methods/binance"]
+bybit = ["exchange_interactions_methods/bybit"]
+bitflyer = ["exchange_interactions_methods/bitflyer"]
+coincheck = ["exchange_interactions_methods/coincheck"]
+kucoin = ["exchange_interactions_methods/kucoin"]
+mexc = ["exchange_interactions_methods/mexc"]
+data = ["exchange_interactions_methods/data"]
+
+[dependencies]
+exchange_interactions_methods = { workspace = true, default-features = false }
+
+[dev-dependencies]
+color-eyre.workspace = true
+exchange_interactions_adapters.workspace = true
+insta.workspace = true
+jiff.workspace = true
+miette.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+v_utils.workspace = true
+
+[lints]
+workspace = true
+
+[[example]]
+name = "test"
+path = "../examples/test.rs"
+
+[[example]]
+name = "spelled_out_request"
+path = "../examples/spelled_out_request.rs"
+
+[[example]]
+name = "ws"
+path = "../examples/ws.rs"
+
+[[example]]
+name = "ws_book"
+required-features = ["binance", "bybit"]
+path = "../examples/ws/book.rs"
+
+[[example]]
+name = "cli"
+path = "../examples/cli.rs"
+
+[[example]]
+name = "data"
+path = "../examples/data.rs"
+
+[[example]]
+name = "binance_market_perp"
+required-features = ["binance"]
+path = "../examples/binance/market_perp.rs"
+
+[[example]]
+name = "net_change_selfheal"
+required-features = ["binance"]
+path = "../examples/net_change_selfheal.rs"
+
+[[example]]
+name = "binance_market_spot"
+required-features = ["binance"]
+path = "../examples/binance/market_spot.rs"
+
+[[example]]
+name = "binance_orders"
+required-features = ["binance"]
+path = "../examples/binance/orders.rs"
+
+[[example]]
+name = "bybit_market"
+required-features = ["bybit"]
+path = "../examples/bybit/market.rs"
+
+[[example]]
+name = "bybit_ws"
+required-features = ["bybit"]
+path = "../examples/bybit/ws.rs"
+
+[[example]]
+name = "kucoin_market"
+required-features = ["kucoin"]
+path = "../examples/kucoin/market.rs"
+
+[[example]]
+name = "mexc"
+required-features = ["mexc"]
+path = "../examples/mexc.rs"
+
+[[example]]
+name = "auth_errors"
+required-features = ["binance", "bybit"]
+path = "../examples/auth_errors.rs"
+
+[[example]]
+name = "healthcheck"
+required-features = ["binance", "bybit", "kucoin", "mexc"]
+path = "../examples/healthcheck.rs"
+
+[[example]]
+name = "time_to_expiration_coins"
+required-features = ["binance", "bybit"]
+path = "../examples/info/time_to_expiration_coins.rs"
+
+[[example]]
+name = "time_to_expiration_keys"
+required-features = ["binance", "bybit", "kucoin"]
+path = "../examples/info/time_to_expiration_keys.rs"
+
+[[example]]
+name = "try_extend_lifetime"
+required-features = ["bybit"]
+path = "../examples/info/extend_lifetime.rs"

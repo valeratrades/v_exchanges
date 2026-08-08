@@ -1,10 +1,10 @@
 use std::env;
 
+use exchange_interactions::prelude::*;
+use exchange_interactions_adapters::bybit::{BybitHttpAuth, BybitOption};
 use jiff::Timestamp;
 use serde::Deserialize;
 use serde_json::json;
-use v_exchanges::prelude::*;
-use v_exchanges_adapters::bybit::{BybitHttpAuth, BybitOption};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

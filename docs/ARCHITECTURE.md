@@ -12,10 +12,10 @@ flowchart TD
 
 ![](../assets/arch.png)
 
-### `v_exchanges_api_generics`
+### `exchange_interactions_api_generics`
 Provides a standardized interface for defining how an exchange wants to be communicated with.
 
-### `v_exchanges`
+### `exchange_interactions`
 
 #### `::core`
 Defines `Exchange` trait and associated structs. If some interactions/methods can be generalized _on top of_ the specified standard objects, they can also be exposed here (under a feature flag probably).
@@ -41,7 +41,7 @@ println!("{klines}");
 ```
 b) want to work with specific exchange, known at comp time
 ```rs
-use v_exchanges::Exchange as _;
+use exchange_interactions::Exchange as _;
 let mut binance = ExchangeName::Binance.init_client();
 let symbol = Symbol::from_str("BTC-USDT.P").unwrap();
 let price = binance.price(symbol).await.unwrap();

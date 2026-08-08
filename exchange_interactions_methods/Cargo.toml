@@ -1,0 +1,71 @@
+cargo-features = ["codegen-backend"]
+
+[package]
+name = "exchange_interactions_methods"
+version = "0.2.2"
+edition = "2024"
+authors = ["negi-grass", "valeratrades"]
+categories = ["api-bindings", "asynchronous"]
+description = "Exchange method implementations backing the exchange_interactions crate"
+homepage = "https://github.com/EV-invest/exchange_interactions"
+keywords = ["client", "websocket", "asynchronous"]
+license = "MIT"
+repository = "https://github.com/EV-invest/exchange_interactions/tree/main/exchange_interactions_methods"
+
+[package.metadata.cargo-machete]
+ignored = ["derive-new", "serde", "tokio", "v_utils"]
+
+[features]
+default = ["major", "data"]
+
+full = ["major", "data", "mexc", "kucoin", "bitflyer", "coincheck"]
+major = ["binance", "bybit"]
+
+binance = ["exchange_interactions_adapters/binance"]
+bybit = [
+    "exchange_interactions_adapters/bybit",
+    "dep:flate2",
+    "dep:reqwest",
+    "dep:zip",
+]
+bitflyer = ["exchange_interactions_adapters/bitflyer"]
+coincheck = ["exchange_interactions_adapters/coincheck"]
+kucoin = ["exchange_interactions_adapters/kucoin"]
+mexc = ["exchange_interactions_adapters/mexc"]
+data = ["dep:reqwest"]
+
+[dependencies]
+ahash = { workspace = true, features = ["serde"] }
+arrayvec.workspace = true
+async-trait.workspace = true
+cfg-if.workspace = true
+derive-new.workspace = true
+derive_more.workspace = true
+enum_dispatch.workspace = true
+exchange_interactions_adapters.workspace = true
+eyre.workspace = true
+flate2 = { workspace = true, optional = true }
+futures-util.workspace = true
+jiff.workspace = true
+miette.workspace = true
+reqwest = { workspace = true, optional = true }
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
+smart-default.workspace = true
+strum.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+trading_data_core.workspace = true
+uuid.workspace = true
+v_utils.workspace = true
+zip = { workspace = true, optional = true }
+
+[dev-dependencies]
+color-eyre.workspace = true
+insta.workspace = true
+
+[lints]
+workspace = true
