@@ -31,6 +31,8 @@ pub use retry::{ExponentialBackoff, RetryConfig, RetryManager};
 pub extern crate reqwest;
 pub extern crate tokio_tungstenite;
 
+// `derive_new` writes `key: key` into the generated constructor; the lint fires on our field span.
+#[allow(clippy::redundant_field_names)]
 #[derive(Debug, miette::Diagnostic, thiserror::Error, derive_new::new)]
 #[non_exhaustive]
 pub enum ConstructAuthError {
