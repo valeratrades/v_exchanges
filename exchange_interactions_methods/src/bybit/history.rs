@@ -220,7 +220,10 @@ pub(super) struct ArchiveBook {
 	prec: PrecisionPriceQty,
 	symbol: Symbol,
 	pending: VecDeque<Date>,
-	lines: Option<Lines<BufReader<fs::File>>>,
+	/// Held as the reader rather than its [`Lines`]: a 400-level message is ~10KB, and `lines()`
+	/// allocates and drops that much per message where [`Self::line`] is reused across the file.
+	reader: Option<BufReader<fs::File>>,
+	line: String,
 	prev: i64,
 }
 
@@ -230,7 +233,8 @@ impl ArchiveBook {
 			prec,
 			symbol,
 			pending: window,
-			lines: None,
+			reader: None,
+			line: String::new(),
 			prev: i64::MIN,
 		}
 	}
@@ -263,45 +267,56 @@ impl ArchiveBook {
 			std::io::copy(&mut archive.by_index(0).expect("open zip member"), &mut out).expect("unpack archive");
 			fs::rename(&tmp, &jsonl).expect("move unpacked archive into place");
 		}
-		self.lines = Some(BufReader::new(fs::File::open(&jsonl).expect("open unpacked archive")).lines());
+		self.reader = Some(BufReader::new(fs::File::open(&jsonl).expect("open unpacked archive")));
 		Ok(true)
 	}
+}
 
-	fn parse(&mut self, line: &str) -> BookUpdate {
-		let v: Value = serde_json::from_str(line).unwrap_or_else(|e| panic!("malformed archive line: {e}"));
-		let ts_ns = v["ts"].as_i64().unwrap_or_else(|| panic!("no ts on archive line: {line}")) * 1_000_000;
-		assert!(ts_ns >= self.prev, "archive is not time-ordered: {} > {ts_ns}", self.prev);
-		self.prev = ts_ns;
+/// One archive record, borrowed out of the line buffer. A [`serde_json::Value`] of the same line is
+/// a `String` per key and per number — ~1600 allocations to reach the 800 integers a 400-level
+/// message carries — where the derive resolves the keys at compile time and leaves the numbers as
+/// slices for [`Precision`] to walk. Fields nothing downstream reads (`topic`, `data.s`, the update
+/// ids) are simply not named.
+#[derive(serde::Deserialize)]
+struct Rec<'a> {
+	ts: i64,
+	#[serde(rename = "type")]
+	kind: &'a str,
+	#[serde(borrow)]
+	data: Sides<'a>,
+}
 
-		let prec = self.prec;
-		let levels = |side: &Value| -> BTreeMap<i32, u32> {
-			side.as_array()
-				.unwrap_or_else(|| panic!("book side is not an array: {line}"))
-				.iter()
-				.map(|l| {
-					(
-						prec.price.parse_i32(l[0].as_str().unwrap_or_else(|| panic!("price is not a string: {line}"))),
-						prec.qty.parse_u32(l[1].as_str().unwrap_or_else(|| panic!("qty is not a string: {line}"))),
-					)
-				})
-				.collect()
-		};
-		let shape = BookShape {
-			ts: Aggregate {
-				venue_exec: Span::at(Ts::<Venue>::from_nanos(ts_ns)),
-				// As with a trade archive's: nothing here was ever received.
-				local_recv: Span::at(Ts::<Local>::from_nanos(ts_ns)),
-			},
-			prec,
-			bids: levels(&v["data"]["b"]),
-			asks: levels(&v["data"]["a"]),
-		};
-		match v["type"].as_str().unwrap_or_else(|| panic!("no type on archive line: {line}")) {
-			"snapshot" => BookUpdate::Snapshot(shape),
-			// The archive is the venue's own recollection, so there is no sequence to have broken.
-			"delta" => BookUpdate::BatchDelta { shape, gapped: false },
-			other => panic!("unknown archive record type `{other}`"),
-		}
+#[derive(serde::Deserialize)]
+struct Sides<'a> {
+	#[serde(borrow)]
+	b: Vec<[&'a str; 2]>,
+	#[serde(borrow)]
+	a: Vec<[&'a str; 2]>,
+}
+
+/// Free rather than a method so the batch loop can hold the line buffer and the cursor at once.
+fn parse(line: &str, prec: PrecisionPriceQty, prev: &mut i64) -> BookUpdate {
+	let rec: Rec = serde_json::from_str(line).unwrap_or_else(|e| panic!("malformed archive line: {e}"));
+	let ts_ns = rec.ts * 1_000_000;
+	assert!(ts_ns >= *prev, "archive is not time-ordered: {prev} > {ts_ns}");
+	*prev = ts_ns;
+
+	let levels = |side: &[[&str; 2]]| -> BTreeMap<i32, u32> { side.iter().map(|[p, q]| (prec.price.parse_i32(p), prec.qty.parse_u32(q))).collect() };
+	let shape = BookShape {
+		ts: Aggregate {
+			venue_exec: Span::at(Ts::<Venue>::from_nanos(ts_ns)),
+			// As with a trade archive's: nothing here was ever received.
+			local_recv: Span::at(Ts::<Local>::from_nanos(ts_ns)),
+		},
+		prec,
+		bids: levels(&rec.data.b),
+		asks: levels(&rec.data.a),
+	};
+	match rec.kind {
+		"snapshot" => BookUpdate::Snapshot(shape),
+		// The archive is the venue's own recollection, so there is no sequence to have broken.
+		"delta" => BookUpdate::BatchDelta { shape, gapped: false },
+		other => panic!("unknown archive record type `{other}`"),
 	}
 }
 
@@ -312,18 +327,25 @@ impl ExchangeStream for ArchiveBook {
 	/// `Ok(vec![])` is the window running out; see [`ArchiveTrades::next`].
 	async fn next(&mut self) -> Result<Vec<Self::Item>, WsError> {
 		loop {
-			let Some(lines) = &mut self.lines else {
+			let Some(reader) = &mut self.reader else {
 				if !self.advance().await.map_err(|e| WsError::Other(eyre!("{e}")))? {
 					return Ok(Vec::new());
 				}
 				continue;
 			};
-			let raw: Vec<String> = lines.by_ref().take(BOOK_BATCH).map(|l| l.expect("read archive line")).collect();
-			if raw.is_empty() {
-				self.lines = None;
+			let mut batch = Vec::with_capacity(BOOK_BATCH);
+			while batch.len() < BOOK_BATCH {
+				self.line.clear();
+				if reader.read_line(&mut self.line).expect("read archive line") == 0 {
+					break;
+				}
+				batch.push(parse(&self.line, self.prec, &mut self.prev));
+			}
+			if batch.is_empty() {
+				self.reader = None;
 				continue;
 			}
-			return Ok(raw.iter().map(|l| self.parse(l)).collect());
+			return Ok(batch);
 		}
 	}
 }
