@@ -2,23 +2,25 @@ use std::fmt::Debug;
 
 use exchange_interactions_api_generics::{http, ws};
 
-/// Response path for venues that ship no typed error envelope: parse on success, otherwise report
-/// whatever came back. `venue` only names the exchange in the message.
-#[cfg(any(feature = "bitflyer", feature = "coincheck"))]
-pub(crate) fn handle_untyped_response<T: serde::de::DeserializeOwned>(venue: &str, status: http::StatusCode, body: &http::Bytes) -> Result<T, http::HandleError> {
-	let truncated = || v_utils::utils::truncate_msg(String::from_utf8_lossy(body));
-	if status.is_success() {
-		return serde_json::from_slice(body).map_err(|error| http::HandleError::Parse(eyre::eyre!("Failed to parse response: {error}\nResponse body: {}", truncated())));
-	}
-	Err(match serde_json::from_slice::<serde_json::Value>(body) {
-		Ok(parsed) => http::HandleError::Api(http::ApiError::Other(eyre::eyre!("{venue} API error (status {status}): {parsed}"))),
-		Err(error) => http::HandleError::Parse(eyre::eyre!("Failed to parse error response: {error}\nResponse body: {}", truncated())),
-	})
+/// A `trait` that shows the implementing type is an enpoint url. Meant to be implemented on enums with all currently accessible urls for exchange defined.
+pub trait EndpointUrl {
+	fn url_mainnet(&self) -> url::Url;
+	/// Returns the testnet url for the exchange. Not that not all exchanges have testnets for all endpoints.
+	fn url_testnet(&self) -> Option<url::Url>;
 }
 
-/// A `trait` that represents an option which can be set when creating handlers
-pub trait HandlerOption: Default {
-	type Options: HandlerOptions<OptionItem = Self>;
+/// shows that the implementing type is able to create [websocket::WebSocketHandler]s
+pub trait WsOption: HandlerOption {
+	type WsHandler: ws::WsHandler;
+
+	fn ws_handler(options: Self::Options) -> Self::WsHandler;
+}
+
+/// A `trait` that shows the implementing type is able to create [http::RequestHandler]s
+pub trait HttpOption<'a, R, B>: HandlerOption {
+	type RequestHandler: http::RequestHandler<B>;
+
+	fn request_handler(options: Self::Options) -> Self::RequestHandler;
 }
 
 /// Set of [HandlerOption] s
@@ -31,25 +33,22 @@ pub trait HandlerOptions: Default + Clone + Debug {
 	fn is_authenticated(&self) -> bool;
 }
 
-/// A `trait` that shows the implementing type is able to create [http::RequestHandler]s
-pub trait HttpOption<'a, R, B>: HandlerOption {
-	type RequestHandler: http::RequestHandler<B>;
-
-	fn request_handler(options: Self::Options) -> Self::RequestHandler;
+/// A `trait` that represents an option which can be set when creating handlers
+pub trait HandlerOption: Default {
+	type Options: HandlerOptions<OptionItem = Self>;
 }
-
-/// shows that the implementing type is able to create [websocket::WebSocketHandler]s
-pub trait WsOption: HandlerOption {
-	type WsHandler: ws::WsHandler;
-
-	fn ws_handler(options: Self::Options) -> Self::WsHandler;
-}
-
-/// A `trait` that shows the implementing type is an enpoint url. Meant to be implemented on enums with all currently accessible urls for exchange defined.
-pub trait EndpointUrl {
-	fn url_mainnet(&self) -> url::Url;
-	/// Returns the testnet url for the exchange. Not that not all exchanges have testnets for all endpoints.
-	fn url_testnet(&self) -> Option<url::Url>;
+/// Response path for venues that ship no typed error envelope: parse on success, otherwise report
+/// whatever came back. `venue` only names the exchange in the message.
+#[cfg(any(feature = "bitflyer", feature = "coincheck"))]
+pub(crate) fn handle_untyped_response<T: serde::de::DeserializeOwned>(venue: &str, status: http::StatusCode, body: &http::Bytes) -> Result<T, http::HandleError> {
+	let truncated = || v_utils::utils::truncate_msg(String::from_utf8_lossy(body));
+	if status.is_success() {
+		return serde_json::from_slice(body).map_err(|error| http::HandleError::Parse(eyre::eyre!("Failed to parse response: {error}\nResponse body: {}", truncated())));
+	}
+	Err(match serde_json::from_slice::<serde_json::Value>(body) {
+		Ok(parsed) => http::HandleError::Api(http::ApiError::Other(eyre::eyre!("{venue} API error (status {status}): {parsed}"))),
+		Err(error) => http::HandleError::Parse(eyre::eyre!("Failed to parse error response: {error}\nResponse body: {}", truncated())),
+	})
 }
 
 /// Writes an [EndpointUrl] impl from a flat variant→literal table. Omitting `testnet:` means the

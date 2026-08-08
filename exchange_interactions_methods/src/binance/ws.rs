@@ -14,6 +14,7 @@ use crate::{
 };
 
 // trades {{{
+type SnapshotFu = Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>>;
 #[derive(Debug)]
 pub struct TradesConnection {
 	connection: WsConnection<BinanceWsHandler>,
@@ -145,7 +146,6 @@ pub struct TradeEventSpot {
 //,}}}
 
 // book {{{
-type SnapshotFu = Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>>;
 
 pub struct BookConnection {
 	connection: WsConnection<BinanceWsHandler>,

@@ -14,7 +14,7 @@ pub fn join_params(a: Value, b: Value) -> Value {
 #[macro_export]
 macro_rules! define_provider_timeframe {
 	($struct_name:ident, $timeframes:expr) => {
-		#[derive(derive_more::AsRef, Clone, Copy, Debug, Default, derive_more::Deref, derive_more::DerefMut)]
+		#[derive(Clone, Copy, Debug, Default, derive_more::AsRef, derive_more::Deref, derive_more::DerefMut)]
 		pub struct $struct_name(v_utils::Timeframe);
 
 		impl std::fmt::Display for $struct_name {

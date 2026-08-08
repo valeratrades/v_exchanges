@@ -531,7 +531,7 @@ pub enum WsDefinitionError {
 	#[diagnostic(code(exchange_interactions::ws::definition::missing_url), help("WebSocket base URL must be configured in WsConfig."))]
 	MissingUrl,
 }
-#[derive(Clone, Debug, derive_more::Display, Eq, Hash, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, derive_more::Display, serde::Serialize)]
 pub enum Topic {
 	String(String),
 	Order(serde_json::Value),

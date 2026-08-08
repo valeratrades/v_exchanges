@@ -23,6 +23,35 @@ pub struct Bybit {
 	pub client: Client,
 	pub info_cache: BTreeMap<Instrument, ExchangeInfo>,
 }
+impl Bybit {
+	/// Both ws streams decode frames against the venue's per-pair precision, and a second subscribe
+	/// on the same instrument must not re-fetch `exchange_info`.
+	async fn pair_precisions(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, PrecisionPriceQty>> {
+		if !self.info_cache.contains_key(&instrument) {
+			let info = Market::exchange_info(&*self, instrument).await?;
+			self.info_cache.insert(instrument, info);
+		}
+		let exchange = self.name();
+		let info = self.info_cache.get(&instrument).expect("just inserted or was present");
+		pairs
+			.iter()
+			.map(|pair| {
+				info.pairs
+					.get(pair)
+					.ok_or_else(|| ExchangeError::Method(MethodError::new_pair_not_listed(exchange, instrument, *pair)))
+					.map(|pi| {
+						(
+							*pair,
+							PrecisionPriceQty {
+								price: pi.price_precision,
+								qty: pi.qty_precision,
+							},
+						)
+					})
+			})
+			.collect()
+	}
+}
 
 impl ExchangeSeal for Bybit {
 	fn stream(&mut self) -> Option<&mut dyn Stream> {
@@ -101,36 +130,6 @@ impl Market for Bybit {
 			Instrument::Perp => market::open_interest(self, symbol, tf.try_into()?, range).await,
 			_ => Err(crate::ExchangeError::Method(crate::MethodError::new_method_not_supported(self.name(), symbol.instrument))),
 		}
-	}
-}
-
-impl Bybit {
-	/// Both ws streams decode frames against the venue's per-pair precision, and a second subscribe
-	/// on the same instrument must not re-fetch `exchange_info`.
-	async fn pair_precisions(&mut self, pairs: &[Pair], instrument: Instrument) -> ExchangeResult<BTreeMap<Pair, PrecisionPriceQty>> {
-		if !self.info_cache.contains_key(&instrument) {
-			let info = Market::exchange_info(&*self, instrument).await?;
-			self.info_cache.insert(instrument, info);
-		}
-		let exchange = self.name();
-		let info = self.info_cache.get(&instrument).expect("just inserted or was present");
-		pairs
-			.iter()
-			.map(|pair| {
-				info.pairs
-					.get(pair)
-					.ok_or_else(|| ExchangeError::Method(MethodError::new_pair_not_listed(exchange, instrument, *pair)))
-					.map(|pi| {
-						(
-							*pair,
-							PrecisionPriceQty {
-								price: pi.price_precision,
-								qty: pi.qty_precision,
-							},
-						)
-					})
-			})
-			.collect()
 	}
 }
 

@@ -263,7 +263,7 @@ pub struct ApiKeyInfo {
 	pub permissions: Vec<KeyPermission>,
 }
 
-#[derive(Clone, Debug, strum::Display, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, strum::Display)]
 #[non_exhaustive]
 pub enum KeyPermission {
 	/// Read-only access (market data, account info queries)

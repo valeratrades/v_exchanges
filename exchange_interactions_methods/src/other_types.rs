@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use trading_data_core::Pair;
 use v_utils::{NowThen, Percent};
 
-#[derive(Clone, Copy, Debug, Default, derive_more::Deref, derive_more::DerefMut, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, derive_more::Deref, derive_more::DerefMut)]
 pub struct Lsr {
 	pub time: Timestamp,
 	#[deref_mut]
@@ -36,7 +36,7 @@ impl From<f64> for Lsr {
 	}
 }
 
-#[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, derive_more::Deref, derive_more::DerefMut)]
 pub struct Lsrs {
 	#[deref_mut]
 	#[deref]

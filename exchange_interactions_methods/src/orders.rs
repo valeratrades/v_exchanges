@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::{Price, Qty, Ticker};
 
 /// An order bound to a specific exchange and ticker, ready to be placed.
-#[derive(Clone, Debug, derive_more::Deref, derive_more::DerefMut, PartialEq, derive_new::new)]
+#[derive(Clone, Debug, PartialEq, derive_more::Deref, derive_more::DerefMut, derive_new::new)]
 pub struct ExchangeOrder<O> {
 	#[deref]
 	#[deref_mut]
@@ -166,7 +166,7 @@ impl Trigger {
 }
 
 /// What price feed triggers the conditional order.
-#[derive(Clone, Copy, Debug, Default, strum::Display, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, strum::Display)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum TriggerPriceType {
 	/// Last traded price (Binance: CONTRACT_PRICE)
@@ -186,7 +186,7 @@ pub enum TrailingCallback {
 }
 
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, Default, derive_more::Display, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, derive_more::Display)]
 pub enum TimeInForce {
 	/// Good-Til-Canceled: remains active until filled or canceled.
 	#[default]
@@ -216,7 +216,7 @@ pub enum Contingency {
 }
 
 /// Binance: EXPIRE_MAKER/EXPIRE_TAKER/EXPIRE_BOTH; OKX: cancel_maker/cancel_taker/cancel_both
-#[derive(Clone, Copy, Debug, strum::Display, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, strum::Display)]
 pub enum SelfTradePreventionMode {
 	#[strum(serialize = "EXPIRE_MAKER")]
 	CancelMaker,
@@ -233,7 +233,7 @@ pub struct OrderPlaced {
 	pub status: OrderStatus,
 }
 
-#[derive(Clone, Copy, Debug, strum::Display, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, strum::Display)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum OrderStatus {
 	New,
