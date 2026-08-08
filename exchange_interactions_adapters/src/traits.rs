@@ -53,9 +53,14 @@ pub(crate) fn handle_untyped_response<T: serde::de::DeserializeOwned>(venue: &st
 
 /// Writes an [EndpointUrl] impl from a flat variant→literal table. Omitting `testnet:` means the
 /// venue exposes no testnet for that variant, so the two `match`es cannot drift out of sync.
+///
+/// Exported rather than `pub(crate) use`d only because the formatter hoists every `use` above the
+/// `macro_rules!` it would name; call it as `crate::endpoint_urls!`.
+#[doc(hidden)]
+#[macro_export]
 macro_rules! endpoint_urls {
 	($ty:ty { $($variant:ident => $mainnet:literal $(, testnet: $testnet:literal)? ;)+ }) => {
-		impl crate::traits::EndpointUrl for $ty {
+		impl $crate::traits::EndpointUrl for $ty {
 			fn url_mainnet(&self) -> url::Url {
 				match self {
 					$(Self::$variant => url::Url::parse($mainnet).expect("literal"),)+
@@ -64,7 +69,7 @@ macro_rules! endpoint_urls {
 
 			fn url_testnet(&self) -> Option<url::Url> {
 				match self {
-					$(Self::$variant => endpoint_urls!(@testnet $($testnet)?),)+
+					$(Self::$variant => $crate::endpoint_urls!(@testnet $($testnet)?),)+
 				}
 			}
 		}
@@ -72,4 +77,3 @@ macro_rules! endpoint_urls {
 	(@testnet $testnet:literal) => { Some(url::Url::parse($testnet).expect("literal")) };
 	(@testnet) => { None };
 }
-pub(crate) use endpoint_urls;

@@ -265,7 +265,7 @@ pub enum KucoinHttpUrl {
 	/// The url will not be modified by [KucoinRequestHandler]
 	None,
 }
-endpoint_urls!(KucoinHttpUrl {
+crate::endpoint_urls!(KucoinHttpUrl {
 	Spot => "https://api.kucoin.com", testnet: "https://openapi-sandbox.kucoin.com";
 	Futures => "https://api-futures.kucoin.com", testnet: "https://api-sandbox-futures.kucoin.com";
 	None => "", testnet: "";
@@ -282,7 +282,7 @@ pub enum KucoinWsUrl {
 	/// The url will not be modified by [KucoinWsHandler]
 	None,
 }
-endpoint_urls!(KucoinWsUrl {
+crate::endpoint_urls!(KucoinWsUrl {
 	Spot => "wss://ws-api-spot.kucoin.com", testnet: "wss://ws-api-sandbox-spot.kucoin.com";
 	Futures => "wss://ws-api-futures.kucoin.com", testnet: "wss://ws-api-sandbox-futures.kucoin.com";
 	None => "", testnet: "";

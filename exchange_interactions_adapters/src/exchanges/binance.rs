@@ -367,7 +367,7 @@ pub enum BinanceHttpUrl {
 	#[default]
 	None,
 }
-endpoint_urls!(BinanceHttpUrl {
+crate::endpoint_urls!(BinanceHttpUrl {
 	Spot => "https://api.binance.com", testnet: "https://testnet.binance.vision";
 	Spot1 => "https://api1.binance.com", testnet: "https://testnet.binance.vision";
 	Spot2 => "https://api2.binance.com", testnet: "https://testnet.binance.vision";
@@ -408,7 +408,7 @@ pub enum BinanceWsUrl {
 	None,
 }
 // Can't impl [ToOwned], as there is a blanket impl of it on everything with [Clone]
-endpoint_urls!(BinanceWsUrl {
+crate::endpoint_urls!(BinanceWsUrl {
 	Spot => "wss://stream.binance.com:9443", testnet: "wss://testnet.binance.vision"; //TODO: actually have some metric to select the best url here
 	Spot9443 => "wss://stream.binance.com:9443", testnet: "wss://testnet.binance.vision:9443";
 	Spot443 => "wss://stream.binance.com:443", testnet: "wss://testnet.binance.vision:443";

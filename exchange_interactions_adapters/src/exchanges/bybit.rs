@@ -367,7 +367,7 @@ fn bybit_ws_config() -> WsConfig {
 	config
 }
 
-endpoint_urls!(BybitHttpUrl {
+crate::endpoint_urls!(BybitHttpUrl {
 	Bybit => "https://api.bybit.com", testnet: "https://api-testnet.bybit.com";
 	Bytick => "https://api.bytick.com"; //HACK: maybe it has a testnet, idk, needs checking
 	None => "", testnet: "";
@@ -662,7 +662,7 @@ impl WsHandler for BybitWsHandler {
 		}
 	}
 }
-endpoint_urls!(BybitWsUrlBase {
+crate::endpoint_urls!(BybitWsUrlBase {
 	Bybit => "wss://stream.bybit.com", testnet: "wss://stream-testnet.bybit.com";
 	Bytick => "wss://stream.bytick.com"; //HACK: no clue if it actually exists, but don't care rn
 	None => "", testnet: "";

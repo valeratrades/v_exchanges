@@ -142,7 +142,7 @@ pub enum MexcWsUrl {
 }
 static MAX_RECV_WINDOW: std::time::Duration = std::time::Duration::from_millis(60000); // as of (2025/01/18)
 
-endpoint_urls!(MexcHttpUrl {
+crate::endpoint_urls!(MexcHttpUrl {
 	Spot => "https://api.mexc.com", testnet: "https://api-testnet.mexc.com";
 	Futures => "https://contract.mexc.com", testnet: "https://contract-testnet.mexc.com";
 	None => "", testnet: "";
@@ -334,7 +334,7 @@ impl WsHandler for MexcWsHandler {
 		todo!()
 	}
 }
-endpoint_urls!(MexcWsUrl {
+crate::endpoint_urls!(MexcWsUrl {
 	Spot => "wss://stream.mexc.com/ws", testnet: "wss://stream-testnet.mexc.com/ws";
 	Futures => "wss://contract.mexc.com/ws", testnet: "wss://contract-testnet.mexc.com/ws";
 	None => "";
