@@ -248,7 +248,7 @@ pub enum KucoinOption {
 	/// Base url for WebSocket connections
 	WsUrl(KucoinWsUrl),
 	/// [WebSocketConfig] used for creating [WebSocketConnection]s
-	WsConfig(WsConfig),
+	WsConfig(Box<WsConfig>),
 	/// See [WsConfig::topics]. Will be merged with those manually defined in [Self::WsConfig::topics], if any.
 	WsTopics(Vec<String>),
 }
@@ -265,23 +265,11 @@ pub enum KucoinHttpUrl {
 	/// The url will not be modified by [KucoinRequestHandler]
 	None,
 }
-impl EndpointUrl for KucoinHttpUrl {
-	fn url_mainnet(&self) -> Url {
-		match self {
-			Self::Spot => Url::parse("https://api.kucoin.com").unwrap(),
-			Self::Futures => Url::parse("https://api-futures.kucoin.com").unwrap(),
-			Self::None => Url::parse("").unwrap(),
-		}
-	}
-
-	fn url_testnet(&self) -> Option<Url> {
-		match self {
-			Self::Spot => Some(Url::parse("https://openapi-sandbox.kucoin.com").unwrap()),
-			Self::Futures => Some(Url::parse("https://api-sandbox-futures.kucoin.com").unwrap()),
-			Self::None => Some(Url::parse("").unwrap()),
-		}
-	}
-}
+endpoint_urls!(KucoinHttpUrl {
+	Spot => "https://api.kucoin.com", testnet: "https://openapi-sandbox.kucoin.com";
+	Futures => "https://api-futures.kucoin.com", testnet: "https://api-sandbox-futures.kucoin.com";
+	None => "", testnet: "";
+});
 
 /// A `enum` that represents the base url of the Kucoin WebSocket API
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -294,23 +282,11 @@ pub enum KucoinWsUrl {
 	/// The url will not be modified by [KucoinWsHandler]
 	None,
 }
-impl EndpointUrl for KucoinWsUrl {
-	fn url_mainnet(&self) -> url::Url {
-		match self {
-			Self::Spot => Url::parse("wss://ws-api-spot.kucoin.com").unwrap(),
-			Self::Futures => Url::parse("wss://ws-api-futures.kucoin.com").unwrap(),
-			Self::None => Url::parse("").unwrap(),
-		}
-	}
-
-	fn url_testnet(&self) -> Option<url::Url> {
-		match self {
-			Self::Spot => Some(Url::parse("wss://ws-api-sandbox-spot.kucoin.com").unwrap()),
-			Self::Futures => Some(Url::parse("wss://ws-api-sandbox-futures.kucoin.com").unwrap()),
-			Self::None => Some(Url::parse("").unwrap()),
-		}
-	}
-}
+endpoint_urls!(KucoinWsUrl {
+	Spot => "wss://ws-api-spot.kucoin.com", testnet: "wss://ws-api-sandbox-spot.kucoin.com";
+	Futures => "wss://ws-api-futures.kucoin.com", testnet: "wss://ws-api-sandbox-futures.kucoin.com";
+	None => "", testnet: "";
+});
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum KucoinAuth {
@@ -326,7 +302,7 @@ pub struct KucoinRequestHandler<'a, R: DeserializeOwned> {
 }
 
 /// A `struct` that represents a set of [KucoinOption] s.
-#[derive(Clone, derive_more::Debug, Default)]
+#[derive(Clone, Default, derive_more::Debug)]
 pub struct KucoinOptions {
 	/// see [KucoinOption::Pubkey]
 	pub pubkey: Option<String>,
@@ -362,7 +338,7 @@ impl HandlerOptions for KucoinOptions {
 			Self::OptionItem::HttpUrl(v) => self.http_url = v,
 			Self::OptionItem::HttpAuth(v) => self.http_auth = v,
 			Self::OptionItem::WsUrl(v) => self.ws_url = v,
-			Self::OptionItem::WsConfig(v) => self.ws_config = v,
+			Self::OptionItem::WsConfig(v) => self.ws_config = *v,
 			Self::OptionItem::WsTopics(v) => self.ws_topics = v.into_iter().collect(),
 		}
 	}

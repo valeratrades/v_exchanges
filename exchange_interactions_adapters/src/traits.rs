@@ -2,6 +2,20 @@ use std::fmt::Debug;
 
 use exchange_interactions_api_generics::{http, ws};
 
+/// Response path for venues that ship no typed error envelope: parse on success, otherwise report
+/// whatever came back. `venue` only names the exchange in the message.
+#[cfg(any(feature = "bitflyer", feature = "coincheck"))]
+pub(crate) fn handle_untyped_response<T: serde::de::DeserializeOwned>(venue: &str, status: http::StatusCode, body: &http::Bytes) -> Result<T, http::HandleError> {
+	let truncated = || v_utils::utils::truncate_msg(String::from_utf8_lossy(body));
+	if status.is_success() {
+		return serde_json::from_slice(body).map_err(|error| http::HandleError::Parse(eyre::eyre!("Failed to parse response: {error}\nResponse body: {}", truncated())));
+	}
+	Err(match serde_json::from_slice::<serde_json::Value>(body) {
+		Ok(parsed) => http::HandleError::Api(http::ApiError::Other(eyre::eyre!("{venue} API error (status {status}): {parsed}"))),
+		Err(error) => http::HandleError::Parse(eyre::eyre!("Failed to parse error response: {error}\nResponse body: {}", truncated())),
+	})
+}
+
 /// A `trait` that represents an option which can be set when creating handlers
 pub trait HandlerOption: Default {
 	type Options: HandlerOptions<OptionItem = Self>;
@@ -37,3 +51,26 @@ pub trait EndpointUrl {
 	/// Returns the testnet url for the exchange. Not that not all exchanges have testnets for all endpoints.
 	fn url_testnet(&self) -> Option<url::Url>;
 }
+
+/// Writes an [EndpointUrl] impl from a flat variant→literal table. Omitting `testnet:` means the
+/// venue exposes no testnet for that variant, so the two `match`es cannot drift out of sync.
+macro_rules! endpoint_urls {
+	($ty:ty { $($variant:ident => $mainnet:literal $(, testnet: $testnet:literal)? ;)+ }) => {
+		impl crate::traits::EndpointUrl for $ty {
+			fn url_mainnet(&self) -> url::Url {
+				match self {
+					$(Self::$variant => url::Url::parse($mainnet).expect("literal"),)+
+				}
+			}
+
+			fn url_testnet(&self) -> Option<url::Url> {
+				match self {
+					$(Self::$variant => endpoint_urls!(@testnet $($testnet)?),)+
+				}
+			}
+		}
+	};
+	(@testnet $testnet:literal) => { Some(url::Url::parse($testnet).expect("literal")) };
+	(@testnet) => { None };
+}
+pub(crate) use endpoint_urls;

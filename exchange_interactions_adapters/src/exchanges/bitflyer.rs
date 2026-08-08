@@ -195,21 +195,7 @@ where
 	}
 
 	fn handle_response(&self, status: StatusCode, _: HeaderMap, response_body: Bytes) -> Result<Self::Successful, HandleError> {
-		if status.is_success() {
-			serde_json::from_slice(&response_body).map_err(|error| {
-				let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
-				HandleError::Parse(eyre::eyre!("Failed to parse response: {error}\nResponse body: {response_str}"))
-			})
-		} else {
-			let error = match serde_json::from_slice::<serde_json::Value>(&response_body) {
-				Ok(parsed_error) => HandleError::Api(ApiError::Other(eyre::eyre!("BitFlyer API error (status {status}): {parsed_error}"))),
-				Err(error) => {
-					let response_str = v_utils::utils::truncate_msg(String::from_utf8_lossy(&response_body));
-					HandleError::Parse(eyre::eyre!("Failed to parse error response: {error}\nResponse body: {response_str}"))
-				}
-			};
-			Err(error)
-		}
+		handle_untyped_response("BitFlyer", status, &response_body)
 	}
 }
 

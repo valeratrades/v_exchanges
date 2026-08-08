@@ -336,7 +336,7 @@ pub enum BinanceOption {
 	WsUrl(BinanceWsUrl),
 	/// [WebSocketConfig] used for creating [WebSocketConnection]s
 	/// `url_prefix` will be overridden by [WebSocketUrl](Self::WebSocketUrl) unless `WebSocketUrl` is [BinanceWebSocketUrl::None].
-	WsConfig(WsConfig),
+	WsConfig(Box<WsConfig>),
 	/// See [WsConfig::topics]. Will be merged with those manually defined in [Self::WsConfig::topics], if any.
 	WsTopics(Vec<String>),
 }
@@ -367,37 +367,18 @@ pub enum BinanceHttpUrl {
 	#[default]
 	None,
 }
-impl EndpointUrl for BinanceHttpUrl {
-	fn url_mainnet(&self) -> Url {
-		match self {
-			Self::Spot => Url::parse("https://api.binance.com").unwrap(),
-			Self::Spot1 => Url::parse("https://api1.binance.com").unwrap(),
-			Self::Spot2 => Url::parse("https://api2.binance.com").unwrap(),
-			Self::Spot3 => Url::parse("https://api3.binance.com").unwrap(),
-			Self::Spot4 => Url::parse("https://api4.binance.com").unwrap(),
-			Self::SpotData => Url::parse("https://data.binance.com").unwrap(),
-			Self::FuturesUsdM => Url::parse("https://fapi.binance.com").unwrap(),
-			Self::FuturesCoinM => Url::parse("https://dapi.binance.com").unwrap(),
-			Self::EuropeanOptions => Url::parse("https://eapi.binance.com").unwrap(),
-			Self::None => Url::parse("").unwrap(),
-		}
-	}
-
-	fn url_testnet(&self) -> Option<Url> {
-		match self {
-			Self::Spot => Some(Url::parse("https://testnet.binance.vision").unwrap()),
-			Self::Spot1 => Some(Url::parse("https://testnet.binance.vision").unwrap()),
-			Self::Spot2 => Some(Url::parse("https://testnet.binance.vision").unwrap()),
-			Self::Spot3 => Some(Url::parse("https://testnet.binance.vision").unwrap()),
-			Self::Spot4 => Some(Url::parse("https://testnet.binance.vision").unwrap()),
-			Self::SpotData => Some(Url::parse("https://testnet.binance.vision").unwrap()),
-			Self::FuturesUsdM => Some(Url::parse("https://testnet.binancefuture.com").unwrap()),
-			Self::FuturesCoinM => Some(Url::parse("https://testnet.binancefuture.com").unwrap()),
-			Self::EuropeanOptions => None,
-			Self::None => Some(Url::parse("").unwrap()),
-		}
-	}
-}
+endpoint_urls!(BinanceHttpUrl {
+	Spot => "https://api.binance.com", testnet: "https://testnet.binance.vision";
+	Spot1 => "https://api1.binance.com", testnet: "https://testnet.binance.vision";
+	Spot2 => "https://api2.binance.com", testnet: "https://testnet.binance.vision";
+	Spot3 => "https://api3.binance.com", testnet: "https://testnet.binance.vision";
+	Spot4 => "https://api4.binance.com", testnet: "https://testnet.binance.vision";
+	SpotData => "https://data.binance.com", testnet: "https://testnet.binance.vision";
+	FuturesUsdM => "https://fapi.binance.com", testnet: "https://testnet.binancefuture.com";
+	FuturesCoinM => "https://dapi.binance.com", testnet: "https://testnet.binancefuture.com";
+	EuropeanOptions => "https://eapi.binance.com";
+	None => "", testnet: "";
+});
 
 /// A `enum` that represents the base url of the Binance WebSocket API
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -426,35 +407,20 @@ pub enum BinanceWsUrl {
 	#[default]
 	None,
 }
-impl EndpointUrl for BinanceWsUrl {
-	// Can't impl [ToOwned], as there is a blanket impl of it on everything with [Clone]
-	fn url_mainnet(&self) -> url::Url {
-		match self {
-			Self::Spot => Url::parse("wss://stream.binance.com:9443").unwrap(), //TODO: actually have some metric to select the best url here
-			Self::Spot9443 => Url::parse("wss://stream.binance.com:9443").unwrap(),
-			Self::Spot443 => Url::parse("wss://stream.binance.com:443").unwrap(),
-			Self::SpotData => Url::parse("wss://data-stream.binance.com").unwrap(),
-			Self::WebSocket443 => Url::parse("wss://ws-api.binance.com:443").unwrap(),
-			Self::WebSocket9443 => Url::parse("wss://ws-api.binance.com:9443").unwrap(),
-			Self::FuturesUsdM => Url::parse("wss://fstream.binance.com").unwrap(),
-			Self::FuturesUsdMAuth => Url::parse("wss://fstream-auth.binance.com").unwrap(),
-			Self::FuturesCoinM => Url::parse("wss://dstream.binance.com").unwrap(),
-			Self::EuropeanOptions => Url::parse("wss://nbstream.binance.com").unwrap(),
-			Self::None => Url::parse("").unwrap(),
-		}
-	}
-
-	fn url_testnet(&self) -> Option<url::Url> {
-		match self {
-			Self::Spot => Some(Url::parse("wss://testnet.binance.vision").unwrap()),
-			Self::Spot9443 => Some(Url::parse("wss://testnet.binance.vision:9443").unwrap()),
-			Self::Spot443 => Some(Url::parse("wss://testnet.binance.vision:443").unwrap()),
-			Self::FuturesUsdM => Some(Url::parse("wss://stream.binancefuture.com").unwrap()),
-			Self::FuturesCoinM => Some(Url::parse("wss://dstream.binancefuture.com").unwrap()),
-			Self::SpotData | Self::WebSocket443 | Self::WebSocket9443 | Self::FuturesUsdMAuth | Self::EuropeanOptions | Self::None => None,
-		}
-	}
-}
+// Can't impl [ToOwned], as there is a blanket impl of it on everything with [Clone]
+endpoint_urls!(BinanceWsUrl {
+	Spot => "wss://stream.binance.com:9443", testnet: "wss://testnet.binance.vision"; //TODO: actually have some metric to select the best url here
+	Spot9443 => "wss://stream.binance.com:9443", testnet: "wss://testnet.binance.vision:9443";
+	Spot443 => "wss://stream.binance.com:443", testnet: "wss://testnet.binance.vision:443";
+	SpotData => "wss://data-stream.binance.com";
+	WebSocket443 => "wss://ws-api.binance.com:443";
+	WebSocket9443 => "wss://ws-api.binance.com:9443";
+	FuturesUsdM => "wss://fstream.binance.com", testnet: "wss://stream.binancefuture.com";
+	FuturesUsdMAuth => "wss://fstream-auth.binance.com";
+	FuturesCoinM => "wss://dstream.binance.com", testnet: "wss://dstream.binancefuture.com";
+	EuropeanOptions => "wss://nbstream.binance.com";
+	None => "";
+});
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum BinanceAuth {
@@ -479,7 +445,7 @@ pub struct BinanceRequestHandler<'a, R: DeserializeOwned> {
 }
 
 /// A `struct` that represents a set of [BinanceOption] s.
-#[derive(Clone, derive_more::Debug, Default)]
+#[derive(Clone, Default, derive_more::Debug)]
 pub struct BinanceOptions {
 	/// see [BinanceOption::Pubkey]
 	pub pubkey: Option<String>,
@@ -516,7 +482,7 @@ impl HandlerOptions for BinanceOptions {
 			Self::OptionItem::HttpUrl(v) => self.http_url = v,
 			Self::OptionItem::HttpAuth(v) => self.http_auth = v,
 			Self::OptionItem::WsUrl(v) => self.ws_url = v,
-			Self::OptionItem::WsConfig(v) => self.ws_config = v,
+			Self::OptionItem::WsConfig(v) => self.ws_config = *v,
 			Self::OptionItem::WsTopics(v) => self.ws_topics = v.into_iter().collect(),
 			Self::OptionItem::BookSnapshotFreq(v) => self.book_snapshot_freq = v,
 		}

@@ -1,6 +1,6 @@
 use std::{
 	fmt::Debug,
-	path::PathBuf,
+	path::{Path, PathBuf},
 	sync::{
 		Arc, OnceLock,
 		atomic::{AtomicBool, Ordering},
@@ -572,7 +572,7 @@ const MOCK_CACHE_DURATION: Duration = Duration::from_days(30);
 
 /// Constructs a cache path from the mock cache dir and the URL.
 /// Uses host + path as the meaningful parts (no query params, no scheme).
-fn mock_cache_path(cache_dir: &PathBuf, url: &Url) -> PathBuf {
+fn mock_cache_path(cache_dir: &Path, url: &Url) -> PathBuf {
 	let host = url.host_str().unwrap_or("unknown");
 	let path = url.path().trim_start_matches('/');
 	cache_dir.join(host).join(path)
@@ -641,7 +641,8 @@ mod tests {
 		let server = async {
 			let (mut sock, _) = listener.accept().await.unwrap();
 			let mut buf = [0u8; 1024];
-			sock.read(&mut buf).await.expect("client sent a request");
+			let n = sock.read(&mut buf).await.expect("client sent a request");
+			assert!(n > 0, "client closed the connection without sending a request");
 			sock.write_all(b"HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\n\r\n").await.unwrap();
 		};
 

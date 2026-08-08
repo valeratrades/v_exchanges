@@ -93,15 +93,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Installation
-      uses: taiki-e/install-action@v2
-      with:
-        tool: cargo-sort-derives
+    - uses: cachix/install-nix-action@v31
     - name: Assert derives are sorted
-      run: "\t\t\t\tcargo sort-derives --check\n\t\t\t\texit_code=$?\n\t\t\t\tif [\
-        \ $exit_code != 0 ]; then\n\t\t\t\t\techo \"Derives are not sorted. Run \\\
-        `cargo sort-derives\\` to fix it.\"\n\t\t\t\t\texit $exit_code\n\t\t\t\tfi\n\
-        \t\t\t"
+      run: "\t\t\t\tnix run github:valeratrades/v_flakes#cargo-sort-derives -- --check\n\
+        \t\t\t\texit_code=$?\n\t\t\t\tif [ $exit_code != 0 ]; then\n\t\t\t\t\techo\
+        \ \"Derives are not sorted. Run \\`cargo sort-derives\\` to fix it.\"\n\t\t\
+        \t\t\texit $exit_code\n\t\t\t\tfi\n\t\t\t"
   tokei:
     name: Reasonable Amount of Comments
     runs-on: ubuntu-latest

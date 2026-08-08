@@ -36,12 +36,12 @@ pub enum MexcOption {
 	/// Base url for Ws connections
 	WsUrl(MexcWsUrl),
 	/// WsConfig used for creating WsConnections
-	WsConfig(WsConfig),
+	WsConfig(Box<WsConfig>),
 	/// Topics to subscribe to on Ws connections
 	WsTopics(Vec<String>),
 }
 /// A struct that represents a set of MexcOptions
-#[derive(Clone, derive_more::Debug, Default)]
+#[derive(Clone, Default, derive_more::Debug)]
 pub struct MexcOptions {
 	/// see [MexcOption::Key]
 	pub pubkey: Option<String>,
@@ -142,23 +142,11 @@ pub enum MexcWsUrl {
 }
 static MAX_RECV_WINDOW: std::time::Duration = std::time::Duration::from_millis(60000); // as of (2025/01/18)
 
-impl EndpointUrl for MexcHttpUrl {
-	fn url_mainnet(&self) -> Url {
-		match self {
-			Self::Spot => Url::parse("https://api.mexc.com").unwrap(),
-			Self::Futures => Url::parse("https://contract.mexc.com").unwrap(),
-			Self::None => Url::parse("").unwrap(),
-		}
-	}
-
-	fn url_testnet(&self) -> Option<Url> {
-		match self {
-			Self::Spot => Some(Url::parse("https://api-testnet.mexc.com").unwrap()),
-			Self::Futures => Some(Url::parse("https://contract-testnet.mexc.com").unwrap()),
-			Self::None => Some(Url::parse("").unwrap()),
-		}
-	}
-}
+endpoint_urls!(MexcHttpUrl {
+	Spot => "https://api.mexc.com", testnet: "https://api-testnet.mexc.com";
+	Futures => "https://contract.mexc.com", testnet: "https://contract-testnet.mexc.com";
+	None => "", testnet: "";
+});
 
 /// Envelope used by MEXC futures API, which returns errors with HTTP 200
 #[derive(Deserialize)]
@@ -346,23 +334,11 @@ impl WsHandler for MexcWsHandler {
 		todo!()
 	}
 }
-impl EndpointUrl for MexcWsUrl {
-	fn url_mainnet(&self) -> Url {
-		match self {
-			Self::Spot => Url::parse("wss://stream.mexc.com/ws").unwrap(),
-			Self::Futures => Url::parse("wss://contract.mexc.com/ws").unwrap(),
-			Self::None => Url::parse("").unwrap(),
-		}
-	}
-
-	fn url_testnet(&self) -> Option<Url> {
-		match self {
-			Self::Spot => Some(Url::parse("wss://stream-testnet.mexc.com/ws").unwrap()),
-			Self::Futures => Some(Url::parse("wss://contract-testnet.mexc.com/ws").unwrap()),
-			Self::None => None,
-		}
-	}
-}
+endpoint_urls!(MexcWsUrl {
+	Spot => "wss://stream.mexc.com/ws", testnet: "wss://stream-testnet.mexc.com/ws";
+	Futures => "wss://contract.mexc.com/ws", testnet: "wss://contract-testnet.mexc.com/ws";
+	None => "";
+});
 impl WsOption for MexcOption {
 	type WsHandler = MexcWsHandler;
 
@@ -391,7 +367,7 @@ impl HandlerOptions for MexcOptions {
 					self.recv_window = Some(v);
 				},
 			MexcOption::WsUrl(v) => self.ws_url = v,
-			MexcOption::WsConfig(v) => self.ws_config = v,
+			MexcOption::WsConfig(v) => self.ws_config = *v,
 			MexcOption::WsTopics(v) => self.ws_topics = v.into_iter().collect(),
 		}
 	}

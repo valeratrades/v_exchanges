@@ -145,6 +145,8 @@ pub struct TradeEventSpot {
 //,}}}
 
 // book {{{
+type SnapshotFu = Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>>;
+
 pub struct BookConnection {
 	connection: WsConnection<BinanceWsHandler>,
 	pair_precisions: BTreeMap<Pair, PrecisionPriceQty>,
@@ -156,7 +158,7 @@ pub struct BookConnection {
 	next_pair_idx: usize,
 	/// `freq / pairs.len()`; `None` = disabled.
 	per_pair_interval: Option<Duration>,
-	pending_snapshot_fut: Option<Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>>>,
+	pending_snapshot_fut: Option<SnapshotFu>,
 	/// Tracks which pair the in-flight snapshot future is fetching, so we can route its result.
 	/// Last delta sequence value seen per pair. Used to compute `gapped` on each subsequent delta.
 	/// REST snapshots are independent anchors and do not seed/clear this map.
@@ -183,7 +185,7 @@ impl BookConnection {
 		let per_pair_interval = book_snapshot_freq.map(|f| f / pairs.len() as u32);
 
 		// Seed the initial snapshot future — fires immediately on first next() when enabled.
-		let pending_snapshot_fut: Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>> = if let (Some(_), Some(&pair)) = (per_pair_interval, pairs.first()) {
+		let pending_snapshot_fut: SnapshotFu = if let (Some(_), Some(&pair)) = (per_pair_interval, pairs.first()) {
 			let prec = pair_precisions[&pair];
 			let client_clone = client.clone();
 			let deadline = tokio::time::Instant::now();
@@ -214,7 +216,7 @@ impl BookConnection {
 		&self.pair_precisions
 	}
 
-	fn build_next_snapshot_fut(&mut self) -> Pin<Box<dyn Future<Output = Result<BookShape, ExchangeError>> + Send + Sync>> {
+	fn build_next_snapshot_fut(&mut self) -> SnapshotFu {
 		let Some(interval) = self.per_pair_interval else {
 			return Box::pin(std::future::pending());
 		};

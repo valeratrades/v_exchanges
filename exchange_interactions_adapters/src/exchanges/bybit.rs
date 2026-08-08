@@ -51,7 +51,7 @@ pub enum BybitOption {
 	/// [WsConfig] used for creating [WsConnection]s
 	/// `url_prefix` will be overridden by [WsUrl](Self::WsUrl) unless `WsUrl` is [BybitWsUrl::None].
 	/// By default, `ignore_duplicate_during_reconnection` is set to `true`.
-	WsConfig(WsConfig),
+	WsConfig(Box<WsConfig>),
 	/// Ref [WsConfig::topics]
 	WsTopics(Vec<String>),
 }
@@ -367,23 +367,11 @@ fn bybit_ws_config() -> WsConfig {
 	config
 }
 
-impl EndpointUrl for BybitHttpUrl {
-	fn url_mainnet(&self) -> Url {
-		match self {
-			Self::Bybit => Url::parse("https://api.bybit.com").unwrap(),
-			Self::Bytick => Url::parse("https://api.bytick.com").unwrap(),
-			Self::None => Url::parse("").unwrap(),
-		}
-	}
-
-	fn url_testnet(&self) -> Option<Url> {
-		match self {
-			Self::Bybit => Some(Url::parse("https://api-testnet.bybit.com").unwrap()),
-			Self::Bytick => None, //HACK: maybe it has it, idk, needs checking
-			Self::None => Some(Url::parse("").unwrap()),
-		}
-	}
-}
+endpoint_urls!(BybitHttpUrl {
+	Bybit => "https://api.bybit.com", testnet: "https://api-testnet.bybit.com";
+	Bytick => "https://api.bytick.com"; //HACK: maybe it has a testnet, idk, needs checking
+	None => "", testnet: "";
+});
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 struct BybitError {
@@ -674,23 +662,11 @@ impl WsHandler for BybitWsHandler {
 		}
 	}
 }
-impl EndpointUrl for BybitWsUrlBase {
-	fn url_mainnet(&self) -> Url {
-		match self {
-			Self::Bybit => Url::parse("wss://stream.bybit.com").unwrap(),
-			Self::Bytick => Url::parse("wss://stream.bytick.com").unwrap(),
-			Self::None => Url::parse("").unwrap(),
-		}
-	}
-
-	fn url_testnet(&self) -> Option<Url> {
-		match self {
-			Self::Bybit => Some(Url::parse("wss://stream-testnet.bybit.com").unwrap()),
-			Self::Bytick => None, //HACK: no clue if it actually exists, but don't care rn
-			Self::None => Some(Url::parse("").unwrap()),
-		}
-	}
-}
+endpoint_urls!(BybitWsUrlBase {
+	Bybit => "wss://stream.bybit.com", testnet: "wss://stream-testnet.bybit.com";
+	Bytick => "wss://stream.bytick.com"; //HACK: no clue if it actually exists, but don't care rn
+	None => "", testnet: "";
+});
 impl WsOption for BybitOption {
 	type WsHandler = BybitWsHandler;
 
@@ -714,7 +690,7 @@ impl HandlerOptions for BybitOptions {
 			BybitOption::RecvWindow(v) => self.recv_window = Some(v),
 			BybitOption::WsUrl(v) => self.ws_url = v,
 			BybitOption::WsAuth(v) => self.ws_auth = v,
-			BybitOption::WsConfig(v) => self.ws_config = v,
+			BybitOption::WsConfig(v) => self.ws_config = *v,
 			BybitOption::WsTopics(v) => self.ws_topics = v.into_iter().collect(),
 		}
 	}
