@@ -46,7 +46,7 @@
             #,}}}1
           };
         };
-        readme = v_flakes.readme-fw { inherit pkgs pname; defaults = true; lastSupportedVersion = "nightly-1.92"; rootDir = ./.; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; };
+        readme = v_flakes.readme-fw { inherit pkgs pname; defaults = true; lastSupportedVersion = "nightly-1.92"; rootDir = ./.; repo = "EV-invest/exchange_interactions"; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; };
         combined = v_flakes.utils.combine { inherit rust; modules = [ rs github readme ]; };
       in
       {
